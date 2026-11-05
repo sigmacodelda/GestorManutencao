@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backoffice de Manutenção</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --verde:#5BB572;--azul:#3466AF;--roxo:#604696;--navy:#1A1731;--cinza:#CAC9C9;
+  --bg:#F4F5F8;--card:#FFFFFF;--texto:#1A1731;--suave:#5A5873;--linha:#E1E1E8;
+  --ok:#2E7D4A;--ok-bg:#E3F4E8;--aviso:#8A5A00;--aviso-bg:#FFF1D6;--erro:#A32A2A;--erro-bg:#FBE4E4;--info-bg:#E4ECF8;
+  --r:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--texto);font-family:"Open Sans",system-ui,sans-serif;font-size:15px;line-height:1.5}
+h1,h2,h3{font-family:"Exo 2","Open Sans",sans-serif;margin:0;color:var(--navy)}
+h2{font-size:1.35rem}h3{font-size:1.05rem}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--azul);outline-offset:2px}
+header{background:var(--navy);color:#fff;display:flex;align-items:center;gap:16px;padding:10px 16px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;font-family:"Exo 2",sans-serif;font-weight:700;font-size:1.2rem}
+.hd-sub{font-size:.85rem;color:var(--cinza);flex:1;min-width:180px}
+.perfil{display:flex;align-items:center;gap:8px;font-size:.85rem}
+.perfil select{min-height:44px;border-radius:8px;border:1px solid var(--cinza);padding:0 10px;background:#fff;color:var(--navy)}
+.aviso-proto{background:var(--roxo);color:#fff;text-align:center;font-size:.8rem;padding:4px 16px}
+.layout{display:flex;min-height:calc(100vh - 100px)}
+nav{width:210px;background:var(--card);border-right:1px solid var(--linha);padding:12px 8px;flex-shrink:0}
+nav button{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;border:0;background:none;border-radius:8px;padding:0 12px;cursor:pointer;text-align:left;font-weight:600;color:var(--suave)}
+nav button:hover{background:var(--bg)}
+nav button.ativo{background:var(--info-bg);color:var(--azul)}
+nav svg{width:20px;height:20px;flex-shrink:0}
+main{flex:1;padding:20px;min-width:0}
+.vista{display:none}.vista.ativa{display:block}
+.topo{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);padding:16px;margin-bottom:16px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.kpi{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);padding:14px;border-top:4px solid var(--azul)}
+.kpi .v{font-family:"Exo 2",sans-serif;font-size:2rem;font-weight:700;line-height:1.1}
+.kpi .l{color:var(--suave);font-size:.85rem}
+.kpi.verde{border-top-color:var(--verde)}.kpi.roxo{border-top-color:var(--roxo)}.kpi.erro{border-top-color:var(--erro)}
+.btn{min-height:44px;padding:0 18px;border-radius:10px;border:1px solid var(--azul);background:var(--azul);color:#fff;font-weight:600;cursor:pointer}
+.btn.sec{background:#fff;color:var(--azul)}
+.btn.verde{background:var(--ok);border-color:var(--ok)}
+.btn.perigo{background:#fff;color:var(--erro);border-color:var(--erro)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.filtros{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.filtros label{display:flex;flex-direction:column;font-size:.8rem;color:var(--suave);gap:2px}
+.filtros select,.filtros input,.campo input,.campo select{min-height:44px;border:1px solid var(--cinza);border-radius:8px;padding:0 10px;background:#fff}
+.tab-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--linha);font-size:.9rem}
+th{font-family:"Exo 2",sans-serif;color:var(--suave);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em}
+tr.clic{cursor:pointer}tr.clic:hover{background:var(--bg)}tr.sel{background:var(--info-bg)}
+.tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.78rem;font-weight:600;white-space:nowrap}
+.t-ok{background:var(--ok-bg);color:var(--ok)}.t-av{background:var(--aviso-bg);color:var(--aviso)}.t-er{background:var(--erro-bg);color:var(--erro)}.t-in{background:var(--info-bg);color:var(--azul)}.t-ne{background:#ECECF0;color:var(--suave)}
+.meses{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;max-width:520px}
+.mes{min-height:44px;border-radius:8px;border:1px solid var(--cinza);background:#fff;font-weight:600;cursor:pointer}
+.mes[aria-pressed="true"]{background:var(--verde);border-color:var(--verde);color:var(--navy)}
+.mes:disabled{cursor:not-allowed;opacity:.6}
+.campos{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:12px}
+.campo{display:flex;flex-direction:column;font-size:.8rem;color:var(--suave);gap:2px}
+.duas{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+.barras{display:flex;align-items:flex-end;gap:10px;height:150px;padding-top:8px}
+.barra{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font-size:.75rem}
+.barra .col{width:100%;max-width:38px;border-radius:6px 6px 0 0;background:var(--azul)}
+.barra .pct{font-weight:600;margin-bottom:2px}
+.pilha{width:100%;max-width:38px;display:flex;flex-direction:column;justify-content:flex-end}
+.legenda{display:flex;gap:14px;font-size:.8rem;color:var(--suave);margin-top:6px;flex-wrap:wrap}
+.legenda i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+ul.lista{list-style:none;margin:0;padding:0}
+ul.lista li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--linha);align-items:center}
+a.lnk{color:var(--azul);font-weight:600;cursor:pointer;text-decoration:underline;background:none;border:0;padding:0}
+.painel{border-left:4px solid var(--roxo)}
+.muted{color:var(--suave);font-size:.85rem}
+.interr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--linha)}
+.sw{min-width:64px;min-height:44px;border-radius:999px;border:1px solid var(--cinza);background:#ECECF0;font-weight:600;cursor:pointer}
+.sw[aria-pressed="true"]{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.sw:disabled{cursor:not-allowed;opacity:.6}
+.modal-f{position:fixed;inset:0;background:rgba(26,23,49,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal-f.on{display:flex}
+.modal{background:#fff;border-radius:16px;padding:20px;max-width:520px;width:100%;max-height:90vh;overflow:auto}
+.modal h3{margin-bottom:8px}
+.acoes{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 18px;border-radius:10px;display:none;z-index:60;max-width:92vw;font-size:.9rem}
+.oculto{display:none!important}
+@media (max-width:820px){
+  .layout{flex-direction:column}
+  nav{width:100%;display:flex;overflow-x:auto;border-right:0;border-bottom:1px solid var(--linha);padding:6px}
+  nav button{width:auto;white-space:nowrap}
+  main{padding:16px}
+  .duas{grid-template-columns:1fr}
+  .meses{grid-template-columns:repeat(4,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><defs><linearGradient id="g" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BB572"/><stop offset=".5" stop-color="#3466AF"/><stop offset="1" stop-color="#604696"/></linearGradient></defs><rect width="34" height="34" rx="9" fill="url(#g)"/><path d="M11 12.5h12M11 17h12M11 21.5h8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+    <span>SigmaCode</span>
+  </div>
+  <div class="hd-sub">Gestor de Manutenção · Backoffice · Carnes Landeiro</div>
+  <label class="perfil">Perfil
+    <select id="perfil" aria-label="Perfil do utilizador">
+      <option value="operador">Operador</option>
+      <option value="supervisor" selected>Supervisor</option>
+      <option value="admin">Administrador de manutenção</option>
+    </select>
+  </label>
+</header>
+<div class="aviso-proto">Protótipo para validação (11/11/2026). Todos os dados são fictícios. Nada é gravado.</div>
+
+<div class="layout">
+  <nav id="menu" aria-label="Menu Manutenção"></nav>
+  <main>
+    <!-- DASHBOARD -->
+    <section class="vista" id="v-dashboard">
+      <div class="topo"><h2>Dashboard de manutenção</h2>
+        <div class="filtros" style="margin:0">
+          <label>Período<select id="d-periodo"><option>Últimos 6 meses</option><option>Ano 2026</option></select></label>
+          <label>Zona<select id="d-zona"><option value="">Todas</option><option>Abate de Suínos</option><option>Salsicharia</option></select></label>
+        </div>
+      </div>
+      <div class="grid" id="kpis"></div>
+      <div class="duas" style="margin-top:16px">
+        <div class="card"><h3>Cumprimento por mês</h3><div class="barras" id="g-cumpr"></div><div class="muted">Realizadas ÷ planeadas do mês. Mês sem planeadas mostra n/a.</div></div>
+        <div class="card"><h3>Preventivas vs curativas</h3><div class="barras" id="g-pc"></div>
+          <div class="legenda"><span><i style="background:var(--azul)"></i>Preventivas</span><span><i style="background:var(--roxo)"></i>Curativas</span></div></div>
+      </div>
+      <div class="duas">
+        <div class="card"><h3>Equipamentos com mais avarias</h3><ul class="lista" id="l-avarias"></ul></div>
+        <div class="card"><h3>Alertas</h3><ul class="lista" id="l-alertas"></ul></div>
+      </div>
+      <div class="duas">
+        <div class="card" id="c-custos"><h3>Custos (mão de obra e peças)</h3><div class="grid" id="custos" style="margin-top:8px"></div></div>
+        <div class="card"><h3>Peças em rutura</h3><p><span class="tag t-ne">Indisponível</span></p><p class="muted">Aparece quando a Parte 3 (peças e armazém) estiver instalada.</p></div>
+      </div>
+    </section>
+
+    <!-- EQUIPAMENTOS -->
+    <section class="vista" id="v-equipamentos">
+      <div class="topo"><h2>Equipamentos</h2><button class="btn" id="b-novo-eq">Novo equipamento</button></div>
+      <div class="card">
+        <div class="filtros">
+          <label>Pesquisa<input id="e-q" placeholder="Número ou descrição"></label>
+          <label>Zona<select id="e-zona"><option value="">Todas</option><option>Abate de Suínos</option><option>Salsicharia</option><option>Desmancha</option></select></label>
+          <label>Obsoletos<select id="e-obs"><option value="0">Ocultar</option><option value="1">Mostrar</option></select></label>
+        </div>
+        <div class="tab-wrap"><table><thead><tr><th>Nº</th><th>Descrição</th><th>Zona</th><th>Fornecedor</th><th>Planos</th><th>Estado</th></tr></thead><tbody id="e-corpo"></tbody></table></div>
+      </div>
+      <div class="card painel oculto" id="e-detalhe"></div>
+    </section>
+
+    <!-- PLANOS -->
+    <section class="vista" id="v-planos">
+      <div class="topo"><h2>Planos de manutenção</h2></div>
+      <div class="card">
+        <div class="campos">
+          <label class="campo">Equipamento<select id="p-eq"></select></label>
+          <label class="campo">Plano<select id="p-plano"></select></label>
+        </div>
+        <div class="campos">
+          <label class="campo">Periodicidade<select id="p-per"></select></label>
+          <label class="campo">Tipo de manutenção<select id="p-tipo"><option>Interna</option><option>Externa</option></select></label>
+          <label class="campo">Dia do mês<input id="p-dia" type="number" min="1" max="31" value="10"></label>
+          <label class="campo">Antecedência do alerta (dias; vazio = global)<input id="p-ant" type="number" min="0" max="90" placeholder="global"></label>
+          <label class="campo">Fornecedor por defeito<select id="p-forn"><option value="">Nenhum</option><option>Mecanipol</option><option>Vaessen-Schoemaker Portugal</option></select></label>
+          <label class="campo">Ativo<select id="p-ativo"><option>Sim</option><option>Não</option></select></label>
+        </div>
+        <h3 style="margin-bottom:6px">Meses planeados</h3>
+        <div class="meses" id="p-meses"></div>
+        <p class="muted" id="p-nota"></p>
+        <div class="acoes"><button class="btn" id="p-gravar">Gravar plano</button><span class="muted" id="p-prox"></span></div>
+      </div>
+    </section>
+
+    <!-- PLANEADAS -->
+    <section class="vista" id="v-planeadas">
+      <div class="topo"><h2>Intervenções planeadas</h2><button class="btn" id="b-gerar">Gerar planeadas</button></div>
+      <div class="card">
+        <div class="filtros">
+          <label>Departamento<select id="pl-dep"></select></label>
+          <label>Zona ou máquina<select id="pl-zona"></select></label>
+          <label>Plano<select id="pl-plano"></select></label>
+          <label>Estado<select id="pl-est"><option value="">Todos</option><option>Planeada</option><option>Atrasada</option><option>Em curso</option></select></label>
+        </div>
+        <div class="tab-wrap"><table><thead><tr><th>Data</th><th>Equipamento</th><th>Plano</th><th>Tipo</th><th>Estado</th><th></th></tr></thead><tbody id="pl-corpo"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- VALIDAÇÃO -->
+    <section class="vista" id="v-validacao">
+      <div class="topo"><h2>Validação de intervenções</h2><span class="muted" id="va-cont"></span></div>
+      <div class="duas">
+        <div class="card"><h3>Por validar</h3><div class="tab-wrap"><table><thead><tr><th>Ficha</th><th>Equipamento</th><th>Tipo</th><th>Concluída</th></tr></thead><tbody id="va-corpo"></tbody></table></div></div>
+        <div class="card painel" id="va-det"><p class="muted">Escolha uma ficha da lista.</p></div>
+      </div>
+    </section>
+
+    <!-- CONFIGURAÇÃO -->
+    <section class="vista" id="v-config">
+      <div class="topo"><h2>Configuração</h2><span class="tag t-in" id="cf-nota"></span></div>
+      <div class="card">
+        <h3>Alertas e geração</h3>
+        <div class="campos" style="margin-top:8px">
+          <label class="campo">Antecedência do alerta (dias)<input id="cf-ant" type="number" min="0" max="90" value="7"></label>
+          <label class="campo">Horizonte de geração (dias)<input id="cf-hor" type="number" min="7" max="365" value="60"></label>
+          <label class="campo">Atrasadas a gerar (máximo)<input id="cf-atr" type="number" min="0" max="12" value="1"></label>
+        </div>
+        <p class="muted" id="cf-aviso"></p>
+      </div>
+      <div class="card">
+        <h3>Avançar intervenções fora de ordem</h3>
+        <div class="interr"><span>Operador</span><button class="sw" data-cf="op" aria-pressed="false">Não</button></div>
+        <div class="interr"><span>Supervisor</span><button class="sw" data-cf="su" aria-pressed="true">Sim</button></div>
+        <div class="interr"><span>Administrador de manutenção</span><button class="sw" data-cf="ad" aria-pressed="true">Sim</button></div>
+        <div class="interr"><span>Supervisor ou admin pode validar a ficha que concluiu</span><button class="sw" data-cf="vp" aria-pressed="false">Não</button></div>
+      </div>
+      <button class="btn" id="cf-gravar">Gravar configuração</button>
+    </section>
+  </main>
+</div>
+
+<div class="modal-f" id="modal"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-tit"><h3 id="m-tit"></h3><div id="m-corpo"></div><div class="acoes" id="m-acoes"></div></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+var HOJE=new Date(2026,10,5);
+var MESES=["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+var PERIODS=["Diária","Semanal","Quinzenal","Mensal","Trimestral","Semestral","Anual","Regular","De acordo com procedimento","Sempre que necessário"];
+var PERMS={
+  operador:{vistas:["equipamentos","planos","planeadas"],editaPlano:false,gera:false,valida:false,config:false,custos:false,equip:false},
+  supervisor:{vistas:["dashboard","equipamentos","planos","planeadas","validacao","config"],editaPlano:true,gera:true,valida:true,config:false,custos:true,equip:false},
+  admin:{vistas:["dashboard","equipamentos","planos","planeadas","validacao","config"],editaPlano:true,gera:true,valida:true,config:true,custos:true,equip:true}
+};
+var NOMES={dashboard:"Dashboard",equipamentos:"Equipamentos",planos:"Planos",planeadas:"Planeadas",validacao:"Validação",config:"Configuração"};
+var ICONES={
+ dashboard:'<path d="M4 13h6V4H4zM14 20h6V4h-6zM4 20h6v-3H4z" fill="none" stroke="currentColor" stroke-width="2"/>',
+ equipamentos:'<circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="currentColor" stroke-width="2"/>',
+ planos:'<rect x="4" y="5" width="16" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" stroke-width="2"/>',
+ planeadas:'<path d="M5 6h14M5 12h14M5 18h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+ validacao:'<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+ config:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/>'
+};
+
+var EQUIPS=[
+ {n:79,d:"Depiladora Suínos",z:"Abate de Suínos",dep:"Abate",f:"Mecanipol",obs:0},
+ {n:112,d:"Escaldão",z:"Abate de Suínos",dep:"Abate",f:"Fornecedor A",obs:0},
+ {n:248,d:"Enchedora REX Tecnologie 460",z:"Salsicharia",dep:"Salsicharia",f:"Vaessen-Schoemaker Portugal",obs:0},
+ {n:251,d:"Etiquetadora Bizerba GLP 160",z:"Salsicharia",dep:"Salsicharia",f:"Fornecedor B",obs:0},
+ {n:305,d:"Serra de fita",z:"Desmancha",dep:"Desmancha",f:"Fornecedor C",obs:0},
+ {n:306,d:"Câmara de frio 2",z:"Desmancha",dep:"Desmancha",f:"Fornecedor D",obs:0},
+ {n:90,d:"Tapete antigo (abatido)",z:"Abate de Suínos",dep:"Abate",f:"Fornecedor A",obs:1}
+];
+var PLANOS=[
+ {id:"P1",eq:79,d:"Lubrificação",per:"Mensal",tipo:"Interna",dia:10,ant:"",forn:"",ativo:"Sim",meses:[1,1,1,1,1,1,1,1,1,1,1,1]},
+ {id:"P2",eq:79,d:"Revisão anual",per:"Anual",tipo:"Externa",dia:15,ant:14,forn:"Mecanipol",ativo:"Sim",meses:[0,0,0,0,1,0,0,0,0,0,0,0]},
+ {id:"P3",eq:248,d:"Limpeza profunda",per:"Quinzenal",tipo:"Interna",dia:1,ant:"",forn:"",ativo:"Sim",meses:[1,1,1,1,1,1,1,1,1,1,1,1]},
+ {id:"P4",eq:248,d:"Revisão semestral",per:"Semestral",tipo:"Externa",dia:15,ant:"",forn:"Vaessen-Schoemaker Portugal",ativo:"Sim",meses:[1,0,0,0,0,0,1,0,0,0,0,0]},
+ {id:"P5",eq:112,d:"Verificação trimestral",per:"Trimestral",tipo:"Interna",dia:5,ant:3,forn:"",ativo:"Sim",meses:[1,0,0,1,0,0,1,0,0,1,0,0]},
+ {id:"P6",eq:305,d:"Afiação",per:"Semanal",tipo:"Interna",dia:1,ant:"",forn:"",ativo:"Sim",meses:[1,1,1,1,1,1,1,1,1,1,1,1]},
+ {id:"P7",eq:251,d:"Calibração",per:"Sempre que necessário",tipo:"Externa",dia:1,ant:"",forn:"Fornecedor B",ativo:"Sim",meses:[0,0,0,0,0,0,0,0,0,0,0,0]}
+];
+function d(a,m,di){return new Date(a,m-1,di)}
+var PLAN=[
+ {id:1,data:d(2026,10,10),eq:79,plano:"P1",estado:"Planeada"},
+ {id:2,data:d(2026,10,30),eq:248,plano:"P3",estado:"Planeada"},
+ {id:3,data:d(2026,11,10),eq:79,plano:"P1",estado:"Planeada"},
+ {id:4,data:d(2026,11,13),eq:248,plano:"P3",estado:"Planeada"},
+ {id:5,data:d(2026,11,5),eq:305,plano:"P6",estado:"Em curso"},
+ {id:6,data:d(2026,11,27),eq:248,plano:"P3",estado:"Planeada"},
+ {id:7,data:d(2026,12,5),eq:112,plano:"P5",estado:"Planeada"},
+ {id:8,data:d(2026,12,10),eq:79,plano:"P1",estado:"Planeada"}
+];
+var VALID=[
+ {f:4821,eq:79,tipo:"Preventiva",man:"Interna",conc:"2026-11-04",anom:"Sem anomalias.",interv:"Adição de óleo no lubrificador do ar comprimido e verificação.",hmo:"0h45",custo:"0,00 €",doc:""},
+ {f:4822,eq:248,tipo:"Curativa",man:"Externa",conc:"2026-11-04",anom:"Fuga de óleo na bomba.",interv:"Troca de vedante pelo técnico do fornecedor.",hmo:"2h00",custo:"184,50 €",doc:""},
+ {f:4823,eq:305,tipo:"Preventiva",man:"Interna",conc:"2026-11-03",anom:"Lâmina com desgaste.",interv:"Afiação e ajuste da tensão.",hmo:"1h00",custo:"12,00 €",doc:""},
+ {f:4824,eq:251,tipo:"Curativa",man:"Externa",conc:"2026-11-02",anom:"Etiquetas desalinhadas.",interv:"Recalibração do sensor.",hmo:"1h30",custo:"0,00 €",doc:"FS-2026-0187"}
+];
+var HIST=[["2026-10-10","Preventiva","Interna","Validada"],["2026-09-10","Preventiva","Interna","Validada"],["2026-08-22","Curativa","Interna","Validada"]];
+var CUMPR=[["Jun",100],["Jul",95],["Ago",88],["Set",92],["Out",81],["Nov",null]];
+var PC=[["Jun",22,3],["Jul",20,2],["Ago",18,5],["Set",21,3],["Out",19,6],["Nov",9,2]];
+var AVARIAS=[["Enchedora REX Tecnologie 460",7],["Depiladora Suínos",5],["Etiquetadora Bizerba GLP 160",4],["Serra de fita",3]];
+
+var perfil="supervisor", vistaAtual="dashboard", eqSel=null, fichaSel=null, cfg={op:0,su:1,ad:1,vp:0}, planoSel="P1";
+function $(s){return document.querySelector(s)}
+function $$(s){return Array.prototype.slice.call(document.querySelectorAll(s))}
+function fmt(dt){return ("0"+dt.getDate()).slice(-2)+"/"+("0"+(dt.getMonth()+1)).slice(-2)+"/"+dt.getFullYear()}
+function eqPorN(n){return EQUIPS.filter(function(e){return e.n===n})[0]}
+function planoPorId(id){return PLANOS.filter(function(p){return p.id===id})[0]}
+function estadoDe(p){ if(p.estado==="Planeada"&&p.data<HOJE)return "Atrasada"; return p.estado }
+function tagEstado(e){var c={"Planeada":"t-in","Atrasada":"t-er","Em curso":"t-av","Concluída":"t-ok","Validada":"t-ok","Cancelada":"t-ne"}[e]||"t-ne";return '<span class="tag '+c+'">'+e+'</span>'}
+function toast(t){var e=$("#toast");e.textContent=t;e.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(function(){e.style.display="none"},3200)}
+function modal(tit,corpo,acoes){
+  $("#m-tit").textContent=tit;$("#m-corpo").innerHTML=corpo;var a=$("#m-acoes");a.innerHTML="";
+  acoes.forEach(function(x){var b=document.createElement("button");b.className="btn "+(x.cls||"");b.textContent=x.t;b.onclick=function(){if(!x.keep)fechar();if(x.fn)x.fn()};a.appendChild(b)});
+  $("#modal").classList.add("on");var f=a.querySelector("button");if(f)f.focus();
+}
+function fechar(){$("#modal").classList.remove("on")}
+document.addEventListener("keydown",function(e){if(e.key==="Escape")fechar()});
+
+function montarMenu(){
+  var m=$("#menu");m.innerHTML="";
+  PERMS[perfil].vistas.forEach(function(v){
+    var b=document.createElement("button");b.dataset.v=v;
+    b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONES[v]+'</svg><span>'+NOMES[v]+'</span>';
+    b.onclick=function(){ir(v)};m.appendChild(b);
+  });
+}
+function ir(v){
+  if(PERMS[perfil].vistas.indexOf(v)<0)v=PERMS[perfil].vistas[0];
+  vistaAtual=v;
+  $$(".vista").forEach(function(s){s.classList.toggle("ativa",s.id==="v-"+v)});
+  $$("#menu button").forEach(function(b){b.classList.toggle("ativo",b.dataset.v===v);b.setAttribute("aria-current",b.dataset.v===v?"page":"false")});
+  history.replaceState(null,"","#"+v);
+  render(v);
+}
+function render(v){
+  if(v==="dashboard")rDash();
+  if(v==="equipamentos")rEquip();
+  if(v==="planos")rPlanos();
+  if(v==="planeadas")rPlaneadas();
+  if(v==="validacao")rValid();
+  if(v==="config")rConfig();
+}
+
+/* Dashboard */
+function rDash(){
+  var P=PERMS[perfil], atras=PLAN.filter(function(p){return estadoDe(p)==="Atrasada"}).length;
+  var zona=$("#d-zona").value, f=zona?0.5:1;
+  function n(x){return Math.round(x*f)}
+  $("#kpis").innerHTML=
+   '<div class="kpi"><div class="v">'+n(19)+'</div><div class="l">Planeadas em novembro</div></div>'+
+   '<div class="kpi verde"><div class="v">'+n(9)+'</div><div class="l">Realizadas</div></div>'+
+   '<div class="kpi erro"><div class="v">'+(zona?1:atras)+'</div><div class="l">Atrasadas (a hoje)</div></div>'+
+   '<div class="kpi roxo"><div class="v">'+(zona?"n/a":"81%")+'</div><div class="l">Cumprimento de outubro</div></div>'+
+   '<div class="kpi"><div class="v">'+VALID.length+'</div><div class="l">Por validar</div></div>';
+  $("#g-cumpr").innerHTML=CUMPR.map(function(c){
+    var h=c[1]===null?0:Math.round(c[1]*1.15);
+    return '<div class="barra"><span class="pct">'+(c[1]===null?"n/a":c[1]+"%")+'</span><div class="col" style="height:'+h+'px;background:'+(c[1]!==null&&c[1]<85?"var(--roxo)":"var(--azul)")+'"></div><span>'+c[0]+'</span></div>'}).join("");
+  $("#g-pc").innerHTML=PC.map(function(c){
+    return '<div class="barra"><span class="pct">'+(c[1]+c[2])+'</span><div class="pilha"><div style="height:'+c[2]*4+'px;background:var(--roxo);border-radius:6px 6px 0 0"></div><div style="height:'+c[1]*3+'px;background:var(--azul)"></div></div><span>'+c[0]+'</span></div>'}).join("");
+  $("#l-avarias").innerHTML=AVARIAS.map(function(a){return '<li><span>'+a[0]+'</span><span class="tag t-er">'+a[1]+' curativas</span></li>'}).join("");
+  $("#l-alertas").innerHTML=
+   '<li><span>'+atras+' intervenções atrasadas</span><button class="lnk a lnk" data-ir="planeadas">Ver</button></li>'+
+   '<li><span>3 a vencer nos próximos 7 dias</span><button class="a lnk" data-ir="planeadas">Ver</button></li>'+
+   '<li><span>'+VALID.length+' concluídas por validar</span><button class="a lnk" data-ir="validacao">Ver</button></li>'+
+   '<li><span>1 equipamento sem plano</span><button class="a lnk" data-ir="equipamentos">Ver</button></li>';
+  $$("#l-alertas button").forEach(function(b){b.className="lnk";b.onclick=function(){if(PERMS[perfil].vistas.indexOf(b.dataset.ir)>=0)ir(b.dataset.ir);else toast("O seu perfil não tem acesso a esse ecrã.")}});
+  $("#c-custos").classList.toggle("oculto",!P.custos);
+  $("#custos").innerHTML='<div class="kpi"><div class="v">1.240 €</div><div class="l">Mão de obra (mês)</div></div><div class="kpi"><div class="v">596 €</div><div class="l">Peças (mês)</div></div>';
+}
+
+/* Equipamentos */
+function rEquip(){
+  $("#b-novo-eq").disabled=!PERMS[perfil].equip;
+  $("#b-novo-eq").title=PERMS[perfil].equip?"":"Só o administrador cria equipamentos";
+  var q=$("#e-q").value.toLowerCase(), z=$("#e-zona").value, o=$("#e-obs").value==="1";
+  var lista=EQUIPS.filter(function(e){return (o||!e.obs)&&(!z||e.z===z)&&(!q||(e.n+" "+e.d).toLowerCase().indexOf(q)>=0)});
+  $("#e-corpo").innerHTML=lista.length?lista.map(function(e){
+    var np=PLANOS.filter(function(p){return p.eq===e.n}).length;
+    return '<tr class="clic'+(eqSel===e.n?" sel":"")+'" tabindex="0" data-n="'+e.n+'"><td>'+e.n+'</td><td>'+e.d+'</td><td>'+e.z+'</td><td>'+e.f+'</td><td>'+(np||'<span class="tag t-av">Sem plano</span>')+'</td><td>'+(e.obs?'<span class="tag t-ne">Obsoleto</span>':'<span class="tag t-ok">Ativo</span>')+'</td></tr>'}).join(""):'<tr><td colspan="6" class="muted">Sem resultados.</td></tr>';
+  $$("#e-corpo tr[data-n]").forEach(function(tr){
+    function abre(){eqSel=+tr.dataset.n;rEquip();detEquip()}
+    tr.onclick=abre;tr.onkeydown=function(ev){if(ev.key==="Enter")abre()};
+  });
+  if(eqSel)detEquip();
+}
+function detEquip(){
+  var e=eqPorN(eqSel);if(!e)return;var box=$("#e-detalhe");box.classList.remove("oculto");
+  var ps=PLANOS.filter(function(p){return p.eq===e.n});
+  box.innerHTML='<h3>'+e.n+' · '+e.d+'</h3><p class="muted">Zona: '+e.z+' · Fornecedor: '+e.f+' · E-mail de alerta: manutencao@exemplo.invalid</p>'+
+   '<h3 style="margin-top:10px">Planos</h3>'+(ps.length?'<ul class="lista">'+ps.map(function(p){return '<li><span>'+p.d+' · '+p.per+' · '+p.tipo+'</span><button class="lnk" data-p="'+p.id+'">Abrir plano</button></li>'}).join("")+'</ul>':'<p class="muted">Sem plano. Crie um no ecrã Planos.</p>')+
+   '<h3 style="margin-top:10px">Histórico de intervenções</h3><ul class="lista">'+HIST.map(function(h){return '<li><span>'+h[0]+' · '+h[1]+' · '+h[2]+'</span>'+tagEstado(h[3])+'</li>'}).join("")+'</ul>';
+  $$("#e-detalhe button[data-p]").forEach(function(b){b.onclick=function(){planoSel=b.dataset.p;ir("planos")}});
+}
+
+/* Planos */
+function rPlanos(){
+  var P=PERMS[perfil], pl=planoPorId(planoSel)||PLANOS[0];planoSel=pl.id;
+  $("#p-eq").innerHTML=EQUIPS.filter(function(e){return !e.obs}).map(function(e){return '<option value="'+e.n+'"'+(e.n===pl.eq?" selected":"")+'>'+e.n+' · '+e.d+'</option>'}).join("");
+  $("#p-plano").innerHTML=PLANOS.filter(function(p){return p.eq===pl.eq}).map(function(p){return '<option value="'+p.id+'"'+(p.id===pl.id?" selected":"")+'>'+p.d+'</option>'}).join("");
+  $("#p-per").innerHTML=PERIODS.map(function(x){return '<option'+(x===pl.per?" selected":"")+'>'+x+'</option>'}).join("");
+  $("#p-tipo").value=pl.tipo;$("#p-dia").value=pl.dia;$("#p-ant").value=pl.ant;$("#p-forn").value=pl.forn;$("#p-ativo").value=pl.ativo;
+  $("#p-meses").innerHTML=MESES.map(function(m,i){return '<button class="mes" type="button" aria-pressed="'+(pl.meses[i]?"true":"false")+'" data-i="'+i+'">'+m+'</button>'}).join("");
+  $$("#p-meses .mes").forEach(function(b){b.disabled=!P.editaPlano;b.onclick=function(){var i=+b.dataset.i;pl.meses[i]=pl.meses[i]?0:1;b.setAttribute("aria-pressed",pl.meses[i]?"true":"false");proxima(pl)}});
+  ["#p-eq","#p-plano","#p-per","#p-tipo","#p-dia","#p-ant","#p-forn","#p-ativo"].forEach(function(s){$(s).disabled=!P.editaPlano&&s!=="#p-eq"&&s!=="#p-plano"});
+  $("#p-gravar").disabled=!P.editaPlano;
+  $("#p-nota").textContent=P.editaPlano?"Clique nos meses para marcar ou desmarcar. Meses todos desmarcados significa todos os meses.":"O seu perfil só consulta os planos.";
+  proxima(pl);
+}
+function proxima(pl){
+  var txt;
+  if(pl.per==="Sempre que necessário")txt="Este plano nunca gera intervenções planeadas.";
+  else if(pl.ativo!=="Sim")txt="Plano inativo: não gera intervenções.";
+  else{
+    var marc=pl.meses.reduce(function(a,b){return a+b},0), dia=+pl.dia||1, r=null;
+    for(var k=0;k<14&&!r;k++){
+      var m=new Date(HOJE.getFullYear(),HOJE.getMonth()+k,1), i=m.getMonth();
+      if(marc&&!pl.meses[i])continue;
+      var ult=new Date(m.getFullYear(),i+1,0).getDate(), c=new Date(m.getFullYear(),i,Math.min(dia,ult));
+      if(c>=HOJE)r=c;
+    }
+    txt=r?"Próxima data calculada: "+fmt(r):"Sem data nos próximos 14 meses.";
+  }
+  $("#p-prox").textContent=txt;
+}
+function ligarPlanos(){
+  $("#p-eq").onchange=function(){var p=PLANOS.filter(function(x){return x.eq===+$("#p-eq").value})[0];planoSel=p?p.id:planoSel;rPlanos()};
+  $("#p-plano").onchange=function(){planoSel=$("#p-plano").value;rPlanos()};
+  ["#p-per","#p-dia","#p-ativo"].forEach(function(s){$(s).onchange=function(){var pl=planoPorId(planoSel);pl.per=$("#p-per").value;pl.dia=$("#p-dia").value;pl.ativo=$("#p-ativo").value;proxima(pl)}});
+  $("#p-gravar").onclick=function(){
+    var pl=planoPorId(planoSel), n=PLAN.filter(function(p){return p.plano===pl.id&&p.estado==="Planeada"&&p.data>=HOJE}).length;
+    var ant=$("#p-ant").value;
+    if(ant!==""&&(+ant<0||+ant>90)){toast("A antecedência tem de estar entre 0 e 90 dias.");return}
+    pl.tipo=$("#p-tipo").value;pl.ant=ant;pl.forn=$("#p-forn").value;
+    if(pl.tipo==="Externa"&&!pl.forn){toast("Plano externo precisa de fornecedor por defeito.");return}
+    modal("Gravar plano","<p>Há <b>"+n+"</b> intervenções futuras planeadas deste plano. Ao gravar, ficam <b>Canceladas</b> (motivo: plano alterado) e geram-se as novas.</p>",[
+      {t:"Gravar e recalcular",fn:function(){toast("Plano gravado. "+n+" canceladas e novas geradas (simulação).")}},{t:"Cancelar",cls:"sec"}]);
+  };
+}
+
+/* Planeadas */
+function rPlaneadas(){
+  var P=PERMS[perfil];$("#b-gerar").disabled=!P.gera;$("#b-gerar").title=P.gera?"":"Só supervisor e administrador geram planeadas";
+  var deps=["Todos"].concat(uniq(EQUIPS.map(function(e){return e.dep})));
+  fill("#pl-dep",deps);
+  var dep=$("#pl-dep").value, zs=["Todas"].concat(uniq(EQUIPS.filter(function(e){return dep==="Todos"||e.dep===dep}).map(function(e){return e.z+" · "+e.d})));
+  fill("#pl-zona",zs);
+  var zv=$("#pl-zona").value, ps=["Todos"].concat(PLANOS.filter(function(p){var e=eqPorN(p.eq);return (dep==="Todos"||e.dep===dep)&&(zv==="Todas"||zv===e.z+" · "+e.d)}).map(function(p){return p.id+" · "+p.d}));
+  fill("#pl-plano",ps);
+  var pv=$("#pl-plano").value, ev=$("#pl-est").value;
+  var lista=PLAN.filter(function(p){
+    var e=eqPorN(p.eq), pl=planoPorId(p.plano);
+    return (dep==="Todos"||e.dep===dep)&&(zv==="Todas"||zv===e.z+" · "+e.d)&&(pv==="Todos"||pv===pl.id+" · "+pl.d)&&(!ev||estadoDe(p)===ev);
+  }).sort(function(a,b){return a.data-b.data});
+  $("#pl-corpo").innerHTML=lista.length?lista.map(function(p){
+    var e=eqPorN(p.eq), pl=planoPorId(p.plano), est=estadoDe(p);
+    return '<tr><td>'+fmt(p.data)+'</td><td>'+e.n+' · '+e.d+'</td><td>'+pl.d+'</td><td>'+(pl.tipo==="Externa"?"Externa":"Interna")+' · Preventiva</td><td>'+tagEstado(est)+'</td><td>'+(P.gera&&(est==="Planeada"||est==="Atrasada")?'<button class="btn perigo" data-c="'+p.id+'">Cancelar</button>':"")+'</td></tr>'}).join(""):'<tr><td colspan="6" class="muted">Sem intervenções para este filtro.</td></tr>';
+  $$("#pl-corpo button[data-c]").forEach(function(b){b.onclick=function(){
+    modal("Cancelar planeada",'<label class="campo">Motivo (obrigatório)<input id="mot" placeholder="Ex.: equipamento parado"></label>',[
+      {t:"Cancelar planeada",cls:"perigo",keep:true,fn:function(){
+        if(!$("#mot").value.trim()){toast("Indique o motivo.");return}
+        var it=PLAN.filter(function(x){return x.id===+b.dataset.c})[0];it.estado="Cancelada";PLAN.splice(PLAN.indexOf(it),1);fechar();rPlaneadas();toast("Planeada cancelada.")}},
+      {t:"Voltar",cls:"sec"}]);}});
+}
+function uniq(a){return a.filter(function(x,i){return a.indexOf(x)===i})}
+function fill(sel,vals){var s=$(sel),cur=s.value;s.innerHTML=vals.map(function(v){return "<option>"+v+"</option>"}).join("");if(vals.indexOf(cur)>=0)s.value=cur}
+var gerou=false;
+function gerar(){
+  if(!PERMS[perfil].gera)return;
+  var novas=gerou?0:3, exist=PLAN.length-(gerou?0:0);
+  if(!gerou){
+    PLAN.push({id:90,data:d(2026,12,25),eq:248,plano:"P3",estado:"Planeada"},{id:91,data:d(2026,12,11),eq:248,plano:"P3",estado:"Planeada"},{id:92,data:d(2026,12,15),eq:248,plano:"P4",estado:"Planeada"});
+  }
+  var corpo='<ul class="lista"><li><span>Criadas</span><b>'+novas+'</b></li><li><span>Já existentes</span><b>'+exist+'</b></li><li><span>Saltadas (atraso acima do máximo)</span><b>'+(gerou?0:2)+'</b></li><li><span>Planos com erro</span><b>0</b></li></ul><p class="muted">'+(gerou?"A segunda geração não cria nada: o resultado é idempotente.":"Horizonte de 60 dias (até 04/01/2027). Experimente gerar outra vez.")+'</p>';
+  gerou=true;
+  modal("Relatório de geração",corpo,[{t:"Fechar",fn:function(){rPlaneadas()}}]);
+}
+
+/* Validação */
+function rValid(){
+  var P=PERMS[perfil];
+  $("#va-cont").textContent=VALID.length+" fichas por validar";
+  $("#va-corpo").innerHTML=VALID.length?VALID.map(function(v){var e=eqPorN(v.eq);
+    return '<tr class="clic'+(fichaSel===v.f?" sel":"")+'" tabindex="0" data-f="'+v.f+'"><td>'+v.f+'</td><td>'+e.n+' · '+e.d+'</td><td>'+v.tipo+' · '+v.man+'</td><td>'+v.conc+'</td></tr>'}).join(""):'<tr><td colspan="4" class="muted">Nada por validar.</td></tr>';
+  $$("#va-corpo tr[data-f]").forEach(function(tr){function a(){fichaSel=+tr.dataset.f;rValid()}tr.onclick=a;tr.onkeydown=function(ev){if(ev.key==="Enter")a()}});
+  var v=VALID.filter(function(x){return x.f===fichaSel})[0], box=$("#va-det");
+  if(!v){box.innerHTML='<p class="muted">Escolha uma ficha da lista.</p>';return}
+  var e=eqPorN(v.eq);
+  box.innerHTML='<h3>Ficha '+v.f+' · '+e.d+'</h3><p>'+tagEstado("Concluída")+' <span class="tag t-in">'+v.tipo+'</span> <span class="tag t-ne">'+v.man+'</span></p>'+
+   '<p><b>Anomalia:</b> '+v.anom+'</p><p><b>Intervenção:</b> '+v.interv+'</p><p><b>Mão de obra:</b> '+v.hmo+' · <b>Peças e materiais:</b> '+v.custo+'</p>'+
+   (v.man==="Externa"?'<label class="campo">Doc. externo / folha de serviço<input id="v-doc" value="'+v.doc+'" '+(P.valida?"":"disabled")+'></label>':"")+
+   '<div class="acoes"><button class="btn verde" id="v-ok">Validar e fechar</button><button class="btn perigo" id="v-dev">Devolver ao técnico</button></div>'+
+   (P.valida?"":'<p class="muted">O seu perfil não pode validar.</p>');
+  $("#v-ok").disabled=!P.valida;$("#v-dev").disabled=!P.valida;
+  $("#v-ok").onclick=function(){
+    if(v.man==="Externa"){var doc=$("#v-doc").value.trim();if(!doc){toast("Ficha externa: indique o doc. externo ou a folha de serviço antes de validar.");return}v.doc=doc}
+    VALID.splice(VALID.indexOf(v),1);fichaSel=null;rValid();toast("Ficha "+v.f+" validada e fechada.");
+  };
+  $("#v-dev").onclick=function(){
+    modal("Devolver ao técnico",'<label class="campo">Motivo (obrigatório)<input id="mot2" placeholder="O que falta corrigir"></label>',[
+      {t:"Devolver",cls:"perigo",keep:true,fn:function(){if(!$("#mot2").value.trim()){toast("Indique o motivo da devolução.");return}fechar();VALID.splice(VALID.indexOf(v),1);fichaSel=null;rValid();toast("Ficha devolvida: volta a Em curso na app.")}},
+      {t:"Voltar",cls:"sec"}]);
+  };
+}
+
+/* Configuração */
+function rConfig(){
+  var adm=PERMS[perfil].config;
+  $("#cf-nota").textContent=adm?"Pode editar":"Só o administrador edita";
+  ["#cf-ant","#cf-hor","#cf-atr"].forEach(function(s){$(s).disabled=!adm});
+  $$(".sw").forEach(function(b){b.disabled=!adm;var on=!!cfg[b.dataset.cf];b.setAttribute("aria-pressed",on?"true":"false");b.textContent=on?"Sim":"Não"});
+  $("#cf-gravar").disabled=!adm;avisoCfg();
+}
+function avisoCfg(){
+  var a=+$("#cf-ant").value,h=+$("#cf-hor").value,msg="";
+  if(h<a)msg="O horizonte de geração não pode ser inferior à maior antecedência ("+a+" dias).";
+  else if(a<0||a>90||isNaN(a))msg="A antecedência tem de estar entre 0 e 90 dias.";
+  $("#cf-aviso").textContent=msg;return !msg;
+}
+
+/* Arranque */
+function init(){
+  $("#perfil").onchange=function(){perfil=$("#perfil").value;montarMenu();ir(PERMS[perfil].vistas.indexOf(vistaAtual)>=0?vistaAtual:PERMS[perfil].vistas[0]);toast("Perfil: "+$("#perfil").selectedOptions[0].text)};
+  ["#d-periodo","#d-zona"].forEach(function(s){$(s).onchange=rDash});
+  ["#e-q","#e-zona","#e-obs"].forEach(function(s){$(s).oninput=rEquip;$(s).onchange=rEquip});
+  ["#pl-dep","#pl-zona","#pl-plano","#pl-est"].forEach(function(s){$(s).onchange=rPlaneadas});
+  $("#b-gerar").onclick=gerar;
+  $("#b-novo-eq").onclick=function(){toast("Criar equipamento: decidido em P1-T01 (no PHC ou aqui).")};
+  ["#cf-ant","#cf-hor","#cf-atr"].forEach(function(s){$(s).oninput=avisoCfg});
+  $$(".sw").forEach(function(b){b.onclick=function(){cfg[b.dataset.cf]=cfg[b.dataset.cf]?0:1;rConfig()}});
+  $("#cf-gravar").onclick=function(){if(avisoCfg())toast("Configuração gravada (simulação).")};
+  $("#modal").onclick=function(e){if(e.target===$("#modal"))fechar()};
+  ligarPlanos();montarMenu();
+  var h=location.hash.replace("#","");ir(NOMES[h]?h:"dashboard");
+}
+init();
+})();
+</script>
+</body>
+</html>

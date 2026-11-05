@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Manutenção Landeiro - protótipo da app</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Marca SigmaCode */
+  --verde:#5BB572; --azul:#3466AF; --roxo:#604696; --navy:#1A1731; --cinza:#CAC9C9;
+  /* Gradiente do ícone: verde no canto superior direito, azul ao meio, roxo no canto inferior esquerdo */
+  --grad:linear-gradient(225deg,#5BB572 0%,#3466AF 50%,#604696 100%);
+  --bg:#F3F4F8; --card:#FFFFFF; --txt:#1A1731; --muted:#55546A; --line:#E1E1E8; --campo:#FFFFFF;
+  --ok:#23803F; --ok-bg:#E4F3E9; --azul-t:#2A5698; --azul-bg:#E5EDF8; --roxo-t:#4E3883; --roxo-bg:#ECE6F6;
+  --erro:#B3261E; --erro-bg:#FCE8E6; --aviso:#8A5200; --aviso-bg:#FFF0D6;
+  --fora:#E9E8EE; --sombra:0 10px 30px rgba(26,23,49,.18);
+  --f-tit:'Exo 2',system-ui,sans-serif; --f-txt:'Open Sans',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#14122A; --card:#1F1C3A; --txt:#F1F0F8; --muted:#B9B7CB; --line:#37335C; --campo:#181531;
+    --ok:#7BD594; --ok-bg:#1B3A28; --azul-t:#9CBDF0; --azul-bg:#1B2C4C; --roxo-t:#C7B3F2; --roxo-bg:#2C2250;
+    --erro:#FF9A92; --erro-bg:#472220; --aviso:#FFC56B; --aviso-bg:#43310F; --fora:#0E0C1F;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--fora);color:var(--txt);font-family:var(--f-txt);font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--azul);outline-offset:2px}
+.ic{width:22px;height:22px;flex:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* Palco: telemóvel e painel de demonstração */
+.palco{min-height:100%;display:flex;gap:28px;align-items:flex-start;justify-content:center;padding:24px 16px;flex-wrap:wrap}
+.phone{width:390px;height:min(800px,calc(100vh - 48px));min-height:640px;background:var(--bg);border:10px solid var(--navy);border-radius:38px;box-shadow:var(--sombra);overflow:hidden;position:relative;display:flex;flex-direction:column}
+.status{height:26px;background:var(--navy);color:#fff;font:600 12px var(--f-tit);display:flex;align-items:center;justify-content:space-between;padding:0 18px;flex:none}
+.app{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+.scr{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+
+/* Painel de demonstração */
+.demo{width:300px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--sombra)}
+.demo h2{font:700 18px var(--f-tit);margin:0 0 4px}
+.demo h3{font:600 14px var(--f-tit);margin:16px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.demo p,.demo li{font-size:14px;margin:0 0 6px}
+.demo ul{padding-left:18px;margin:0}
+.tag{display:inline-block;background:var(--navy);border:1px solid var(--line);color:#fff;font:600 12px var(--f-tit);padding:2px 10px;border-radius:99px}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:48px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--campo);margin-bottom:8px;text-align:left}
+.sw b{font-weight:600}
+.sw .pill{font:600 13px var(--f-tit);padding:4px 12px;border-radius:99px;background:var(--erro-bg);color:var(--erro)}
+.sw[aria-pressed="true"] .pill{background:var(--ok-bg);color:var(--ok)}
+.btn-s{width:100%;min-height:48px;border:1px solid var(--line);background:var(--campo);border-radius:12px;padding:8px 12px;margin-bottom:8px;text-align:left;font-size:15px}
+#demoBtn,#demoFechar{display:none}
+
+/* Componentes da app */
+.top{background:var(--navy);color:#fff;padding:10px 12px;display:flex;align-items:center;gap:10px;flex:none;position:relative}
+.top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--grad)}
+.top h1{font:700 20px var(--f-tit);margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{width:48px;height:48px;border-radius:14px;border:0;background:rgba(255,255,255,.12);color:#fff;display:inline-flex;align-items:center;justify-content:center;position:relative;flex:none}
+.ib.add{background:var(--verde);color:#10240F}
+.ib.add .ic{width:26px;height:26px;stroke-width:2.6}
+.av{font:700 15px var(--f-tit)}
+.chip-sync{min-height:48px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:14px;border:0;background:rgba(255,255,255,.12);color:#fff;font:600 14px var(--f-tit)}
+.chip-sync .ic{width:20px;height:20px}
+.banner{display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:14px;flex:none}
+.banner.off{background:var(--aviso-bg);color:var(--aviso)}
+.banner.sync{background:var(--azul-bg);color:var(--azul-t)}
+.banner.on{background:var(--ok-bg);color:var(--ok)}
+.banner b{font-weight:600}
+.spin{animation:gira 1s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+.alerta{margin:12px 12px 0;padding:12px 14px;border-radius:14px;background:var(--roxo-bg);color:var(--roxo-t);display:flex;gap:10px;align-items:center;min-height:48px;border:0;width:calc(100% - 24px);text-align:left;font-size:15px}
+.chips{display:flex;gap:8px;padding:12px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{min-height:44px;padding:0 16px;border-radius:99px;border:1px solid var(--line);background:var(--card);font:600 14px var(--f-tit);white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--azul);border-color:var(--azul);color:#fff}
+.lista{padding:0 12px 16px;display:flex;flex-direction:column;gap:10px}
+.it{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;min-height:72px}
+.it.bloq{opacity:.78}
+.it h3{font:600 16px var(--f-tit);margin:0}
+.it .meta{font-size:14px;color:var(--muted);margin-top:2px}
+.it .corpo{flex:1;min-width:0}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.b{font:600 12px var(--f-tit);padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:4px}
+.b.plan{background:var(--azul-bg);color:var(--azul-t)}
+.b.curso{background:var(--roxo-bg);color:var(--roxo-t)}
+.b.conc{background:var(--ok-bg);color:var(--ok)}
+.b.dev{background:var(--aviso-bg);color:var(--aviso)}
+.b.atr{background:var(--erro-bg);color:var(--erro)}
+.b.tipo{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.b .ic{width:14px;height:14px}
+.sy{width:34px;height:34px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.sy .ic{width:18px;height:18px}
+.sy.ok{background:var(--ok-bg);color:var(--ok)}
+.sy.pend{background:var(--azul-bg);color:var(--azul-t)}
+.sy.erro{background:var(--erro-bg);color:var(--erro)}
+.sy.conf{background:var(--aviso-bg);color:var(--aviso)}
+.sy.lock{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.vazio{padding:40px 24px;text-align:center;color:var(--muted)}
+
+/* Formulário */
+.form{padding:14px 14px 110px;display:flex;flex-direction:column;gap:14px}
+label,.lab{font:600 14px var(--f-tit);display:block;margin-bottom:6px}
+.campo{width:100%;min-height:48px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--campo);color:var(--txt);font:inherit}
+textarea.campo{min-height:96px;resize:vertical}
+.campo[readonly]{background:var(--bg);color:var(--muted)}
+.campo.err{border-color:var(--erro)}
+.msg{color:var(--erro);font-size:13px;margin-top:4px}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{min-height:48px;border:0;background:var(--campo);font:600 15px var(--f-tit)}
+.seg button[aria-pressed="true"]{background:var(--azul);color:#fff}
+.trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.trio .lab{display:flex;align-items:center;gap:4px;font-size:13px}
+.trio .lab .ic{width:16px;height:16px}
+.agora{margin-top:6px;min-height:36px;width:100%;border:1px dashed var(--line);border-radius:10px;background:transparent;color:var(--azul-t);font:600 13px var(--f-tit)}
+.chk{display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 0}
+.chk input{width:26px;height:26px;accent-color:var(--azul)}
+.fotos{display:flex;flex-wrap:wrap;gap:10px}
+.foto{width:84px;height:84px;border-radius:12px;background:var(--azul-bg);color:var(--azul-t);display:flex;align-items:center;justify-content:center;position:relative;border:1px solid var(--line)}
+.foto .x{position:absolute;top:-8px;right:-8px;width:32px;height:32px;border-radius:99px;border:2px solid var(--card);background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;padding:0}
+.foto .x .ic{width:16px;height:16px}
+.addfoto{width:84px;height:84px;border-radius:12px;border:2px dashed var(--azul);background:transparent;color:var(--azul-t);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:600 12px var(--f-tit)}
+.pecas{display:flex;align-items:center;gap:10px;min-height:48px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:14px}
+.barra{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1.2fr;gap:10px}
+.bt{min-height:52px;border-radius:14px;border:1.5px solid var(--azul);background:transparent;color:var(--azul-t);font:700 16px var(--f-tit);padding:0 12px}
+.bt.pri{background:var(--azul);color:#fff;border-color:var(--azul)}
+.bt.ver{background:var(--verde);color:#10240F;border-color:var(--verde)}
+.bt[disabled]{opacity:.5;cursor:not-allowed}
+.nota{padding:10px 12px;border-radius:12px;background:var(--aviso-bg);color:var(--aviso);font-size:14px}
+
+/* Login */
+.login{padding:28px 20px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;min-height:100%;background:var(--bg)}
+.logo{width:64px;height:64px;border-radius:18px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff;font:700 28px var(--f-tit)}
+.login h1{font:700 24px var(--f-tit);margin:0;text-align:center}
+.login p{margin:0;color:var(--muted);text-align:center;font-size:15px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;width:100%;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px}
+.tabs button{min-height:44px;border:0;border-radius:10px;background:transparent;font:600 14px var(--f-tit);color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--azul);color:#fff}
+.dots{display:flex;gap:14px;margin:8px 0}
+.dot{width:16px;height:16px;border-radius:99px;border:2px solid var(--azul);background:transparent}
+.dot.on{background:var(--azul)}
+.shake{animation:abana .35s}
+@keyframes abana{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.pad{display:grid;grid-template-columns:repeat(3,76px);gap:12px;margin-top:4px}
+.pad button{height:64px;border-radius:18px;border:1px solid var(--line);background:var(--card);font:600 24px var(--f-tit)}
+.pad button.vz{border:0;background:transparent}
+.link{background:none;border:0;color:var(--azul-t);font:600 15px var(--f-tit);min-height:48px;text-decoration:underline}
+.erro-l{color:var(--erro);font-size:14px;text-align:center;min-height:22px}
+.fld{width:100%}
+
+/* Folha (menu) e aviso */
+.fundo{position:absolute;inset:0;background:rgba(10,8,30,.55);display:flex;align-items:flex-end;z-index:20}
+.folha{width:100%;background:var(--card);border-radius:20px 20px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+.folha .lin{min-height:52px;display:flex;align-items:center;gap:12px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--campo);text-align:left;width:100%;font-size:16px}
+.toast{position:absolute;left:12px;right:12px;bottom:84px;background:var(--navy);color:#fff;padding:12px 14px;border-radius:14px;font-size:14px;z-index:30;box-shadow:var(--sombra)}
+.pend-it{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.pend-it .acoes{display:flex;gap:8px}
+.pend-it .acoes button{min-height:44px;flex:1;border-radius:12px;border:1.5px solid var(--azul);background:transparent;color:var(--azul-t);font:600 14px var(--f-tit)}
+
+@media (max-width:520px){
+  .palco{padding:0;display:block}
+  .phone{width:100%;height:100vh;height:100dvh;min-height:0;border:0;border-radius:0;box-shadow:none}
+  .status{display:none}
+  .demo{display:none;position:fixed;inset:auto 0 0 0;width:100%;max-height:80vh;overflow:auto;border-radius:20px 20px 0 0;z-index:50}
+  .demo.aberto{display:block}
+  #demoBtn{display:inline-flex;position:fixed;right:8px;bottom:8px;z-index:40;min-height:40px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);font:600 13px var(--f-tit);align-items:center;box-shadow:var(--sombra)}
+  #demoFechar{display:inline-flex;margin-top:8px}
+  .pad{grid-template-columns:repeat(3,72px)}
+}
+@media (prefers-reduced-motion:reduce){.spin,.shake{animation:none}}
+</style>
+</head>
+<body>
+<div class="palco">
+  <div class="phone" id="phone">
+    <div class="status" aria-hidden="true"><span id="hora">09:14</span><span>Protótipo</span></div>
+    <div class="app" id="app"></div>
+  </div>
+
+  <aside class="demo" id="demo" aria-label="Painel de demonstração">
+    <span class="tag">Protótipo M0 para 11/11/2026</span>
+    <h2>Manutenção Landeiro</h2>
+    <p>App de telemóvel para registar intervenções, mesmo sem rede. Dados fictícios; não liga a nenhum servidor.</p>
+    <h3>Simular</h3>
+    <button class="sw" id="swNet" aria-pressed="true"><span><b>Rede</b><br><small id="swNetT">Ligação disponível</small></span><span class="pill" id="swNetP">Online</span></button>
+    <button class="sw" id="swOrd" aria-pressed="false"><span><b>Perfil pode avançar ordem</b><br><small>Configuração do backoffice</small></span><span class="pill" id="swOrdP">Não</span></button>
+    <button class="btn-s" id="btConf">Simular conflito no próximo envio</button>
+    <button class="btn-s" id="btErr">Simular erro de regra no próximo envio</button>
+    <button class="btn-s" id="btRepor">Repor demonstração</button>
+    <h3>Como experimentar</h3>
+    <ul>
+      <li>PIN de demonstração: <b>1234</b>. Cinco falhas bloqueiam o PIN.</li>
+      <li>Ponha a rede em Offline, crie uma curativa com o botão +, e veja o estado Pendente.</li>
+      <li>Volte a Online: os pendentes sincronizam.</li>
+      <li>Com a ordem bloqueada, só a primeira planeada pode ser iniciada.</li>
+    </ul>
+    <h3>Suposições a validar</h3>
+    <ul>
+      <li>Linha do ecrã de criar = início, técnico e fim.</li>
+      <li>Botão + no canto superior direito, como no esboço.</li>
+      <li>Antecedência do alerta de 2 dias (vem do backoffice).</li>
+      <li>Ordem das planeadas por data e depois por número de ordem.</li>
+    </ul>
+    <button class="btn-s" id="demoFechar">Fechar painel</button>
+  </aside>
+</div>
+<button id="demoBtn" aria-controls="demo">Demo</button>
+
+<script>
+(function(){
+'use strict';
+const $=(s)=>document.querySelector(s);
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const P={
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  check:'<path d="M5 13l4 4L19 7"/>',
+  warn:'<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.5"/>',
+  alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+  camera:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  off:'<path d="M3 3l18 18"/><path d="M7.5 8.5A5 5 0 006 17h11M18.5 16.5A4 4 0 0017 9a6 6 0 00-9-2"/>',
+  back:'<path d="M15 5l-7 7 7 7"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  refresh:'<path d="M20 11a8 8 0 00-14-4M4 5v4h4M4 13a8 8 0 0014 4M20 19v-4h-4"/>',
+  bell:'<path d="M6 17v-6a6 6 0 0112 0v6l2 2H4z"/><path d="M10 21h4"/>',
+  undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
+  box:'<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+  out:'<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>'
+};
+const ic=(n,c)=>'<svg class="ic '+(c||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+P[n]+'</svg>';
+
+const EQUIP=[
+  ['Compressor de ar (exemplo)','101','Sala de máquinas'],
+  ['Enchedora (exemplo)','202','Salsicharia'],
+  ['Serra de fita (exemplo)','305','Desmancha'],
+  ['Câmara frigorífica 2 (exemplo)','410','Frio'],
+  ['Misturadora (exemplo)','118','Salsicharia'],
+  ['Embaladora (exemplo)','226','Embalamento']
+];
+const PIN_OK='1234';
+const MAX_TENT=5;
+const ANTEC=2;
+
+function dadosIniciais(){
+  return [
+    {id:'a1',eq:2,tipo:'Preventiva',estado:'Planeada',quando:'Atrasada',ordem:1,sync:'ok',origem:'servidor',anom:'',desc:'',ini:'',fim:'',limpeza:false,fotos:0},
+    {id:'a2',eq:0,tipo:'Preventiva',estado:'Planeada',quando:'Hoje',ordem:2,sync:'ok',origem:'servidor',anom:'',desc:'',ini:'',fim:'',limpeza:false,fotos:0},
+    {id:'a3',eq:1,tipo:'Preventiva',estado:'Planeada',quando:'Amanhã',ordem:3,sync:'ok',origem:'servidor',anom:'',desc:'',ini:'',fim:'',limpeza:false,fotos:0},
+    {id:'a4',eq:3,tipo:'Curativa',estado:'EmCurso',quando:'Hoje',ordem:0,sync:'ok',origem:'servidor',anom:'Temperatura acima do normal',desc:'',ini:'08:10',fim:'',limpeza:false,fotos:1},
+    {id:'a5',eq:4,tipo:'Preventiva',estado:'Devolvida',quando:'Ontem',ordem:0,sync:'ok',origem:'servidor',anom:'',desc:'Lubrificação feita',ini:'14:00',fim:'14:40',limpeza:true,fotos:0,nota:'Falta indicar o óleo usado.'}
+  ];
+}
+let S;
+function repor(){
+  S={ecra:'login',aba:'pin',pin:'',tent:MAX_TENT,erroPin:'',shake:false,
+     online:true,avancar:false,syncing:false,ultima:'09:14',
+     itens:dadosIniciais(),fila:[],filtro:'todas',draft:null,errosForm:{},
+     menu:false,toast:'',flagConf:false,flagErr:false,setPin:'',setFase:1,erroLogin:'',n:0};
+}
+repor();
+
+const agora=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+const eq=(i)=>EQUIP[i.eq];
+const primeiraPlaneada=()=>S.itens.filter((i)=>i.estado==='Planeada').sort((a,b)=>a.ordem-b.ordem)[0];
+const bloqueada=(i)=>i.estado==='Planeada'&&!S.avancar&&primeiraPlaneada()&&primeiraPlaneada().id!==i.id;
+const pendentes=()=>S.fila.length;
+function toast(t){S.toast=t;render();clearTimeout(toast.t);toast.t=setTimeout(()=>{S.toast='';render();},3200);}
+
+/* Faixa de estado da ligação */
+function faixa(){
+  if(!S.online)return '<div class="banner off" role="status">'+ic('off')+'<span><b>Sem ligação.</b> '+pendentes()+' por enviar. Dados de '+esc(S.ultima)+'</span></div>';
+  if(S.syncing)return '<div class="banner sync" role="status">'+ic('refresh','spin')+'<span><b>A sincronizar…</b></span></div>';
+  return '<div class="banner on" role="status">'+ic('check')+'<span>Online. Sincronizado às '+esc(S.ultima)+'</span></div>';
+}
+function marca(i){
+  if(bloqueada(i))return '<span class="sy lock" title="Bloqueada pela ordem">'+ic('lock')+'<span class="sr">Bloqueada pela ordem</span></span>';
+  const m={ok:['check','Sincronizado'],pend:['clock','Pendente de envio'],erro:['alert','Erro: ver pendentes'],conf:['warn','Conflito: ficou como proposta']}[i.sync];
+  return '<span class="sy '+i.sync+'" title="'+m[1]+'">'+ic(m[0])+'<span class="sr">'+m[1]+'</span></span>';
+}
+function badgeEstado(i){
+  if(i.estado==='Planeada'){
+    if(i.quando==='Atrasada')return '<span class="b atr">'+ic('alert')+'Atrasada</span>';
+    return '<span class="b plan">Planeada · '+esc(i.quando)+'</span>';
+  }
+  if(i.estado==='EmCurso')return '<span class="b curso">Em curso</span>';
+  if(i.estado==='Concluida')return '<span class="b conc">Concluída, a validar</span>';
+  if(i.estado==='Devolvida')return '<span class="b dev">'+ic('undo')+'Devolvida</span>';
+  return '';
+}
+
+/* Ecrãs */
+function vLogin(){
+  const dots=[0,1,2,3,4,5].map((n)=>'<span class="dot'+(n<S.pin.length?' on':'')+'"></span>').join('');
+  const tentTxt=S.tent<MAX_TENT?'Restam '+S.tent+' tentativas':'4 a 6 dígitos';
+  const pin='<div class="dots'+(S.shake?' shake':'')+'" role="img" aria-label="'+S.pin.length+' dígitos introduzidos">'+dots+'</div>'
+    +'<div class="erro-l" role="alert">'+esc(S.erroPin||tentTxt)+'</div>'
+    +'<div class="pad">'+[1,2,3,4,5,6,7,8,9].map((n)=>'<button data-act="dig" data-v="'+n+'" aria-label="'+n+'">'+n+'</button>').join('')
+    +'<button class="vz" disabled aria-hidden="true"></button><button data-act="dig" data-v="0" aria-label="0">0</button>'
+    +'<button class="vz" data-act="apagar" aria-label="Apagar">'+ic('back')+'</button></div>'
+    +'<button class="bt pri" style="width:100%;margin-top:6px" data-act="entrarpin"'+(S.pin.length<4?' disabled':'')+'>Entrar</button>'
+    +(S.online?'':'<p>Sem ligação: o PIN funciona na mesma.</p>');
+  const usr='<div class="fld"><label for="u">Utilizador</label><input id="u" class="campo" autocomplete="username" autocapitalize="none" placeholder="Escreva o seu utilizador"></div>'
+    +'<div class="fld"><label for="pw">Password</label><input id="pw" type="password" class="campo" autocomplete="current-password" placeholder="Escreva a sua password"></div>'
+    +'<div class="erro-l" role="alert">'+esc(S.erroLogin)+'</div>'
+    +'<button class="bt pri" style="width:100%" data-act="entrarusr">Entrar</button>'
+    +'<p>Na primeira vez precisa de ligação. Depois define um PIN.</p>';
+  return '<div class="login scr"><div class="logo" aria-hidden="true">M</div><h1>Manutenção</h1><p>Registo de intervenções</p>'
+    +'<div class="tabs" role="tablist"><button role="tab" aria-selected="'+(S.aba==='pin')+'" data-act="aba" data-v="pin">PIN</button><button role="tab" aria-selected="'+(S.aba==='usr')+'" data-act="aba" data-v="usr">Utilizador e password</button></div>'
+    +(S.aba==='pin'?pin:usr)+'</div>';
+}
+function vSetPin(){
+  const dots=[0,1,2,3,4,5].map((n)=>'<span class="dot'+(n<S.pin.length?' on':'')+'"></span>').join('');
+  return '<div class="login scr"><div class="logo" aria-hidden="true">M</div><h1>'+(S.setFase===1?'Defina um PIN':'Repita o PIN')+'</h1><p>'+(S.setFase===1?'4 a 6 dígitos. Serve para entrar sem password, mesmo sem rede.':'Escreva o mesmo PIN outra vez.')+'</p>'
+    +'<div class="dots'+(S.shake?' shake':'')+'">'+dots+'</div><div class="erro-l" role="alert">'+esc(S.erroPin)+'</div>'
+    +'<div class="pad">'+[1,2,3,4,5,6,7,8,9].map((n)=>'<button data-act="dig" data-v="'+n+'" aria-label="'+n+'">'+n+'</button>').join('')
+    +'<button class="vz" disabled aria-hidden="true"></button><button data-act="dig" data-v="0" aria-label="0">0</button>'
+    +'<button class="vz" data-act="apagar" aria-label="Apagar">'+ic('back')+'</button></div>'
+    +'<button class="bt pri" style="width:100%;margin-top:6px" data-act="setok"'+(S.pin.length<4?' disabled':'')+'>Continuar</button></div>';
+}
+function vLista(){
+  const prox=S.itens.filter((i)=>i.estado==='Planeada'&&['Atrasada','Hoje','Amanhã'].includes(i.quando)).length;
+  const f=S.filtro;
+  const lista=S.itens.filter((i)=>f==='todas'||(f==='plan'&&i.estado==='Planeada')||(f==='curso'&&(i.estado==='EmCurso'||i.estado==='Devolvida'))||(f==='env'&&i.sync!=='ok'));
+  const cont={todas:S.itens.length,plan:S.itens.filter((i)=>i.estado==='Planeada').length,curso:S.itens.filter((i)=>i.estado==='EmCurso'||i.estado==='Devolvida').length,env:S.itens.filter((i)=>i.sync!=='ok').length};
+  const ch=(k,t)=>'<button class="chip" data-act="filtro" data-v="'+k+'" aria-pressed="'+(f===k)+'">'+t+' ('+cont[k]+')</button>';
+  const cards=lista.map((i)=>{
+    const e=eq(i);const bl=bloqueada(i);
+    return '<button class="it'+(bl?' bloq':'')+'" data-act="abrir" data-v="'+i.id+'"><span class="corpo"><h3>'+esc(e[0])+'</h3><div class="meta">Nº '+e[1]+' · '+esc(e[2])+'</div>'
+      +'<div class="badges">'+badgeEstado(i)+'<span class="b tipo">'+esc(i.tipo)+'</span></div>'
+      +(bl?'<div class="meta" style="margin-top:6px">Faça primeiro: '+esc(EQUIP[primeiraPlaneada().eq][0])+'</div>':'')
+      +(i.estado==='Devolvida'?'<div class="meta" style="margin-top:6px">Supervisão: '+esc(i.nota)+'</div>':'')
+      +'</span>'+marca(i)+'</button>';
+  }).join('');
+  return topo('Intervenções',true)+faixa()
+    +'<div class="scr">'
+    +(prox?'<button class="alerta" data-act="filtro" data-v="plan">'+ic('bell')+'<span><b>'+prox+' planeadas nos próximos '+ANTEC+' dias</b><br><small>Aviso configurado no backoffice</small></span></button>':'')
+    +'<div class="chips" role="group" aria-label="Filtros">'+ch('todas','Todas')+ch('plan','Planeadas')+ch('curso','Em curso')+ch('env','Por enviar')+'</div>'
+    +(cards?'<div class="lista">'+cards+'</div>':'<div class="vazio">Nada por aqui. Toque em + para criar uma intervenção.</div>')
+    +'</div>'+(S.menu?menuFolha():'');
+}
+function topo(titulo,lista){
+  if(lista){
+    const n=pendentes();
+    return '<header class="top"><button class="ib" data-act="menu" aria-label="Menu do utilizador"><span class="av">TD</span></button><h1>'+titulo+'</h1>'
+      +'<button class="chip-sync" data-act="pend" aria-label="Pendentes: '+n+'">'+(S.online?ic(S.syncing?'refresh':'check',S.syncing?'spin':''):ic('off'))+'<span>'+n+'</span></button>'
+      +'<button class="ib add" data-act="novo" aria-label="Nova intervenção">'+ic('plus')+'</button></header>';
+  }
+  return '<header class="top"><button class="ib" data-act="voltar" aria-label="Voltar">'+ic('back')+'</button><h1>'+titulo+'</h1></header>';
+}
+function menuFolha(){
+  return '<div class="fundo" data-act="fechamenu"><div class="folha" role="dialog" aria-label="Menu">'
+    +'<button class="lin" data-act="pend">'+ic('refresh')+'<span>Pendentes ('+pendentes()+')</span></button>'
+    +'<button class="lin" data-act="pinmsg">'+ic('lock')+'<span>Alterar PIN</span></button>'
+    +'<button class="lin" data-act="sair">'+ic('out')+'<span>Sair</span></button>'
+    +'<button class="lin" data-act="fechamenu">'+ic('x')+'<span>Fechar</span></button></div></div>';
+}
+function vForm(){
+  const d=S.draft;const er=S.errosForm;const novo=!d.id;
+  const opts='<option value="">Escolha o equipamento</option>'+EQUIP.map((e,k)=>'<option value="'+k+'"'+(String(d.eq)===String(k)?' selected':'')+'>'+esc(e[0])+' · Nº '+e[1]+'</option>').join('');
+  const fotos=[];for(let k=0;k<d.fotos;k++)fotos.push('<div class="foto">'+ic('camera')+'<button class="x" data-act="rmfoto" aria-label="Remover foto">'+ic('x')+'</button></div>');
+  if(d.fotos<5)fotos.push('<button class="addfoto" data-act="foto">'+ic('camera')+'<span>Foto</span></button>');
+  return topo(novo?'Nova intervenção':'Intr.',false)+faixa()
+    +'<div class="scr"><div class="form">'
+    +(d.estadoOrig==='Planeada'?'<div class="nota">Planeada ('+esc(d.quando.toLowerCase())+'). Ao guardar passa a Em curso.</div>':'')
+    +(d.nota?'<div class="nota">Devolvida pela supervisão: '+esc(d.nota)+'</div>':'')
+    +'<div><label for="eq">Equipamento</label><select id="eq" class="campo'+(er.eq?' err':'')+'" '+(novo?'':'disabled')+'>'+opts+'</select>'+(er.eq?'<div class="msg">'+er.eq+'</div>':'')+'</div>'
+    +'<div><span class="lab">Tipo</span><div class="seg" role="group" aria-label="Tipo">'
+      +'<button data-act="tipo" data-v="Preventiva" aria-pressed="'+(d.tipo==='Preventiva')+'"'+(novo?'':' disabled')+'>Preventiva</button>'
+      +'<button data-act="tipo" data-v="Curativa" aria-pressed="'+(d.tipo==='Curativa')+'"'+(novo?'':' disabled')+'>Curativa</button></div></div>'
+    +'<div class="trio">'
+      +'<div><label class="lab" for="ini">'+ic('clock')+'Início</label><input id="ini" type="time" class="campo" value="'+esc(d.ini)+'"><button class="agora" data-act="agora" data-v="ini">Agora</button></div>'
+      +'<div><label class="lab" for="tec">'+ic('user')+'Técnico</label><input id="tec" class="campo" value="Téc. Demo" readonly></div>'
+      +'<div><label class="lab" for="fim">'+ic('clock')+'Fim</label><input id="fim" type="time" class="campo'+(er.fim?' err':'')+'" value="'+esc(d.fim)+'"><button class="agora" data-act="agora" data-v="fim">Agora</button></div>'
+    +'</div>'+(er.fim?'<div class="msg">'+er.fim+'</div>':'')
+    +'<div><label for="anom">Anomalia ou problema'+(d.tipo==='Curativa'?' (obrigatório)':'')+'</label><textarea id="anom" class="campo'+(er.anom?' err':'')+'" placeholder="O que se passou?">'+esc(d.anom)+'</textarea>'+(er.anom?'<div class="msg">'+er.anom+'</div>':'')+'</div>'
+    +'<div><label for="desc">Intervenção feita</label><textarea id="desc" class="campo" placeholder="O que foi feito?">'+esc(d.desc)+'</textarea></div>'
+    +'<label class="chk" for="limp"><input id="limp" type="checkbox"'+(d.limpeza?' checked':'')+'><span>Limpeza do local feita</span></label>'
+    +'<div><span class="lab">Fotos (até 5)</span><div class="fotos">'+fotos.join('')+'</div></div>'
+    +'<div class="pecas">'+ic('box')+'<span>Peças usadas: disponível na 2.ª fase</span></div>'
+    +'</div></div>'
+    +'<div class="barra"><button class="bt" data-act="rascunho">Guardar rascunho</button><button class="bt pri" data-act="concluir">Concluir</button></div>';
+}
+function vPend(){
+  const its=S.itens.filter((i)=>i.sync!=='ok');
+  const lin=its.map((i)=>{
+    const e=eq(i);
+    const estado={pend:['Pendente de envio','b plan'],erro:['Erro de regra','b atr'],conf:['Conflito','b dev']}[i.sync];
+    const msg=i.sync==='pend'?(S.online?'Vai ser enviada já.':'Fica guardada e segue quando houver ligação.')
+      :i.sync==='erro'?'O servidor recusou: '+esc(i.motivo||'regra de negócio')+'. As outras seguem.'
+      :'A ficha já foi validada ou iniciada por outro. A sua alteração ficou guardada como proposta; a supervisão decide.';
+    const ac=i.sync==='erro'?'<button data-act="repetir" data-v="'+i.id+'">Repetir</button><button data-act="descartar" data-v="'+i.id+'">Descartar</button>'
+      :i.sync==='conf'?'<button data-act="descartar" data-v="'+i.id+'">Descartar proposta</button>':'';
+    return '<div class="pend-it"><div><h3 style="font:600 16px var(--f-tit);margin:0">'+esc(e[0])+'</h3><div class="meta" style="font-size:14px;color:var(--muted)">'+esc(i.tipo)+' · '+esc(i.estado==='Concluida'?'Concluída':i.estado==='EmCurso'?'Em curso':i.estado)+'</div></div>'
+      +'<div><span class="'+estado[1]+'">'+estado[0]+'</span></div><div style="font-size:14px">'+msg+'</div>'+(ac?'<div class="acoes">'+ac+'</div>':'')+'</div>';
+  }).join('');
+  return topo('Pendentes',false)+faixa()
+    +'<div class="scr"><div class="lista" style="padding-top:12px">'+(lin||'<div class="vazio">Tudo enviado. Não há pendentes.</div>')+'</div></div>'
+    +'<div class="barra" style="grid-template-columns:1fr"><button class="bt ver" data-act="enviar"'+((!S.online||!pendentes())?' disabled':'')+'>Enviar agora</button></div>'
+    +(S.online?'':'<div class="toast" style="bottom:84px;background:var(--aviso-bg);color:var(--aviso)">Sem ligação: o envio fica para quando voltar a rede.</div>');
+}
+
+function render(){
+  const a=$('#app');
+  const foco=document.activeElement&&document.activeElement.id;
+  const scr=a.querySelector('.scr');const st=scr?scr.scrollTop:0;
+  let h='';
+  if(S.ecra==='login')h=vLogin();
+  else if(S.ecra==='setpin')h=vSetPin();
+  else if(S.ecra==='lista')h=vLista();
+  else if(S.ecra==='form')h=vForm();
+  else if(S.ecra==='pend')h=vPend();
+  a.innerHTML=h+(S.toast?'<div class="toast" role="status">'+esc(S.toast)+'</div>':'');
+  const novo=a.querySelector('.scr');if(novo&&st&&['lista','form','pend'].includes(S.ecra))novo.scrollTop=st;
+  if(foco){const el=document.getElementById(foco);if(el&&el.focus)try{el.focus();}catch(e){}}
+  $('#swNetT').textContent=S.online?'Ligação disponível':'Sem ligação';
+  const p=$('#swNetP');p.textContent=S.online?'Online':'Offline';$('#swNet').setAttribute('aria-pressed',String(S.online));
+  $('#swOrd').setAttribute('aria-pressed',String(S.avancar));$('#swOrdP').textContent=S.avancar?'Sim':'Não';
+}
+
+/* Sincronização simulada */
+function sincronizar(){
+  if(!S.online||S.syncing||!S.fila.length)return;
+  S.syncing=true;render();
+  setTimeout(()=>{
+    let conf=S.flagConf,err=S.flagErr;
+    S.fila.forEach((id)=>{
+      const it=S.itens.find((x)=>x.id===id);if(!it)return;
+      if(conf){it.sync='conf';conf=false;S.flagConf=false;}
+      else if(err){it.sync='erro';it.motivo='equipamento obsoleto (exemplo)';err=false;S.flagErr=false;}
+      else it.sync='ok';
+    });
+    S.fila=[];
+    S.syncing=false;S.ultima=agora();
+    const ok=S.itens.filter((i)=>i.sync==='conf'||i.sync==='erro').length;
+    render();
+    toast(ok?'Enviado, com avisos. Veja os pendentes.':'Tudo sincronizado. Sem duplicados.');
+  },1300);
+}
+
+/* Validação e gravação */
+function validar(concluir){
+  const d=S.draft;const e={};
+  if(d.eq===''||d.eq==null)e.eq='Escolha o equipamento.';
+  if(d.tipo==='Curativa'&&!d.anom.trim())e.anom='Descreva a anomalia.';
+  if(d.ini&&d.fim&&d.fim<d.ini)e.fim='A hora de fim não pode ser antes do início.';
+  if(concluir){
+    if(!d.ini)e.fim=e.fim||'Indique a hora de início.';
+    if(!d.fim)e.fim=e.fim||'Indique a hora de fim para concluir.';
+  }
+  S.errosForm=e;return Object.keys(e).length===0;
+}
+function gravar(concluir){
+  if(!validar(concluir)){render();toast('Corrija os campos marcados.');return;}
+  const d=S.draft;
+  let it=d.id?S.itens.find((x)=>x.id===d.id):null;
+  if(!it){it={id:'n'+(++S.n),origem:'local',ordem:0,quando:'Hoje',nota:''};S.itens.unshift(it);}
+  Object.assign(it,{eq:Number(d.eq),tipo:d.tipo,anom:d.anom,desc:d.desc,ini:d.ini,fim:d.fim,limpeza:d.limpeza,fotos:d.fotos,nota:'',
+    estado:concluir?'Concluida':'EmCurso',sync:'pend'});
+  if(!S.fila.includes(it.id))S.fila.push(it.id);
+  S.draft=null;S.errosForm={};S.ecra='lista';render();
+  if(S.online){toast('Guardado. A enviar…');sincronizar();}
+  else toast('Guardado no telemóvel. Será enviado quando houver ligação.');
+}
+function abrirDraft(base){
+  S.draft=base;S.errosForm={};S.ecra='form';render();
+}
+
+/* Ações */
+const ACT={
+  aba:(d)=>{S.aba=d.v;S.erroLogin='';S.erroPin='';render();},
+  dig:(d)=>{if(S.pin.length<6){S.pin+=d.v;S.erroPin='';}render();},
+  apagar:()=>{S.pin=S.pin.slice(0,-1);render();},
+  entrarpin:()=>{
+    if(S.pin===PIN_OK){S.tent=MAX_TENT;S.pin='';S.erroPin='';S.ecra='lista';render();return;}
+    S.tent--;S.pin='';S.shake=true;
+    if(S.tent<=0){S.aba='usr';S.tent=MAX_TENT;S.shake=false;S.erroLogin='PIN bloqueado. Entre com utilizador e password. Os registos por enviar mantêm-se.';render();return;}
+    S.erroPin='PIN incorreto. Restam '+S.tent+' tentativas.';render();
+    setTimeout(()=>{S.shake=false;},400);
+  },
+  entrarusr:()=>{
+    const u=$('#u').value.trim(),p=$('#pw').value;
+    if(!S.online){S.erroLogin='Sem ligação ao servidor. Na primeira vez precisa de rede.';render();return;}
+    if(!u||!p){S.erroLogin='Utilizador ou password incorretos.';render();return;}
+    S.pin='';S.setFase=1;S.setPin='';S.erroPin='';S.ecra='setpin';render();
+  },
+  setok:()=>{
+    if(S.setFase===1){S.setPin=S.pin;S.pin='';S.setFase=2;S.erroPin='';render();return;}
+    if(S.pin!==S.setPin){S.erroPin='Os PIN não coincidem. Tente outra vez.';S.pin='';S.setFase=1;S.setPin='';render();return;}
+    S.pin='';S.erroPin='';S.ecra='lista';render();toast('PIN definido. Para a demonstração continua a valer 1234.');
+  },
+  filtro:(d)=>{S.filtro=d.v;render();},
+  menu:()=>{S.menu=true;render();},
+  fechamenu:()=>{S.menu=false;render();},
+  pinmsg:()=>{S.menu=false;render();toast('Protótipo: a alteração de PIN fica para o desenvolvimento.');},
+  sair:()=>{
+    S.menu=false;
+    if(pendentes()){render();toast('Tem '+pendentes()+' registos por enviar. Ligue à rede e sincronize antes de sair.');return;}
+    S.pin='';S.ecra='login';S.aba='pin';render();
+  },
+  pend:()=>{S.menu=false;S.ecra='pend';render();},
+  voltar:()=>{S.draft=null;S.errosForm={};S.ecra='lista';render();},
+  novo:()=>abrirDraft({id:'',eq:'',tipo:'Curativa',ini:agora(),fim:'',anom:'',desc:'',limpeza:false,fotos:0,estadoOrig:'',quando:'',nota:''}),
+  abrir:(d)=>{
+    const it=S.itens.find((x)=>x.id===d.v);if(!it)return;
+    if(bloqueada(it)){toast('Bloqueada pela ordem. Faça primeiro: '+EQUIP[primeiraPlaneada().eq][0]);return;}
+    abrirDraft({id:it.id,eq:it.eq,tipo:it.tipo,ini:it.ini||(it.estado==='Planeada'?agora():''),fim:it.fim,anom:it.anom,desc:it.desc,limpeza:it.limpeza,fotos:it.fotos,estadoOrig:it.estado,quando:it.quando,nota:it.estado==='Devolvida'?it.nota:''});
+  },
+  tipo:(d)=>{syncCampos();S.draft.tipo=d.v;render();},
+  agora:(d)=>{syncCampos();S.draft[d.v]=agora();render();},
+  foto:()=>{syncCampos();S.draft.fotos++;render();},
+  rmfoto:()=>{syncCampos();S.draft.fotos=Math.max(0,S.draft.fotos-1);render();},
+  rascunho:()=>{syncCampos();gravar(false);},
+  concluir:()=>{syncCampos();gravar(true);},
+  enviar:()=>sincronizar(),
+  repetir:(d)=>{const it=S.itens.find((x)=>x.id===d.v);if(it){it.sync='pend';if(!S.fila.includes(it.id))S.fila.push(it.id);}render();sincronizar();},
+  descartar:(d)=>{
+    const it=S.itens.find((x)=>x.id===d.v);if(!it)return;
+    if(it.origem==='local'&&it.sync==='erro'){S.itens=S.itens.filter((x)=>x!==it);}else{it.sync='ok';}
+    S.fila=S.fila.filter((x)=>x!==d.v);render();toast('Descartado.');
+  }
+};
+function syncCampos(){
+  if(!S.draft)return;
+  const g=(id)=>document.getElementById(id);
+  if(g('eq')&&!g('eq').disabled)S.draft.eq=g('eq').value;
+  if(g('ini'))S.draft.ini=g('ini').value;
+  if(g('fim'))S.draft.fim=g('fim').value;
+  if(g('anom'))S.draft.anom=g('anom').value;
+  if(g('desc'))S.draft.desc=g('desc').value;
+  if(g('limp'))S.draft.limpeza=g('limp').checked;
+}
+document.addEventListener('click',(e)=>{
+  const t=e.target.closest('[data-act]');if(!t||!$('#app').contains(t))return;
+  const f=ACT[t.dataset.act];if(f){try{f(t.dataset,t);}catch(x){/* protótipo: ignora falhas de ecrã */}}
+});
+document.addEventListener('change',(e)=>{if(S.ecra==='form'&&e.target.closest('#app')){syncCampos();}});
+
+/* Painel de demonstração */
+$('#swNet').addEventListener('click',()=>{S.online=!S.online;render();if(S.online){if(S.fila.length)sincronizar();else S.ultima=agora();}});
+$('#swOrd').addEventListener('click',()=>{S.avancar=!S.avancar;render();});
+$('#btConf').addEventListener('click',()=>{S.flagConf=true;S.flagErr=false;toast('No próximo envio, a primeira ficha entra em conflito.');});
+$('#btErr').addEventListener('click',()=>{S.flagErr=true;S.flagConf=false;toast('No próximo envio, a primeira ficha dá erro de regra.');});
+$('#btRepor').addEventListener('click',()=>{repor();render();});
+$('#demoBtn').addEventListener('click',()=>$('#demo').classList.add('aberto'));
+$('#demoFechar').addEventListener('click',()=>$('#demo').classList.remove('aberto'));
+setInterval(()=>{$('#hora').textContent=agora();},30000);$('#hora').textContent=agora();
+render();
+})();
+</script>
+</body>
+</html>

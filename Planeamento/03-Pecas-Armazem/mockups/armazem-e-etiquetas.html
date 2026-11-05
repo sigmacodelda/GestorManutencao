@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peças e armazém - mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --verde:#5BB572; --azul:#3466AF; --roxo:#604696; --navy:#1A1731; --cinza:#CAC9C9;
+  --bg:#F5F5F8; --card:#FFFFFF; --texto:#1A1731; --suave:#5A5873; --linha:#DEDDE3;
+  --crit:#B3261E; --crit-bg:#FBE9E7; --avis-bg:#FFF4D6; --avis:#7A5200; --ok-bg:#E6F4EA;
+  --raio:10px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--texto);font-family:'Open Sans',system-ui,sans-serif;font-size:16px;line-height:1.5}
+h1,h2,h3{font-family:'Exo 2','Open Sans',sans-serif;margin:0 0 .5rem;line-height:1.25}
+h1{font-size:1.25rem;font-weight:700}
+h2{font-size:1.15rem;font-weight:600}
+h3{font-size:1rem;font-weight:600}
+header{background:var(--navy);color:#fff;padding:14px 16px;border-bottom:4px solid transparent;border-image:linear-gradient(135deg,var(--verde),var(--azul),var(--roxo)) 1}
+header .sub{color:var(--cinza);font-size:.85rem}
+.aviso-mockup{background:var(--avis-bg);color:var(--avis);font-size:.85rem;padding:6px 16px}
+nav{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--linha);display:flex;gap:4px;overflow-x:auto;padding:6px 12px}
+nav button{font:600 .9rem 'Exo 2',sans-serif;min-height:44px;padding:0 14px;border:0;background:transparent;color:var(--suave);border-radius:8px;cursor:pointer;white-space:nowrap}
+nav button[aria-selected="true"]{background:var(--azul);color:#fff}
+nav button:hover:not([aria-selected="true"]){background:#ECECF2}
+:focus-visible{outline:3px solid var(--roxo);outline-offset:2px}
+main{max-width:1100px;margin:0 auto;padding:16px}
+section[hidden]{display:none}
+.card{background:var(--card);border:1px solid var(--linha);border-radius:var(--raio);padding:16px;margin-bottom:16px}
+.grid{display:grid;gap:16px}
+@media(min-width:800px){.grid.dois{grid-template-columns:1fr 1fr}}
+label{display:block;font-weight:600;font-size:.875rem;margin:10px 0 4px}
+input,select{width:100%;min-height:44px;padding:8px 10px;border:1px solid var(--cinza);border-radius:8px;font:inherit;background:#fff;color:var(--texto)}
+input[type=checkbox]{width:auto;min-height:0}
+.linha{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.linha>*{flex:1 1 140px}
+.btn{min-height:44px;padding:0 16px;border:0;border-radius:8px;font:600 .95rem 'Exo 2',sans-serif;cursor:pointer;background:var(--azul);color:#fff}
+.btn.verde{background:var(--verde);color:var(--navy)}
+.btn.sec{background:#fff;color:var(--azul);border:1px solid var(--azul)}
+.btn.roxo{background:var(--roxo)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.chip{min-height:36px;padding:0 12px;border-radius:18px;border:1px solid var(--cinza);background:#fff;font:.8rem 'Open Sans',sans-serif;cursor:pointer;color:var(--texto)}
+.tabela-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.875rem}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--linha);vertical-align:top}
+th{font-family:'Exo 2',sans-serif;font-weight:600;background:#F0F0F5;white-space:nowrap}
+td.num,th.num{text-align:right}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:.85rem}
+.tag{display:inline-block;padding:2px 10px;border-radius:12px;font-weight:600;font-size:.78rem}
+.tag.crit{background:var(--crit-bg);color:var(--crit)}
+.tag.avis{background:var(--avis-bg);color:var(--avis)}
+.tag.ok{background:var(--ok-bg);color:#1E6B34}
+.tag.cinza{background:#ECECF2;color:var(--suave)}
+.msg{padding:10px 12px;border-radius:8px;margin-top:10px;font-size:.9rem}
+.msg.ok{background:var(--ok-bg);color:#1E6B34}
+.msg.aviso{background:var(--avis-bg);color:var(--avis)}
+.msg.erro{background:var(--crit-bg);color:var(--crit)}
+.msg.info{background:#E8EEF8;color:#1F4378}
+details{border:1px solid var(--linha);border-radius:8px;margin:8px 0;background:#fff}
+summary{cursor:pointer;padding:10px 12px;font-weight:600;min-height:44px;display:flex;align-items:center}
+details>.corpo{padding:0 8px 8px}
+.maq>summary{font-family:'Exo 2',sans-serif;background:#ECEFF7}
+.etq-area{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.etq{background:#fff;border:2px dashed var(--navy);padding:8px;display:flex;gap:8px;overflow:hidden;color:#000;font-family:Arial,sans-serif}
+.etq .txt{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.etq .ref{font-weight:700;font-size:1.05em;letter-spacing:.5px}
+.etq .peq{font-size:.62em;line-height:1.2}
+.etq .des{font-size:.72em;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.etq svg{flex:none}
+.codbar{margin-top:auto}
+.fonte{font-size:.8rem;color:var(--suave)}
+ul.limpa{list-style:none;padding:0;margin:0}
+ul.limpa li{padding:6px 0;border-bottom:1px solid var(--linha)}
+#toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:8px;display:none;max-width:90vw;z-index:10}
+.pill-off{display:inline-flex;align-items:center;gap:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Gestor de Manutenção · Peças e armazém</h1>
+  <div class="sub">Mockup clicável da Parte 3 (PEC-01 a PEC-10) · dados fictícios · hoje = 01/12/2026</div>
+</header>
+<div class="aviso-mockup">Protótipo de planeamento: nada é gravado; os códigos do fabricante e as peças são inventados. Os QR são ilustrativos.</div>
+
+<nav role="tablist" aria-label="Ecrãs">
+  <button role="tab" aria-selected="true" data-t="pecas">Peças por máquina</button>
+  <button role="tab" aria-selected="false" data-t="rec">Receção</button>
+  <button role="tab" aria-selected="false" data-t="saida">Saída por leitura</button>
+  <button role="tab" aria-selected="false" data-t="inv">Inventário</button>
+  <button role="tab" aria-selected="false" data-t="etq">Etiquetas</button>
+  <button role="tab" aria-selected="false" data-t="alt">Alertas de rutura <span id="contador" class="tag crit">0</span></button>
+</nav>
+
+<main>
+<!-- PEÇAS -->
+<section id="s-pecas">
+  <div class="card">
+    <h2>Peças por máquina</h2>
+    <label for="q-pecas">Pesquisar (referência interna, do fabricante ou designação PT/EN)</label>
+    <input id="q-pecas" type="search" placeholder="ex.: lâmina, 7000123, M001-002">
+    <label class="fonte"><input type="checkbox" id="obs-pecas"> incluir obsoletas</label>
+  </div>
+  <div id="arvore"></div>
+</section>
+
+<!-- RECEÇÃO -->
+<section id="s-rec" hidden>
+  <div class="grid dois">
+    <div class="card">
+      <h2>Receção de peças</h2>
+      <label for="rec-cod">Ler código (peça) ou pesquisar</label>
+      <div class="linha"><input id="rec-cod" placeholder="PEC:M001-001.001 ou código do fabricante"><button class="btn" id="rec-ler" style="flex:0 0 auto">Ler</button></div>
+      <div class="chips" aria-label="Leituras de exemplo">
+        <button class="chip" data-ex="rec-cod">PEC:M001-001.001</button>
+        <button class="chip" data-ex="rec-cod">5000456</button>
+        <button class="chip" data-ex="rec-cod">7000999</button>
+      </div>
+      <div id="rec-res"></div>
+      <label for="rec-qtd">Quantidade recebida</label>
+      <input id="rec-qtd" type="number" min="1" step="1" value="10">
+      <label for="rec-loc">Localização</label>
+      <select id="rec-loc"></select>
+      <label for="rec-enc">Encomenda do PHC (opcional)</label>
+      <select id="rec-enc"><option value="">Entrada livre</option><option value="E-2026/118">Encomenda 2026/118 (fornecedor fictício A)</option></select>
+      <div class="linha" style="margin-top:12px">
+        <button class="btn verde" id="rec-ok">Dar entrada</button>
+        <button class="btn sec" id="rec-etq">Imprimir etiqueta</button>
+      </div>
+      <div id="rec-msg"></div>
+    </div>
+    <div class="card"><h3>Últimas receções</h3><ul class="limpa" id="rec-log"><li class="fonte">Sem receções nesta sessão.</li></ul></div>
+  </div>
+</section>
+
+<!-- SAÍDA -->
+<section id="s-saida" hidden>
+  <div class="grid dois">
+    <div class="card">
+      <h2>Saída de peças na intervenção</h2>
+      <p class="fonte">Intervenção planeada #1042 · Midas · Troca de lâmina (preventiva) · estado EmCurso</p>
+      <h3>Peças do plano</h3>
+      <div class="tabela-wrap"><table><thead><tr><th>Peça</th><th class="num">Plano</th><th class="num">Saído</th><th class="num">Stock</th></tr></thead><tbody id="saida-plano"></tbody></table></div>
+      <label class="pill-off"><input type="checkbox" id="offline"> Telemóvel sem rede (simular)</label>
+      <div id="fila" class="fonte"></div>
+    </div>
+    <div class="card">
+      <h3>Ler código</h3>
+      <label for="s-cod">Código lido pela câmara (ZXing) ou leitor</label>
+      <div class="linha"><input id="s-cod" placeholder="PEC:… ou código do fabricante"><button class="btn" id="s-ler" style="flex:0 0 auto">Ler</button></div>
+      <div class="chips">
+        <button class="chip" data-ex="s-cod">PEC:M001-001.001</button>
+        <button class="chip" data-ex="s-cod">7000124</button>
+        <button class="chip" data-ex="s-cod">PEC:M002-001.001</button>
+        <button class="chip" data-ex="s-cod">LOC:A03-2-05</button>
+        <button class="chip" data-ex="s-cod">123456</button>
+      </div>
+      <div id="s-res"></div>
+      <label for="s-qtd">Quantidade</label>
+      <input id="s-qtd" type="number" min="1" step="1" value="1">
+      <label for="s-loc">Localização de origem (sugere a de maior stock)</label>
+      <select id="s-loc"></select>
+      <div class="linha" style="margin-top:12px"><button class="btn verde" id="s-ok">Registar saída</button></div>
+      <div id="s-msg"></div>
+    </div>
+  </div>
+</section>
+
+<!-- INVENTÁRIO -->
+<section id="s-inv" hidden>
+  <div class="grid dois">
+    <div class="card">
+      <h2>Inventário por picagem</h2>
+      <p class="fonte">Sessão: Zona A (estados: Aberta, EmContagem, EmRevisão, Fechada)</p>
+      <label for="i-cod">Picar localização e depois cada peça</label>
+      <div class="linha"><input id="i-cod" placeholder="LOC:A03-2-05 e depois PEC:…"><button class="btn" id="i-ler" style="flex:0 0 auto">Picar</button></div>
+      <div class="chips">
+        <button class="chip" data-ex="i-cod">LOC:A03-2-05</button>
+        <button class="chip" data-ex="i-cod">PEC:M001-001.001</button>
+        <button class="chip" data-ex="i-cod">PEC:M001-002.001</button>
+        <button class="chip" data-ex="i-cod">LOC:B01-1-01</button>
+      </div>
+      <div id="i-estado" class="msg info">Localização atual: nenhuma</div>
+      <div id="i-msg"></div>
+      <div class="linha" style="margin-top:12px">
+        <button class="btn sec" id="i-rev">Terminar contagem e rever</button>
+        <button class="btn roxo" id="i-aprov" disabled>Aprovar ajustes (supervisão)</button>
+      </div>
+    </div>
+    <div class="card"><h3>Contado vs sistema</h3>
+      <div class="tabela-wrap"><table><thead><tr><th>Localização</th><th>Peça</th><th class="num">Contado</th><th class="num">Sistema</th><th class="num">Dif.</th></tr></thead><tbody id="i-tab"><tr><td colspan="5" class="fonte">Sem leituras.</td></tr></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ETIQUETAS -->
+<section id="s-etq" hidden>
+  <div class="grid dois">
+    <div class="card">
+      <h2>Desenho das etiquetas</h2>
+      <label for="e-ctx">Contexto</label>
+      <select id="e-ctx"><option value="peca">Peça</option><option value="loc">Localização</option></select>
+      <label for="e-obj">Objeto</label>
+      <select id="e-obj"></select>
+      <label for="e-tam">Tamanho (203 dpi)</label>
+      <select id="e-tam"><option value="60x40">60 × 40 mm (por defeito)</option><option value="50x30">50 × 30 mm</option><option value="100x60">100 × 60 mm</option></select>
+      <label for="e-copias">Cópias</label>
+      <input id="e-copias" type="number" min="1" value="1">
+      <h3 style="margin-top:12px">Campos visíveis</h3>
+      <div id="e-campos"></div>
+      <div class="linha" style="margin-top:12px"><button class="btn verde" id="e-print">Imprimir</button><button class="btn sec" id="e-lote">Imprimir lote (conjunto)</button></div>
+    </div>
+    <div class="card">
+      <h3>Pré-visualização</h3>
+      <div class="etq-area"><div id="e-prev"></div></div>
+      <p class="fonte" id="e-payload"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ALERTAS -->
+<section id="s-alt" hidden>
+  <div class="card">
+    <h2>Alertas de rutura de stock</h2>
+    <p class="fonte">Janela = prazo de entrega + margem. Necessidade = peças das planeadas dentro da janela. Disponível = stock por localização − reservas (EmCurso). Crítico: data limite de compra já passou. Aviso: comprar até à data limite.</p>
+    <div class="linha">
+      <div><label for="a-m">Margem (dias)</label><input id="a-m" type="number" min="0" value="7"></div>
+      <div><label for="a-f">Urgência</label><select id="a-f"><option value="">Todas</option><option>Crítico</option><option>Aviso</option></select></div>
+    </div>
+  </div>
+  <div class="card tabela-wrap"><table>
+    <thead><tr><th>Peça</th><th class="num">Necess.</th><th class="num">Disp.</th><th class="num">Falta</th><th class="num">Prazo</th><th>Data limite compra</th><th>1.ª planeada em falta</th><th>Urgência</th></tr></thead>
+    <tbody id="a-tab"></tbody></table></div>
+  <p class="fonte" id="a-nota"></p>
+</section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* Dados fictícios */
+var HOJE = Date.UTC(2026,11,1);
+var MAQ = [
+  {cod:"M001", nome:"Midas", conj:[
+    {cod:"M001-001", pt:"Cabeça de corte", en:"Cutting head"},
+    {cod:"M001-002", pt:"Transmissão", en:"Transmission"}]},
+  {cod:"M002", nome:"Mesa de sangria", conj:[
+    {cod:"M002-001", pt:"Estrutura", en:"Frame"}]}
+];
+var PECAS = [
+  {ref:"M001-001.001", fab:"7000123", pt:"Lâmina de corte", en:"Cutting blade", conj:"M001-001", prazoArt:20, prazoFor:35, ativo:true},
+  {ref:"M001-001.002", fab:"7000124", pt:"Suporte da lâmina, esquerdo", en:"Blade holder, left", conj:"M001-001", prazoArt:30, prazoFor:null, ativo:true},
+  {ref:"M001-002.001", fab:"5000456", pt:"Anel O 32x3", en:"O-ring 32x3", conj:"M001-002", prazoArt:null, prazoFor:null, ativo:true},
+  {ref:"M002-001.001", fab:"7000987", pt:"Rolo de suporte", en:"Support roller", conj:"M002-001", prazoArt:25, prazoFor:25, ativo:true},
+  {ref:"M002-001.002", fab:"7000988", pt:"Rolo antigo (obsoleto)", en:"Old roller", conj:"M002-001", prazoArt:25, prazoFor:25, ativo:false}
+];
+var LOCS = {"RECEC":"Zona de receção","A03-2-05":"Corredor A, estante 3, prateleira 2, posição 5","B01-1-01":"Corredor B, estante 1, prateleira 1, posição 1","A03-1-02":"Corredor A, estante 3, prateleira 1, posição 2"};
+var STOCK = {
+  "M001-001.001":{"A03-2-05":2},
+  "M001-001.002":{"A03-2-05":2},
+  "M001-002.001":{},
+  "M002-001.001":{"B01-1-01":6,"A03-1-02":1},
+  "M002-001.002":{}
+};
+var RESERVA = {"M001-001.002":2};
+var PLANO = {"M001-001.001":1,"M001-001.002":1};
+var SAIDO = {};
+var PLANEADAS = [
+  {ref:"M001-001.001", data:"2027-01-05", q:1, eq:"Midas"},
+  {ref:"M001-001.001", data:"2027-01-06", q:2, eq:"Midas"},
+  {ref:"M001-002.001", data:"2026-12-20", q:1, eq:"Midas"},
+  {ref:"M002-001.001", data:"2027-01-10", q:1, eq:"Mesa de sangria"},
+  {ref:"M001-001.002", data:"2027-01-03", q:1, eq:"Midas"}
+];
+
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function peca(ref){for(var i=0;i<PECAS.length;i++){if(PECAS[i].ref===ref)return PECAS[i];}return null;}
+function total(ref){var s=STOCK[ref]||{},t=0;for(var k in s)t+=s[k];return t;}
+function toast(m){var t=$("toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(function(){t.style.display="none";},2600);}
+function msg(id,tipo,txt){$(id).innerHTML='<div class="msg '+tipo+'">'+esc(txt)+'</div>';}
+function isoParaMs(s){var p=s.split("-");return Date.UTC(+p[0],+p[1]-1,+p[2]);}
+function msParaTxt(ms){var d=new Date(ms);return ("0"+d.getUTCDate()).slice(-2)+"/"+("0"+(d.getUTCMonth()+1)).slice(-2)+"/"+d.getUTCFullYear();}
+var DIA=86400000;
+
+/* Resolução de leituras (regras de codificacao-pecas.md, secção 7) */
+var RE_PECA=/^M\d{3}-\d{3}\.\d{3}$/, RE_LOC=/^([A-Z]\d{2}-\d-\d{2}|RECEC)$/;
+function resolver(txt){
+  var c=(txt||"").trim();
+  if(!c)return {tipo:"vazio"};
+  if(c.indexOf("PEC:")===0){var r=c.slice(4).toUpperCase();return peca(r)?{tipo:"peca",ref:r,regra:"prefixo PEC:"}:{tipo:"desconhecido"};}
+  if(c.indexOf("LOC:")===0){var l=c.slice(4).toUpperCase();return LOCS[l]?{tipo:"loc",loc:l,regra:"prefixo LOC:"}:{tipo:"desconhecido"};}
+  var u=c.toUpperCase();
+  if(RE_PECA.test(u))return peca(u)?{tipo:"peca",ref:u,regra:"referência interna"}:{tipo:"desconhecido"};
+  if(RE_LOC.test(u))return LOCS[u]?{tipo:"loc",loc:u,regra:"localização"}:{tipo:"desconhecido"};
+  var m=PECAS.filter(function(p){return p.fab===c;});
+  if(m.length===1)return {tipo:"peca",ref:m[0].ref,regra:"código do fabricante"};
+  if(m.length>1)return {tipo:"lista",lista:m.map(function(p){return p.ref;})};
+  return {tipo:"desconhecido"};
+}
+function descrever(r){
+  if(r.tipo==="peca"){var p=peca(r.ref);return "Peça "+r.ref+" · "+p.pt+" ("+p.en+") · regra: "+r.regra;}
+  if(r.tipo==="loc")return "Localização "+r.loc+" · "+LOCS[r.loc];
+  if(r.tipo==="lista")return "Código ambíguo: "+r.lista.join(", ");
+  if(r.tipo==="vazio")return "Sem leitura.";
+  return "Código desconhecido: pesquise à mão.";
+}
+
+/* Separadores */
+var TABS=["pecas","rec","saida","inv","etq","alt"];
+function mostrar(t){
+  TABS.forEach(function(x){$("s-"+x).hidden=(x!==t);});
+  document.querySelectorAll("nav button").forEach(function(b){b.setAttribute("aria-selected",b.dataset.t===t?"true":"false");});
+  if(t==="alt")alertas();
+  if(t==="saida")saidaPlano();
+}
+document.querySelectorAll("nav button").forEach(function(b){b.addEventListener("click",function(){mostrar(b.dataset.t);});});
+document.querySelectorAll(".chip").forEach(function(b){b.addEventListener("click",function(){$(b.dataset.ex).value=b.textContent;$(b.dataset.ex).focus();});});
+
+/* Peças por máquina */
+function prazoEfetivo(p){
+  var v=[p.prazoArt,p.prazoFor].filter(function(x){return x!==null;});
+  if(!v.length)return {d:30,o:"prazo assumido (defeito)"};
+  var d=Math.max.apply(null,v);
+  return {d:d,o:(p.prazoArt!==null&&p.prazoFor!==null&&p.prazoArt!==p.prazoFor)?"o mais longo de artigo e fornecedor":(p.prazoArt!==null?"artigo":"fornecedor")};
+}
+function locsTxt(ref){var s=STOCK[ref]||{},o=[];for(var k in s){if(s[k]>0)o.push(k+" ("+s[k]+")");}return o.length?o.join(", "):"sem stock";}
+function arvore(){
+  var q=$("q-pecas").value.trim().toLowerCase(),obs=$("obs-pecas").checked,h="";
+  MAQ.forEach(function(m){
+    var corpo="",nm=0;
+    m.conj.forEach(function(c){
+      var linhas=PECAS.filter(function(p){
+        if(p.conj!==c.cod)return false;
+        if(!p.ativo&&!obs)return false;
+        if(!q)return true;
+        return (p.ref+" "+p.fab+" "+p.pt+" "+p.en).toLowerCase().indexOf(q)>=0;
+      });
+      if(!linhas.length)return;
+      nm+=linhas.length;
+      corpo+='<details open><summary>'+esc(c.cod)+' · '+esc(c.pt)+' <span class="fonte">&nbsp;('+esc(c.en)+')</span></summary><div class="corpo tabela-wrap"><table><thead><tr><th>Ref. interna</th><th>Ref. fabricante</th><th>Designação PT / original EN</th><th class="num">Stock</th><th>Localização</th><th>Prazo</th></tr></thead><tbody>';
+      linhas.forEach(function(p){
+        var pe=prazoEfetivo(p);
+        corpo+='<tr><td class="mono">'+p.ref+(p.ativo?'':' <span class="tag cinza">obsoleta</span>')+'</td><td class="mono">'+p.fab+'</td><td>'+esc(p.pt)+'<br><span class="fonte">'+esc(p.en)+'</span></td><td class="num">'+total(p.ref)+'</td><td>'+esc(locsTxt(p.ref))+'</td><td>'+pe.d+' d<br><span class="fonte">'+esc(pe.o)+'</span></td></tr>';
+      });
+      corpo+='</tbody></table></div></details>';
+    });
+    if(nm)h+='<details class="maq" open><summary>'+m.cod+' · '+esc(m.nome)+' <span class="fonte">&nbsp;('+nm+' peças)</span></summary><div class="corpo">'+corpo+'</div></details>';
+  });
+  $("arvore").innerHTML=h||'<div class="card fonte">Sem resultados.</div>';
+}
+$("q-pecas").addEventListener("input",arvore);
+$("obs-pecas").addEventListener("change",arvore);
+
+/* Listas de localizações */
+function preencherLocs(){
+  var h="";for(var k in LOCS)h+='<option value="'+k+'">'+k+' · '+esc(LOCS[k])+'</option>';
+  $("rec-loc").innerHTML=h;
+}
+function sugerirLoc(ref){
+  var s=STOCK[ref]||{},melhor=null,max=-1;
+  for(var k in s){if(s[k]>max){max=s[k];melhor=k;}}
+  var h="";for(var l in LOCS)h+='<option value="'+l+'"'+(l===melhor?' selected':'')+'>'+l+' · stock '+(s[l]||0)+'</option>';
+  $("s-loc").innerHTML=h;
+}
+
+/* Receção */
+var recRes=null;
+$("rec-ler").addEventListener("click",function(){
+  recRes=resolver($("rec-cod").value);
+  msg("rec-res",recRes.tipo==="peca"?"ok":(recRes.tipo==="lista"?"aviso":"erro"),descrever(recRes));
+  if(recRes.tipo==="peca"){var p=peca(recRes.ref);$("rec-loc").value="RECEC";}
+});
+$("rec-ok").addEventListener("click",function(){
+  var q=parseInt($("rec-qtd").value,10);
+  if(!recRes||recRes.tipo!=="peca"){msg("rec-msg","erro","Leia primeiro uma peça válida.");return;}
+  if(!(q>0)){msg("rec-msg","erro","Quantidade tem de ser maior que zero.");return;}
+  var loc=$("rec-loc").value,s=STOCK[recRes.ref];
+  s[loc]=(s[loc]||0)+q;
+  msg("rec-msg","ok","Entrada registada: +"+q+" em "+loc+". Stock total da peça: "+total(recRes.ref)+".");
+  var li=document.createElement("li");li.textContent=recRes.ref+" · +"+q+" em "+loc+($("rec-enc").value?" · "+$("rec-enc").value:"");
+  var lista=$("rec-log");if(lista.firstChild&&lista.firstChild.className==="fonte")lista.innerHTML="";lista.insertBefore(li,lista.firstChild);
+  arvore();
+});
+$("rec-etq").addEventListener("click",function(){
+  if(!recRes||recRes.tipo!=="peca"){msg("rec-msg","erro","Leia primeiro uma peça válida.");return;}
+  $("e-ctx").value="peca";etqObjetos();$("e-obj").value=recRes.ref;mostrar("etq");etqPrev();
+});
+
+/* Saída */
+var fila=[];
+function saidaPlano(){
+  var h="";for(var r in PLANO){h+='<tr><td class="mono">'+r+'<br><span class="fonte">'+esc(peca(r).pt)+'</span></td><td class="num">'+PLANO[r]+'</td><td class="num">'+(SAIDO[r]||0)+'</td><td class="num">'+total(r)+'</td></tr>';}
+  $("saida-plano").innerHTML=h;
+  $("fila").textContent=fila.length?("Fila de saída offline: "+fila.length+" pendente(s). Desligue 'sem rede' para sincronizar."):"Fila de saída vazia.";
+}
+var sRes=null;
+$("s-ler").addEventListener("click",function(){
+  sRes=resolver($("s-cod").value);
+  var tipo=sRes.tipo==="peca"?"ok":(sRes.tipo==="lista"?"aviso":"erro");
+  var t=descrever(sRes);
+  if(sRes.tipo==="loc"){tipo="aviso";t+=" · isto é uma localização, leia a peça.";}
+  msg("s-res",tipo,t);
+  if(sRes.tipo==="peca")sugerirLoc(sRes.ref);
+});
+$("s-ok").addEventListener("click",function(){
+  var q=parseInt($("s-qtd").value,10),off=$("offline").checked;
+  if(!sRes||sRes.tipo!=="peca"){msg("s-msg","erro","Leia primeiro uma peça válida.");return;}
+  if(!(q>0)){msg("s-msg","erro","Quantidade tem de ser maior que zero.");return;}
+  var ref=sRes.ref,loc=$("s-loc").value,disp=(STOCK[ref]||{})[loc]||0,extra=!(ref in PLANO);
+  if(q>disp&&!off){msg("s-msg","erro","Quantidade acima do stock da localização ("+disp+"). Online recusa sem confirmação.");return;}
+  var avisos=[];
+  if(extra)avisos.push("extra ao plano");
+  if(q>disp)avisos.push("stock ficará negativo: assinalado para inventário");
+  if(off){fila.push({ref:ref,loc:loc,q:q,op:"op-"+(fila.length+1)});msg("s-msg","info","Guardado na fila offline ("+ref+" × "+q+")."+(avisos.length?" Avisos: "+avisos.join("; ")+".":""));}
+  else{aplicarSaida(ref,loc,q);msg("s-msg",avisos.length?"aviso":"ok","Saída registada: "+ref+" × "+q+" de "+loc+"."+(avisos.length?" Avisos: "+avisos.join("; ")+".":""));}
+  saidaPlano();arvore();
+});
+function aplicarSaida(ref,loc,q){STOCK[ref][loc]=((STOCK[ref]||{})[loc]||0)-q;SAIDO[ref]=(SAIDO[ref]||0)+q;}
+$("offline").addEventListener("change",function(){
+  if(!$("offline").checked&&fila.length){var n=fila.length;fila.forEach(function(f){aplicarSaida(f.ref,f.loc,f.q);});fila=[];toast("Sincronizado: "+n+" saída(s), sem duplicados (opid único).");saidaPlano();arvore();}
+  else saidaPlano();
+});
+
+/* Inventário */
+var inv={loc:null,cont:{},fechada:false};
+$("i-ler").addEventListener("click",function(){
+  var r=resolver($("i-cod").value);
+  if(r.tipo==="loc"){inv.loc=r.loc;$("i-estado").textContent="Localização atual: "+r.loc;msg("i-msg","ok","Localização picada. Pique agora as peças.");return;}
+  if(r.tipo!=="peca"){msg("i-msg","erro",descrever(r));return;}
+  if(!inv.loc){msg("i-msg","aviso","Pique primeiro a localização.");return;}
+  var k=inv.loc+"|"+r.ref;inv.cont[k]=(inv.cont[k]||0)+1;
+  var esperada=((STOCK[r.ref]||{})[inv.loc]||0)>0;
+  msg("i-msg",esperada?"ok":"aviso",esperada?("Contada: "+r.ref+" em "+inv.loc+"."):("Não esperada aqui: "+r.ref+" não tem stock em "+inv.loc+". Fica contada nesta localização."));
+  invTab(false);
+});
+function invTab(rev){
+  var linhas=[],k;
+  for(k in inv.cont){var p=k.split("|");linhas.push({loc:p[0],ref:p[1],c:inv.cont[k]});}
+  if(rev){
+    var locsPicadas={};linhas.forEach(function(l){locsPicadas[l.loc]=1;});
+    for(var loc in locsPicadas){for(var r in STOCK){var s=(STOCK[r]||{})[loc]||0;if(s>0&&!inv.cont[loc+"|"+r])linhas.push({loc:loc,ref:r,c:0});}}
+  }
+  var h="";
+  linhas.forEach(function(l){var s=((STOCK[l.ref]||{})[l.loc])||0,d=l.c-s;h+='<tr><td class="mono">'+l.loc+'</td><td class="mono">'+l.ref+'</td><td class="num">'+l.c+'</td><td class="num">'+s+'</td><td class="num">'+(rev?(d===0?'<span class="tag ok">0</span>':'<span class="tag '+(d<0?'crit':'avis')+'">'+(d>0?'+':'')+d+'</span>'):'')+'</td></tr>';});
+  $("i-tab").innerHTML=h||'<tr><td colspan="5" class="fonte">Sem leituras.</td></tr>';
+  inv.linhas=linhas;
+}
+$("i-rev").addEventListener("click",function(){invTab(true);$("i-aprov").disabled=false;msg("i-msg","info","Em revisão: diferenças calculadas. A supervisão aprova os ajustes.");});
+$("i-aprov").addEventListener("click",function(){
+  var n=0;(inv.linhas||[]).forEach(function(l){var s=((STOCK[l.ref]||{})[l.loc])||0;if(l.c!==s){STOCK[l.ref][l.loc]=l.c;n++;}});
+  inv={loc:null,cont:{},fechada:true};$("i-aprov").disabled=true;$("i-tab").innerHTML='<tr><td colspan="5" class="fonte">Sessão fechada.</td></tr>';
+  $("i-estado").textContent="Localização atual: nenhuma";
+  msg("i-msg","ok","Sessão Fechada: "+n+" movimento(s) de ajuste gerado(s) só nas diferenças aprovadas.");arvore();
+});
+
+/* Etiquetas */
+function etqObjetos(){
+  var ctx=$("e-ctx").value,h="";
+  if(ctx==="peca")PECAS.forEach(function(p){h+='<option value="'+p.ref+'">'+p.ref+' · '+esc(p.pt)+'</option>';});
+  else for(var k in LOCS)h+='<option value="'+k+'">'+k+'</option>';
+  $("e-obj").innerHTML=h;
+  var campos=ctx==="peca"?[["ref","Referência interna",1],["fab","Referência do fabricante",1],["pt","Designação PT",1],["en","Designação original (EN)",1],["maq","Máquina e conjunto",1],["loc","Localização por defeito",0]]:[["cod","Código",1],["desc","Descrição",1]];
+  var c="";campos.forEach(function(f){c+='<label style="font-weight:400"><input type="checkbox" data-c="'+f[0]+'" '+(f[2]?"checked":"")+'> '+f[1]+'</label>';});
+  $("e-campos").innerHTML=c;
+  $("e-campos").querySelectorAll("input").forEach(function(i){i.addEventListener("change",etqPrev);});
+}
+/* QR ilustrativo: padrão pseudoaleatório determinado pelo texto, com os 3 cantos de posição */
+function qrSvg(txt,px){
+  var n=25,cel=px/n,h=0,i,j;
+  for(i=0;i<txt.length;i++)h=(h*31+txt.charCodeAt(i))>>>0;
+  function rnd(){h^=h<<13;h>>>=0;h^=h>>>17;h^=h<<5;h>>>=0;return h;}
+  var s='<svg width="'+px+'" height="'+px+'" viewBox="0 0 '+px+' '+px+'" role="img" aria-label="QR ilustrativo de '+esc(txt)+'"><rect width="'+px+'" height="'+px+'" fill="#fff"/>';
+  function olho(x,y){s+='<rect x="'+x*cel+'" y="'+y*cel+'" width="'+7*cel+'" height="'+7*cel+'" fill="#000"/><rect x="'+(x+1)*cel+'" y="'+(y+1)*cel+'" width="'+5*cel+'" height="'+5*cel+'" fill="#fff"/><rect x="'+(x+2)*cel+'" y="'+(y+2)*cel+'" width="'+3*cel+'" height="'+3*cel+'" fill="#000"/>';}
+  for(i=0;i<n;i++)for(j=0;j<n;j++){
+    var emOlho=(i<8&&j<8)||(i>n-9&&j<8)||(i<8&&j>n-9);
+    if(emOlho)continue;
+    if(rnd()%2)s+='<rect x="'+i*cel+'" y="'+j*cel+'" width="'+cel+'" height="'+cel+'" fill="#000"/>';
+  }
+  olho(0,0);olho(n-7,0);olho(0,n-7);
+  return s+'</svg>';
+}
+function barSvg(txt,w,hgt){
+  var h=7,i,x=4,s='<svg class="codbar" width="'+w+'" height="'+hgt+'" viewBox="0 0 '+w+' '+hgt+'" role="img" aria-label="Code 128 ilustrativo"><rect width="'+w+'" height="'+hgt+'" fill="#fff"/>';
+  for(i=0;i<txt.length;i++)h=(h*33+txt.charCodeAt(i))>>>0;
+  while(x<w-6){var l=1+(h%3);h=(h*1103515245+12345)>>>0;if((h>>>8)%2===0)s+='<rect x="'+x+'" y="0" width="'+l+'" height="'+hgt+'" fill="#000"/>';x+=l+1;}
+  return s+'</svg>';
+}
+function etqPrev(){
+  var ctx=$("e-ctx").value,obj=$("e-obj").value;if(!obj)return;
+  var on={};$("e-campos").querySelectorAll("input").forEach(function(i){on[i.dataset.c]=i.checked;});
+  var dim=$("e-tam").value.split("x"),w=+dim[0],hh=+dim[1],esc1=5.2;
+  var largPx=Math.round(w*esc1),altPx=Math.round(hh*esc1),qrPx=Math.min(altPx-18,Math.round(largPx*0.42));
+  var payload,txt="";
+  if(ctx==="peca"){
+    var p=peca(obj),c=null;MAQ.forEach(function(m){m.conj.forEach(function(x){if(x.cod===p.conj)c={m:m,x:x};});});
+    payload="PEC:"+p.ref;
+    if(on.ref)txt+='<div class="ref">'+p.ref+'</div>';
+    if(on.fab)txt+='<div class="peq">Fabricante: '+p.fab+'</div>';
+    if(on.pt)txt+='<div class="des">'+esc(p.pt)+'</div>';
+    if(on.en)txt+='<div class="peq">'+esc(p.en)+'</div>';
+    if(on.maq&&c)txt+='<div class="peq">'+esc(c.m.nome)+' · '+esc(c.x.pt)+'</div>';
+    if(on.loc)txt+='<div class="peq">Loc.: A03-2-05</div>';
+  }else{
+    payload="LOC:"+obj;
+    if(on.cod)txt+='<div class="ref" style="font-size:1.5em">'+obj+'</div>';
+    if(on.desc)txt+='<div class="des">'+esc(LOCS[obj])+'</div>';
+  }
+  $("e-prev").innerHTML='<div class="etq" style="width:'+largPx+'px;height:'+altPx+'px">'+qrSvg(payload,qrPx)+'<div class="txt">'+txt+barSvg(obj,Math.max(60,largPx-qrPx-28),22)+'</div></div>';
+  $("e-payload").textContent="Conteúdo do QR e do código de barras: "+payload+" · "+w+" × "+hh+" mm (escala de ecrã)";
+}
+["e-ctx"].forEach(function(id){$(id).addEventListener("change",function(){etqObjetos();etqPrev();});});
+["e-obj","e-tam"].forEach(function(id){$(id).addEventListener("change",etqPrev);});
+$("e-print").addEventListener("click",function(){toast("Impressão simulada: "+$("e-copias").value+" etiqueta(s) enviada(s) ao ImpressaoEtiquetasService.");});
+$("e-lote").addEventListener("click",function(){toast("Lote simulado: "+PECAS.filter(function(p){return p.conj==="M001-001";}).length+" etiquetas do conjunto M001-001.");});
+
+/* Alertas de rutura (fórmula de requisitos.md, PEC-10) */
+function alertas(){
+  var M=Math.max(0,parseInt($("a-m").value,10)||0),filtro=$("a-f").value,res=[];
+  PECAS.forEach(function(p){
+    if(!p.ativo)return;
+    var pe=prazoEfetivo(p),L=pe.d,fim=HOJE+(L+M)*DIA;
+    var pl=PLANEADAS.filter(function(x){return x.ref===p.ref;}).map(function(x){return {ms:Math.max(isoParaMs(x.data),HOJE),q:x.q,eq:x.eq};}).filter(function(x){return x.ms<=fim;}).sort(function(a,b){return a.ms-b.ms;});
+    if(!pl.length)return;
+    var N=0;pl.forEach(function(x){N+=x.q;});
+    var D=total(p.ref)-(RESERVA[p.ref]||0);
+    if(D>=N)return;
+    var acum=0,falha=pl[0];
+    for(var i=0;i<pl.length;i++){acum+=pl[i].q;if(acum>D){falha=pl[i];break;}}
+    var dlc=falha.ms-L*DIA,urg=dlc<HOJE?"Crítico":"Aviso";
+    res.push({p:p,N:N,D:D,F:N-D,L:L,assum:pe.o.indexOf("assumido")>=0,dlc:dlc,falha:falha,urg:urg});
+  });
+  res.sort(function(a,b){return a.dlc-b.dlc;});
+  $("contador").textContent=res.length;
+  var h="";
+  res.filter(function(r){return !filtro||r.urg===filtro;}).forEach(function(r){
+    h+='<tr><td class="mono">'+r.p.ref+'<br><span class="fonte">'+esc(r.p.pt)+'</span></td><td class="num">'+r.N+'</td><td class="num">'+r.D+'</td><td class="num">'+r.F+'</td><td class="num">'+r.L+' d'+(r.assum?'<br><span class="fonte">assumido</span>':'')+'</td><td>'+msParaTxt(r.dlc)+'</td><td>'+esc(r.falha.eq)+' · '+msParaTxt(r.falha.ms)+'</td><td><span class="tag '+(r.urg==="Crítico"?"crit":"avis")+'">'+r.urg+'</span></td></tr>';
+  });
+  $("a-tab").innerHTML=h||'<tr><td colspan="8" class="fonte">Sem alertas para este filtro.</td></tr>';
+  $("a-nota").textContent="Peças sem rutura na janela não aparecem (por exemplo a que só é precisa em 10/01/2027). Atrasadas contam com data de hoje.";
+}
+$("a-m").addEventListener("input",alertas);
+$("a-f").addEventListener("change",alertas);
+
+preencherLocs();arvore();etqObjetos();etqPrev();saidaPlano();sugerirLoc("M001-001.001");alertas();
+</script>
+</body>
+</html>

@@ -1,0 +1,586 @@
+# Transcrição automática (bruta) da reunião de 04/11/2026 com a Informática Landeiro
+# Gerada com faster-whisper (modelo medium, pt). Qualidade média: várias vozes, termos técnicos e mistura PT-PT/PT-BR.
+# Usar só como apoio. A fonte de verdade é o resumo em resumo.md e o vídeo original.
+[00:13] O equipamento velho do plano de manutenção.
+[00:51] Naquela listagem eu fechei, não, está aqui, aqui, está a ver a numeração, então o 72
+[01:00] ela está fazendo aqui porque o carro é o céu, não, você está fazendo outro equipamento é uma peça, é uma peça, exatamente, é a designação, no caso é o 79, ela é o 79 aqui, é isso aqui, depilador, e ele vai mudar aqui, como o 79 apanha muitos, depois eu vou instruções de manutenção, que é aquilo que ele precisa, e as fichas de intervenção, são aquelas que são feitas em papel e depois migram para cá,
+[01:35] por exemplo alguma, e aqui tem a depiladora de suínos, é semestral, a data para fazer a nova, eu tenho que clicar aqui, e automaticamente vou pôr o que é que ela é, se é quinzenal, semanal, o que for, por exemplo mensal,
+[02:03] mas ela aqui tinha como a parceria já infraestrutura, não é?
+[02:08] É, sei lá.
+[02:13] É a da esquerda?
+[02:15] Exatamente, é esta, é a do policar, não é, é isso, depiladora de suínos, aqui, ela já me está a dizer que é semestral, aqui só tem que alterar a data, e o que é que fiz, adicionando o ódulo, o logrificante.
+[02:30] O que foi o serviço? O serviço foi ao papel, não é?
+[02:33] E isto é o que vem do papel?
+[02:34] Sim, eu vou deixá-la escrever, você só recebe para ela depois validá-la.
+[02:39] Já se pode fazer a aplicação para o leão de talandão, para eles fazerem a integração de talandão.
+[02:42] Então ela morre, certo? E depois ela só faz validá-la, quem tem que validá-la?
+[02:48] Fica fechada, quando ela validar.
+[02:51] O que é que é o superebizelão?
+[02:54] Não conseguimos calhar-te aqui, por um dólar.
+[02:56] Seria muito mais fácil, elas o trabalham na leitura, já obriga-lhe a fazer a gestão.
+[03:02] Se quiserem que tivessem o trabalho, sim.
+[03:04] Aqui eu não faço ideia, nunca me cheguei aqui, eu não faço ideia.
+[03:08] A única coisa que eu faço é alimentar, isto, ponho a gravar.
+[03:12] E o documento de externo falha de serviço, é vossa empresa?
+[03:16] Isto é se for uma...
+[03:18] Aqui, aqui, aqui.
+[03:20] Isto é automaticamente, bem pela requisição, mas é quando é as mantenções externas.
+[03:25] Porque eu também coloco aqui as mantenções externas.
+[03:28] No caso, você coloca esse do documento externo, seria o que? A fatura?
+[03:32] Não, a ficha.
+[03:34] A ficha que ele deixou.
+[03:36] Eu coloco aí.
+[03:40] Se for externo, sim, porque ele vem com a folha de obra.
+[03:43] Temos lá um aparato, se é externo, e aquilo aparece com o externo.
+[03:46] Mas a partir da externa só há a ideia de o que vai fazer.
+[03:49] Não, a externa, eles deixam uma ficha, portanto, eles aí não têm...
+[03:54] Não sei, não são, mas não vai parar.
+[03:56] São os próprios, aquilo, que seja externo.
+[04:01] Onde é que tinha o bordo aberto?
+[04:03] Aqui, aqui, aqui. Isso, isso, é esse.
+[04:07] Acho que aqui não sabe se sabia.
+[04:09] Esta ficha aqui, vocês já têm contato?
+[04:12] E ganho.
+[04:14] Esta ficha é só em papel?
+[04:16] É só em papel.
+[04:23] E depois passam para ali.
+[04:26] A ideia é ter tudo aí no PHC, não é mesmo?
+[04:28] Por exemplo, as externas.
+[04:30] Um equipamento da salsicharia.
+[04:32] Isto é externo.
+[04:34] Eu coloco aqui.
+[04:49] Duplica.
+[04:52] E aparece na ficha que foi externa.
+[04:55] O que é que eles fizeram, como colocaram lá.
+[04:57] Isso é sempre que necessário.
+[04:59] E é preventiva.
+[05:01] No seu caso, o que vai acontecer,
+[05:03] quando você abrir, vai ter que dizer se é externo ou externo.
+[05:07] Não, mas isso posso nos dizer...
+[05:09] É só para ela.
+[05:11] Se os externa não fazem externo,
+[05:13] é para ela, quando ela for à aplicação,
+[05:15] que ela vai entrar pelo externo.
+[05:17] Mas aqui, se for calteiro,
+[05:19] se é interno, se é externo.
+[05:21] Pronto, é isso.
+[05:23] Sim, sim.
+[05:25] Aparece o tipo de montação.
+[05:27] Se é externo, vai aparecer o tipo de montação.
+[05:29] Isso é o que você está fazendo de uma coisa,
+[05:33] mas tem a outra que você disse, não é?
+[05:35] E a outra é aquela, que não tenho nada disso,
+[05:37] que é da gestão de stock das peças que temos aqui.
+[05:39] Sim, isso é outra história.
+[05:41] Mas você disse que era uma intervenção,
+[05:43] dois tipos de intervenções, não disse?
+[05:45] Preventivo ou curativo.
+[05:47] Isso.
+[05:49] Que também sou eu que altero aqui,
+[05:51] é no mesmo sítio.
+[05:53] Está aqui.
+[05:55] Tem o prenotário, semestral,
+[05:57] e depois o tipo de intervenção aqui
+[05:59] é que aparece, preventivo ou curativo.
+[06:01] Ok.
+[06:03] Por exemplo, esta aqui foi preventiva,
+[06:05] devia estar no número de horas da REX.
+[06:07] Certo.
+[06:09] Está feita, é explicado.
+[06:11] E agora?
+[06:13] E agora?
+[06:15] Eu precisava de uma coisa já moldada,
+[06:17] para o dia 17.
+[06:19] O que é essa importância para me ter noção do que é?
+[06:21] Da parte nova, desta parte não.
+[06:23] Da parte antiga...
+[06:25] Não, mas quando faz uma, já vai tudo.
+[06:27] É por causa da alugaria externa, Luís.
+[06:29] Hã?
+[06:31] Da alugaria interna.
+[06:33] É o que nós vamos ter ainda.
+[06:35] Não é externa em dezembro,
+[06:37] é que eu já tenho que ter...
+[06:39] Sim, mas...
+[06:41] Eu já tenho no dia 17.
+[06:43] As primeiras intervenções,
+[06:45] todos os equipamentos,
+[06:47] por exemplo, eu não estou ainda a fazer nada.
+[06:49] As intervenções, eles já estão a fazê-las,
+[06:51] por exemplo, em cada equipamento,
+[06:53] a lubrificação, já substituíram peças...
+[06:55] Aí na máquina nova.
+[06:57] Nas máquinas novas.
+[06:59] Isso é que eu já preciso ter para alimentarem isso.
+[07:01] E eu vou conseguir enviar a informação até lá,
+[07:03] Mário?
+[07:05] Se eles não conseguirem, aquilo que eu já fiz,
+[07:07] que já tenho fichas em papel,
+[07:09] isto, que era para depois,
+[07:11] quando tivesse alguma coisa aqui,
+[07:13] para...
+[07:15] Eu já consegui mostrar, por exemplo,
+[07:17] numidas, já alteramos três peças,
+[07:19] as peças que foram,
+[07:21] o que eu pensei por aqui,
+[07:23] foi preventiva.
+[07:25] Quarta que vem ainda é 11,
+[07:27] você que disse 17, né?
+[07:29] Pronto.
+[07:31] Nós já conseguimos trazer um protótipo
+[07:33] para validar.
+[07:35] Porque qualquer coisa, a gente adianta até o dia 17,
+[07:37] mas aí...
+[07:39] Depois da outra semana...
+[07:41] Assim, em auditoria interna,
+[07:43] estamos em fase de...
+[07:45] Implementação, se pode dizer.
+[07:47] Exato.
+[07:49] Mas aqui no dia 11, a gente tendo o espelho de como vai ser,
+[07:51] você já consegue explicar isso?
+[07:53] Entendeu?
+[07:55] No dia 11, então fica marcado para a gente fazer a primeira...
+[07:57] estar ali mexendo e olhando
+[07:59] e dizendo assim, está viável ou não está viável?
+[08:01] Está bem?
+[08:03] Obrigada.
+[08:08] Vocês já têm alguma designação das referências
+[08:10] que usam neste momento?
+[08:12] Já temos...
+[08:14] designações, nós queremos colocar as amarelas
+[08:16] que vêm com a peça.
+[08:18] Por exemplo, no equipamento,
+[08:20] temos o nome do equipamento.
+[08:22] Não, mas tipo...
+[08:24] Mas para os consumos das peças, vocês já têm...
+[08:26] Não, não.
+[08:28] Não, podemos...
+[08:30] E dos que a gente já tem hoje,
+[08:32] como é que você faz isso?
+[08:34] Ainda não fazemos nada, não sabemos...
+[08:36] Eu imagino.
+[08:38] Você não tem controle de estoque?
+[08:40] Ela não tem e temos que criar.
+[08:42] O que a gente já cria,
+[08:44] pode fazer a referência de entrada,
+[08:46] que é a referência que vem externa
+[08:48] e a nova referência
+[08:50] seria a referência da própria
+[08:52] nossa interna.
+[08:54] O Vinâncio,
+[08:56] nas primeiras peças que
+[08:58] que encomendamos, cria uma referência.
+[09:00] Se calhar podíamos vir por aí.
+[09:02] Por aí podemos falar com o Vinâncio.
+[09:04] E para o stock,
+[09:06] para o que tem que limar ele?
+[09:08] Já existe? Não, não existe nada.
+[09:10] É ir ao manual e ver as peças.
+[09:12] Pronto.
+[09:14] Já criado tudo,
+[09:16] já automático, já todas as espécies.
+[09:18] Tem que ir a ser na tabela de stock
+[09:20] e serviço da feria.
+[09:22] Para não ser vocês que me digam que
+[09:24] é nível de compras e assim isso vai ser importante.
+[09:28] Deixe-me chamar aquilo do...
+[09:30] Está lá meia-dia.
+[09:58] Voltado.
+[10:04] A gente está criando
+[10:06] uma cena que é para controlar
+[10:08] a parte de manutenção, certo?
+[10:10] Dentro disso vai ter a parte dos stocks,
+[10:12] alertas e tal.
+[10:14] Nas compras ela disse que você criou
+[10:16] referências para a parte da Maré.
+[10:18] Aquelas primeiras emcomendas.
+[10:20] A primeira emcomenda.
+[10:22] Não criou.
+[10:24] Naquela primeira emcomenda não estava.
+[10:26] É porque nós tivemos que ficar, evidentemente,
+[10:28] a referência deles, para não estar a fazer
+[10:30] as coisas atuas.
+[10:32] Que eles iam moldar os manuais,
+[10:34] a documentação.
+[10:36] E isso é preliminar.
+[10:38] Parece moldar num manuais, não é que eu também venho a...
+[10:40] E pelas momentos a gente não
+[10:42] ser confuso.
+[10:44] Por isso é que eu não quis arriscar a criar
+[10:46] e depois dar as noiras.
+[10:48] A ideia era
+[10:50] como é que eles criassem.
+[10:52] O objetivo é criar.
+[10:54] E hoje em dia, como é que em relação às
+[10:56] referências das peças que ela tem?
+[10:58] Não existe.
+[11:00] É que é 0399, é que é 0899.
+[11:02] Ou é...
+[11:04] Quatro reais.
+[11:06] Basicamente é isso.
+[11:08] Quando é viaturas, é que daí já...
+[11:10] Já o VT.
+[11:12] Aquela família de viaturas.
+[11:14] É...
+[11:16] Uma coisa à parte...
+[11:18] Um estoque de serviço.
+[11:20] Um estoque de serviço, porque aí já era
+[11:22] letras de compras, já era tudo.
+[11:24] Já começaram a criar uma sua família
+[11:26] ou vocês queriam...
+[11:28] Nós podemos manter o que há.
+[11:30] Tenham que trabalhar com as categoridades que não pegam a ser.
+[11:32] Vocês querem.
+[11:34] Eles poderão dizer que é uma peça,
+[11:36] que é o que é que se é.
+[11:38] Claro que também já são as peças.
+[11:40] É isso.
+[11:42] É isso.
+[11:44] Porque vem a designação em inglês.
+[11:46] E nós vamos chamar outra coisa que nem é a tradução.
+[11:48] Usamos outro termo.
+[11:50] E isso é que torna complicado
+[11:52] nós iniciarmos isto.
+[11:54] Por isso é que nós queríamos que viessem estas primeiras peças.
+[11:56] Inicialmente.
+[11:58] Está certo. Isto é para o mid.
+[12:00] Isto é para a depiladora.
+[12:02] Isto é para...
+[12:04] Mas isto não impede.
+[12:06] A ideia é ter a referência que vem de lá.
+[12:08] E tem a nossa referência.
+[12:10] Igual faz entrar no mercadurismo quando vem o código de fora.
+[12:12] E nós criamos o nosso código.
+[12:14] Pronto. Eu queria tentar agrupar.
+[12:16] Ou olharmos para a linha de debate.
+[12:18] E tentar, por exemplo, no número inicial,
+[12:20] o 1 podia ser o que diz respeito ao mid.
+[12:22] Ok. Só parte do jogo.
+[12:24] O 2, que seja o acabamento seguinte.
+[12:26] Aquele que nós fizemos na plancha.
+[12:28] Sim, sim, sim.
+[12:30] Agruparmos do número 10.
+[12:32] E nós olhávamos com essa referência e a percebíamos.
+[12:34] Onde é que podia ser.
+[12:36] Onde é que podia ser o mid, da depiladora?
+[12:38] Isto é interessante.
+[12:40] Pronto.
+[12:42] E aquilo é N peças.
+[12:44] N peças.
+[12:46] N peças, não é?
+[12:48] Então, o 00 não seria a...
+[12:50] A...
+[12:52] Não é obrigatoriamente a bato,
+[12:54] mas seria tipo a...
+[12:56] O midas, a máquina.
+[12:58] Só para eu ter medo desse.
+[13:00] Sabe, se não te fossem enviarem a mensagem das peças.
+[13:02] E já mandaram, só que imagine.
+[13:04] Dentro...
+[13:06] Dentro do midas tem umas 300 peças.
+[13:08] É...
+[13:10] Mas aí eu posso dizer que o midas
+[13:12] é um exemplo.
+[13:14] Eu posso dizer que o midas é o 001.
+[13:16] E as outras peças.
+[13:18] 001.1, 0.2, 0.10, 0.50.
+[13:20] Você me anda, não é?
+[13:22] E eu já sei que o 00 não é o midas.
+[13:24] É o midas, exato.
+[13:26] E aí o 002 é a outra coisa da cena.
+[13:28] Outra parte da outra máquina.
+[13:30] E lá...
+[13:32] Quando nós fizemos aquele esquema,
+[13:34] embora manual,
+[13:36] mas o objetivo é este.
+[13:38] Quando nós temos aqui a agoria,
+[13:40] temos a linha toda guardada, não é?
+[13:42] Até para cima.
+[13:44] Isto é a linha suja.
+[13:46] O que é que nós estamos a pensar?
+[13:48] Ou pegar no EQ.
+[13:50] No momento de criar outra família.
+[13:52] Exato.
+[13:54] Em que um seria para o midas.
+[13:56] Ou em inglês de família.
+[13:58] Exatamente.
+[14:00] Por o 2 era a mesa de sangria.
+[14:02] Por o 3 era o escaldão.
+[14:04] E dentro da sede.
+[14:06] E depois dentro de cada uma.
+[14:08] Todas as peças que aparecem,
+[14:10] vai para ali.
+[14:12] Nós olhávamos para o número inicial e já sabíamos que o 4
+[14:14] é o época.
+[14:16] Ou seja, o primeiro chamusco.
+[14:18] O segundo lavador.
+[14:20] Por aí fora.
+[14:22] Em cima. É mais simples.
+[14:24] Lá em cima é só plataformas e séries.
+[14:26] Certo. Só tenho uma série.
+[14:28] E eu até estava a pensar.
+[14:30] Começar por o 11 e por o 12.
+[14:32] Certo. Agora uma pergunta.
+[14:34] Porque a nossa ideia
+[14:36] é que quando você faz isso,
+[14:38] eu obra a gente para todo o resto.
+[14:40] Daí me dá para perguntar.
+[14:42] Se calhar até criou uma família aparte.
+[14:44] Pois. Se calhar era separado.
+[14:46] A linha toda no mar.
+[14:48] Para não errar mais confusão.
+[14:50] O Dani?
+[14:52] E o Luís?
+[14:54] Como é que é?
+[14:56] Na mangueira.
+[14:58] Não há stocks.
+[15:00] Não há stocks.
+[15:02] A questão é que eles vão buscar.
+[15:04] Aparentemente vão buscar.
+[15:06] Comprou, dava-lhe o tempo consumido.
+[15:08] Poderam fazer os stocks fora do PHC.
+[15:10] Como os com os dados.
+[15:12] Com os dados, tem os stocks PHC
+[15:14] e tem os stocks das paletes.
+[15:16] Depois obriga-lhe a ter novos passos.
+[15:18] Fazer controle de entrada.
+[15:20] A pergunta é.
+[15:24] Quando vocês compram as peças,
+[15:26] isso passa para a entrada de mercadorias?
+[15:28] Ou não?
+[15:30] Então é a alimentação direta.
+[15:32] Ou é não.
+[15:34] Um dos dois.
+[15:36] Quem receber a peça da entrada
+[15:38] e o outro quem consumir
+[15:40] com o dado da estrela.
+[15:42] Por exemplo.
+[15:44] Quem consumir.
+[15:46] Eu faço a compra.
+[15:48] Mas ela pode fazer o pequeno.
+[15:50] Da entrada do stock.
+[15:52] E eles quando consomem pelo telemóvel.
+[15:54] Faz o consumo.
+[15:56] E você só vai lá com a supervisora
+[15:58] e diz.
+[16:00] Fechado.
+[16:02] O procedimento tem que ser esse.
+[16:04] Não podem andar assim ao contrário.
+[16:06] Ele compra.
+[16:08] Você recebe.
+[16:10] Para o futuro.
+[16:12] Se querem passar isso para o avanço.
+[16:14] Trabalha sem surpresa.
+[16:16] Mas não é necessário.
+[16:18] Se vocês quisessem
+[16:20] comprar as peças.
+[16:22] Com as mesmas surpresas.
+[16:24] Se a partir de alguma usada mesmo.
+[16:26] A cliente já é o seu caso.
+[16:28] Em uma referência a base.
+[16:30] Depois não tem mais designação.
+[16:32] Esse caso aqui.
+[16:34] Isso aqui fica muito bem.
+[16:36] Porque não é para a família.
+[16:38] Que é separado por máquinas.
+[16:40] Esse caso.
+[16:42] Bom ou não bom criar surpresas.
+[16:44] Não.
+[16:46] E depois.
+[16:48] Nós temos como se você se estoque a parte.
+[16:50] E o resto.
+[16:52] A contabilidade.
+[16:54] Aqui está tudo.
+[16:56] Tudo que chega na montação.
+[16:58] É considerado peritamente.
+[17:00] Ou é essa.
+[17:02] É verdade.
+[17:04] Que as peças estão afundadas.
+[17:06] Isso é interessante.
+[17:08] Tem que carregar.
+[17:10] Depois é tudo que não é maré.
+[17:12] O que você tiver de peça.
+[17:14] Se tiver.
+[17:16] A gente tem que jogar.
+[17:18] Fazer um negócio para jogar aqui dentro.
+[17:20] Para ter a gestão de estoque.
+[17:22] A ideia é que você receba o alerta.
+[17:24] Mas ele também recebe.
+[17:26] Dizendo que.
+[17:28] Tem que comprar tal peça.
+[17:30] É isso.
+[17:32] A gente precisa fazer o estoque.
+[17:34] E o serviço do P.
+[17:36] Depois é preciso informar.
+[17:38] Pronto.
+[17:40] Assim.
+[17:42] Dia 11.
+[17:44] Trazemos o primeiro.
+[17:46] Como é que isso deve ficar.
+[17:48] E aí discutimos.
+[17:50] E eles também.
+[17:52] Vamos trazer.
+[17:54] Sem esta parte deste estoque.
+[17:56] Não vamos.
+[17:58] Não vamos porque as peças.
+[18:00] É a única coisa que eu tenho.
+[18:02] Já tenho peças lá.
+[18:04] Mas você tem como é que.
+[18:06] Dizendo assim a máquina.
+[18:08] Tem uma listagem de peças.
+[18:10] Com 4.000.
+[18:12] 3.300.
+[18:14] Mas já estão separadas por máquinas.
+[18:16] Ainda não estão.
+[18:20] Se mexe por máquina.
+[18:22] Já carregaram.
+[18:24] A informação é pronta.
+[18:26] E eles não tem isso por máquina.
+[18:28] Por máquina.
+[18:30] É que ele está por máquina.
+[18:32] Fala assim.
+[18:34] Do jeito que vocês montaram aqui.
+[18:36] Quer saber?
+[18:38] Porque eu vejo que é outra carinha.
+[18:40] Nós não vamos deixar em outra.
+[18:42] Mas isso fica bem.
+[18:44] Tem comida.
+[18:46] Vou colocar todas as peças que tem lá.
+[18:48] Independente se eu tenho zero estoque.
+[18:50] Não sei se eu tenho zero istoque.
+[18:52] Onde é que eu sei que precisar tem que ter.
+[18:54] Tem que ter lá.
+[18:56] Já sabe em inglês que eles não lhe daram por exemplo.
+[18:58] Numidas.
+[19:00] Eles põem o desenho do equipamento.
+[19:02] Para identificar.
+[19:04] E tem as primeiras peças.
+[19:06] Depois abre aquilo.
+[19:08] Depois você põe uma série de referências.
+[19:10] Que volta a clicar e tem mais peças.
+[19:12] Abre outro.
+[19:14] Abre outro.
+[19:16] Você tem qualquer PDF?
+[19:18] Está na pasta comum.
+[19:20] Pronto.
+[19:22] Porque eu jogo isso dentro da IA e vamos ver se ela consegue separar.
+[19:24] Está na pasta comum.
+[19:26] Entendeu?
+[19:28] Bota ela a trabalhar.
+[19:30] Jogo ela lá.
+[19:32] Em vez de se ela separa.
+[19:34] Se ela separar tudo.
+[19:36] Que muito.
+[19:38] Eu tenho dado um contexto.
+[19:40] Sim.
+[19:42] Sim, também.
+[19:44] E não pegar a cerveja.
+[19:46] O que é que?
+[19:48] Não deve ser simples a coisa.
+[19:50] Vamos lá mesmo.
+[19:52] Estou a esquecer.
+[19:54] Temos lá.
+[19:56] É para essa.
+[19:58] O mesmo que eu me ajudo a transferir.
+[20:00] Está aqui.
+[20:02] Ah, é isto?
+[20:04] São os dois iguais?
+[20:09] Ou são diferentes?
+[20:11] Não, eu tenho português.
+[20:13] Mas este aqui tem meio misturado.
+[20:15] Em inglês com português.
+[20:17] Tem integralmente.
+[20:19] Tem espanhola por meio.
+[20:21] Tem tudo.
+[20:23] É.
+[20:25] 300...
+[20:27] 300 megas.
+[20:29] É grande.
+[20:33] Eu jogo lá dentro e ela fica lá moendo.
+[20:35] Inicialmente.
+[20:37] E passando foi chapéu.
+[20:39] Está lá.
+[20:41] Da diágua.
+[20:43] Chapéu.
+[20:48] E por que também...
+[20:50] O vale serve?
+[20:52] Pronto.
+[20:54] Está aqui.
+[20:56] Por exemplo, vai abrir aqui o meu equipamento.
+[20:58] Que é a mesa.
+[21:03] Isto é a mesa.
+[21:05] Só que eles têm duas referências.
+[21:07] Normalmente é uma que começa por sete.
+[21:09] Depois agora.
+[21:11] E isto fecha-me tudo.
+[21:13] Acho eu.
+[21:18] Se ele abriava-se.
+[21:20] Se não saísse eu abro.
+[21:22] Quando ele acalicou.
+[21:24] Por exemplo.
+[21:26] Só tem estas peças.
+[21:30] Mas vocês conseguem perceber
+[21:32] se este número que vem aqui
+[21:34] é o mesmo que vem a tocar as caixas?
+[21:36] Ainda não conseguimos perceber isso.
+[21:38] Não.
+[21:40] Parece-me que as referências bem começadas em sete
+[21:42] é a mesma referência da peça.
+[21:44] Porque depois há um código.
+[21:46] Que é do vizinho.
+[21:48] Exatamente.
+[21:50] É só uma assistente.
+[21:52] Se vier com um colivar.
+[21:54] Ela já alia e pronto.
+[21:56] Não tem que ter uma etiquetadora no pique.
+[21:58] Na lista de peças nem todas
+[22:00] conseguem entrar.
+[22:02] Não, é isso.
+[22:04] Por exemplo.
+[22:06] Por exemplo.
+[22:08] Por exemplo.
+[22:10] Não está aqui.
+[22:12] Por exemplo.
+[22:19] Eu abro aqui este.
+[22:21] E estão estas placas.
+[22:23] É bastante complexo.
+[22:25] Muito complexo.
+[22:27] Não, não é direito.
+[22:29] É isso que estou a dizer.
+[22:31] Vou dar para ela mastigar isso.
+[22:33] Para ver como é que sai do outro lado.
+[22:35] É, está bem.
+[22:37] As referências da streaming peças.
+[22:39] Qual a parte?
+[22:41] Está, está.
+[22:43] Eu já vou por baixo.
+[22:45] Mas entretanto.
+[22:47] Vou copiar isto do meu lado.
+[22:49] Vou copiar mesmo o inglês.
+[22:51] O inglês original.
+[22:53] Depois mando ele traduzir.
+[22:55] É isso que vou fazer.
+[22:57] Diz que não está muito bom.
+[22:59] Vou colar para cá.
+[23:01] Colar.
+[23:03] E você me faça um favor.
+[23:05] Manda aquele plano de manutenção para mim.
+[23:07] Por e-mail.
+[23:09] Manda para mim.
+[23:11] E pronto.
+[23:13] Eu já estou copiando.
+[23:15] E vou mandar para ela mastigar.
+[23:17] Primeiro vou mandá-la traduzir.
+[23:19] E depois vou em cima do calabro.
+[23:21] Dar uma olhada para eu também entender.
+[23:23] Porque ela vai me responder.
+[23:25] Eu tenho que ter noção de que ela vai me responder.
+[23:27] E aí boto ela para martelar isso.
+[23:29] Porque o que vai vir em português.
+[23:31] Que vai ser basicamente apenas o inglês.
+[23:35] Vamos contar que vai vir uma tradução.
+[23:41] Eu vou mandar traduzir.
+[23:43] E a gente também dá uma olhada.
+[23:45] Porque aí a faz aqui.
+[23:47] Pode parar.
+[23:49] Posso parar aqui a partilha.
