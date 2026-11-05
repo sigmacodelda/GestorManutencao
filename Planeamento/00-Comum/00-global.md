@@ -68,12 +68,16 @@ Os critérios detalhados de cada task estão no topo do respetivo prompt (campo 
 | D-07 | "Backoffice" = ecrãs Windows do módulo Manutenção no LandeiroMaui, sobre as tabelas do PHC. **Suposição a confirmar com a Landeiro** | Painéis dentro do PHC: não é o que o PAT 2 diz ("na plataforma .NET MAUI") | P1-T02 | 2026-11-05 |
 | D-08 | Documentos e mockups em Markdown + Mermaid e HTML, com a marca SigmaCode | Word/PDF: podem sair depois | todas | 2026-11-05 |
 | D-09 | UI de mockups com paleta SigmaCode por defeito. A app segue as cores do LandeiroMaui só se o pedido disser "Cliente: Landeiro, usar cores do cliente" | Aplicar as cores do cliente por defeito: contraria a regra de marca | P2-T02 | 2026-11-05 |
+| D-10 | **Por decidir (bloqueia P2-T03): credencial de sincronização da app móvel.** Depois do login, os serviços do LandeiroMaui usam a cadeia de ligação da app (ficaria dentro do APK) e o PIN não permite voltar a pedir a password. Opções: (A) API fina intermédia; (B) cadeia da app com conta SQL de mínimo privilégio, só em `TESTES_LAND2` durante M1 e M2, com o acesso atrás de `IRemotoIntervencoes`; (C) guardar a password cifrada. Recomendação: B só em testes e A antes de produção. **Isto está mal para utilizadores reais herdar de D-03 sem mais** | C: rejeitada, guarda credenciais no telemóvel | P2-T02, P2-T03 | — |
+| D-11 | **Por decidir (bloqueia P3-T01 na parte do PDF):** autorização da Landeiro para tratar o PDF Marel com serviços externos (IA em nuvem, incluindo o Claude Code, que envia o texto lido ao modelo). Até haver autorização: extração local sem IA e amostras mínimas | Assumir "processa localmente": inexato | P3-T01, P3-T03 | — |
+| D-12 | **Por decidir:** um artigo por código do fabricante, ligações às máquinas por posição (a mesma peça em vários conjuntos não fragmenta o stock) | Um artigo por ocorrência na máquina: fragmenta stock | P3-T02 | — |
+| D-13 | Saídas de documentação por parte, para não colidirem: P1 em `C:\_SigmaRepos\GestorManutencao\docs\` (trabalho) e `LandeiroMaui\docs\manutencao\` (final); P2 em `docs/manutencao/p2/`; P3 em `docs/pecas-armazem/`. Os caminhos "Saídas" da secção 3 são os dos prompts | Uma só pasta `docs/` para as 3 partes: colide | todas | 2026-11-05 |
 
 ## 5. Pendências
 
 | # | Pendência | Dono | Bloqueia? (que task) | Estado |
 |---|---|---|---|---|
-| 1 | Word do plano de manutenção P.05-03 (v1.4, 2026) | Luís (Landeiro) | sim: P1-T01 (carga do plano) | Aberta |
+| 1 | Word do plano de manutenção P.05-03 (v1.4) | Luís (Landeiro) | sim: P1-T01 (carga do plano) | **Recebido a 05/11/2026**; análise em nalise-plano-word-p05-03.md |
 | 2 | Acesso de leitura à BD de testes `TESTES_LAND2` (connection string no `appsettings`, preenchida pelo utilizador) | Utilizador | sim: P1-T01, P3-T01 | Aberta |
 | 3 | Circuito PHC em detalhe (sessão com o Rui) | Rui (Landeiro) | não (levantamento corre antes) | Aberta |
 | 4 | É possível criar tabelas e campos `u_` neste PHC? Quem cria e quando? | Utilizador / Landeiro | sim: P1-T03, P3-T03 | Aberta |
@@ -86,6 +90,14 @@ Os critérios detalhados de cada task estão no topo do respetivo prompt (campo 
 | 11 | Viaturas ficam fora do âmbito? (o ecrã Infraestruturas tem Via Verde e Kms) | Landeiro | não | Aberta |
 | 12 | Confirmar D-02, D-04 e D-07 | Utilizador | sim: P1-T02, P2-T02, P3-T02 | Aberta |
 | 13 | Nível de compatibilidade e versão do SQL Server da base real | Utilizador (SELECT em P1-T01) | não | Aberta |
+| 14 | Decidir D-10 (credencial de sincronização da app) | Utilizador | sim: P2-T03 | Aberta |
+| 15 | Decidir D-11 (PDF Marel e IA em nuvem: até onde) | Utilizador / Landeiro | sim: P3-T01 (parte do PDF), P3-T03 | Aberta |
+| 16 | Decidir D-12 (um artigo por código do fabricante) | Utilizador | sim: P3-T02 | Aberta |
+| 17 | Impressora e rolo de etiquetas (formato assumido 60x40 mm) | Landeiro | sim: P3-T04 | Aberta |
+| 18 | Filtro das planeadas que o operador vê (por zona, por equipamento ou todas) | Landeiro | não | Aberta |
+| 20 | Excel de origem Lista de infraestruturas1.xlsx (folha "plano de manutenção") e confirmar se existe versão do plano mais recente que 2023-11-13 | Landeiro | não (melhora a carga) | Aberta |
+| 21 | Landeiro valida o plano do Word: 2 células por mês (Suposição: quinzenas), Nºs repetidos (225, 231, 233), 5 sem Nº, 3 decimais, Interna+Externa (14), periodicidades fora da lista | Landeiro | sim: carga em P1-T03 | Aberta |
+| 19 | Percorrer o protótipo clicável do telemóvel de ponta a ponta antes de 11/11 (o agente só testou login e sintaxe) | SigmaCode | não | Aberta |
 
 ## 6. Riscos
 
@@ -94,7 +106,9 @@ Os critérios detalhados de cada task estão no topo do respetivo prompt (campo 
 | R-01 | **Prazo 17/11/2026 irrealista** para app offline completa (a 1.ª fase inclui Android, offline, PIN e sincronização) | Landeiro fica sem ferramenta e continua em papel | Entregar a 11/11 só protótipo clicável. Para 17/11, solução provisória: registar no ecrã PHC atual com plano exportado do Word; a app sai por marcos | P2 |
 | R-02 | Tabelas e campos novos têm de ser criados no PHC por pessoas, não pelo Claude Code | Atrasa P1-T03 e P3-T03 | Especificação fechada em P1-T02 e P3-T02 e script de verificação só leitura | P1, P3 |
 | R-03 | Telemóvel liga direto ao SQL Server com credenciais SQL por utilizador | Exposição se o SQL sair da rede interna | Só Wi-Fi interno ou VPN; password nunca guardada; alternativa API (D-03) | P2 |
-| R-04 | Peças: 3.300 a 4.000 referências por máquina, nomes em inglês e códigos duplos | Carga lenta e sujeita a erros | Carga por máquina, IA a propor e humano a validar, tradução ao lado | P3 |
+| R-09 | Cadeia de ligação ao SQL dentro do APK (D-10) | Credencial extraível do telemóvel | Conta de mínimo privilégio só em testes; API antes de produção | P2 |
+| R-10 | O plano offline do LandeiroMaui é só desenho (não há `LocalDb` nem `FilaSaida` no código) | Esforço de P2-T04 maior | Esforço de P2-T04 já conta com isso (Parte 2 estima 110 a 200 h) | P2 |
+| R-04 | Peças: 3.300 a 4.000 referências **no total** (Midas cerca de 300), nomes em inglês e códigos duplos | Carga lenta e sujeita a erros | Carga por máquina, IA a propor e humano a validar, tradução ao lado | P3 |
 | R-05 | Sem stock nem entradas, o consumo no telemóvel não tem sentido | Alertas de rutura inúteis | Receção (PEC-07) antes do consumo; procedimento comprar, receber, consumir | P3 |
 | R-06 | Alvo Android pode afetar o projeto dos postos em produção | Regressão nos postos | Projeto novo partilhando bibliotecas (D-02); build dos postos intacto | P2 |
 | R-07 | Transcrição do vídeo com erros | Requisitos mal lidos | Resumo marcado com Suposições; validar a 11/11 | todas |
@@ -109,6 +123,9 @@ Os critérios detalhados de cada task estão no topo do respetivo prompt (campo 
 ## 8. Registo
 
 - 2026-11-05 · Planeamento criado: base comum, 3 partes, tasks e prompts (rascunho). Nenhuma task arrancou.
+- 2026-11-05 · Word P.05-03 recebido e analisado: CSV normalizado de 107 linhas em fontes/, problemas de qualidade e pendências 20 e 21. Prompt P1-T01 atualizado.
+- 2026-11-05 · Partes 1, 2 e 3 escritas por agentes e consolidadas aqui: D-10 a D-13, pendências 14 a 19, riscos R-09 e R-10. Esforço estimado (documentado em cada `tarefas.md`): P1 57 a 102 h, P2 110 a 200 h, P3 108 a 174 h.
+- Nota de contradição das partes: os agentes seguiram o bloco comum (nenhum git no LandeiroMaui) em vez de "branch por parte"; o branch, se existir, cria-o o utilizador fora do agente.
 
 ## 9. Próximo passo
 

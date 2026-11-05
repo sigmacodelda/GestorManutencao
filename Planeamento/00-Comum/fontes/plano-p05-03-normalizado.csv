@@ -1,0 +1,108 @@
+﻿no;designacao;zona;entidade;entidade_original;periodicidade;periodicidade_original;meses_x_por_mes_jan_a_dez;avisos
+4;Lava Aventais;Abate;Interna;Interna;Trimestral;Trimestral;200200020000;
+63;Guincho Elevatório de Bovinos;Abate;Interna;Interna;Mensal;Mensal;222222222200;
+64;Pistola Insensibilização Bovinos;Abate;Interna;Interna;Semanal;Semanal;222222222200;
+65;Ascensor;Abate;Interna+Externa;Interna/Ext;Semestral;Semestral;000000000000;"grafia de entidade; sem meses marcados"
+66;Esfoladora Mecânica;Abate;Interna;Interna;Mensal;Mensal;222222222200;
+67;Serra Elétrica (Modelo 56);Abate;Interna;Interna;Mensal;Mensal;222000000000;
+69;Serra Elétrica (Modelo 66);Abate;Interna;Interna;Mensal;Mensal;222000000000;
+70;Serra Elétrica(SB321EFA);Abate;Interna;Interna;Mensal;Mensal;222000000000;
+71;Serra Elétrica(Buster VI Jarvis);Abate;Interna;Interna;Mensal;Mensal;222222222200;
+72;Carrocel;Abate;Interna;Interna;Trimestral;Trimestral;200000000000;
+74;Secador;Abate;Interna;Interna;Trimestral;Trimestral;200000000000;
+75;Forno Chamusco;Abate;Interna;Interna;Trimestral;Trimestral;200000000000;
+77;Lavadora;Abate;Interna;Interna;Mensal;Mensal;222000000000;
+78;Tanque Escaldão;Abate;Interna;Interna;Semestral;Semestral;200000000000;
+79;Depiladora Suínos;Abate;Interna;Interna;Trimestral;Trimestral;200000000000;
+80;Chamusco;Abate;Interna;Interna;Trimestral;Trimestral;200000000000;
+81;Carrocel;Abate;Interna;Interna;Trimestral;Trimestral;200000000000;
+85;Tenaz Insensibilização Suínos;Abate;Interna;Interna;Semanal;semanal;222000000000;
+87;Máquina Desinfetar Mãos;Abate;Interna;Interna;Semestral;Semestral;200000000000;
+88;Guincho Elevatório;Abate;Interna;Interna;Trimestral;Trimestral;200020002000;
+123;Serra Elétrica Cortar Cornos;Abate;Interna;Interna;Mensal;Mensal;222222222200;
+141;Bombas Sucção Sangue;Abate;Interna;Interna;Mensal;Mensal;222222222200;
+147;Pistola Insensibilização Bovinos;Abate;Interna;Interna;Semanal;Semanal;222222222200;
+166;Transporel-Plataforma          Hidráulica;Abate;Externa;Externa;Anual;Anual;000000000000;sem meses marcados
+198;Esterilizadores;Abate;Interna;Interna;Mensal;Mensal;222222222200;
+47;Máquina Lavar Patas;Triparia;Interna;Interna;Trimestral;Trimestral;200020002000;
+48;Máquina Lavar Panças;Triparia;Interna;Interna;Trimestral;Trimestral;200020002000;
+49;Máquina Extrair Unhas Bovinos;Triparia;Interna;Interna;Trimestral;Trismestral;200020002000;gralha corrigida: trismestral
+;Máquina de Virar Tripas Grossas;Triparia;Externa;Externa;;;000000000000;"sem Nº; periodicidade por rever: ''; sem meses marcados"
+;Máquina Separar Tripa Fina;Triparia;Externa;Externa;;;000000000000;"sem Nº; periodicidade por rever: ''; sem meses marcados"
+11;Bombo Grande nº1;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+12;Bombo Pequeno  nº2;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+28;Injetora;Salsicharia;Interna;Interna;Mensal;Mensal;222222222000;
+29;Estufa Elétrica nº 3;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+30;Agitadora Salmoura;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+31;Enchedora de Salpicão;Salsicharia;Interna;Interna;Mensal;Mensal;222222222000;
+32;Elevadores Carros Standard;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+33;Picadora ASGO;Salsicharia;Interna;Interna;Mensal;Mensal;222222222200;
+34;Elevadores Carros Standard;Salsicharia;Interna;Interna;Trimestral;Trimestral;200200200200;
+35;Enchedora Paios Lombo;Salsicharia;Interna;Interna;Mensal;Mensal;000000000000;sem meses marcados
+36;polyclip (clipsedora);Salsicharia;Interna+Externa;Int/Ext;Mensal;Mensal;222222222200;grafia de entidade
+37;Misturadora;Salsicharia;Interna;Interna;Mensal;Mensal;222222222220;
+38;Elevadores Carros Standard;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+39;Enchedora Vácuo (HDE 20T);Salsicharia;Interna;Interna;Mensal;Mensal;222222222220;
+40;Elevadores Carros Standard;Salsicharia;Interna;Interna;Trimestral;Trimestral;000000000000;sem meses marcados
+54;Máquina Colocar fios;Salsicharia;Interna;Interna;Mensal;Mensal;222222222220;
+54,1;Máquina Colocar fios;Salsicharia;Interna;Interna;Mensal;Mensal;222222222220;Nº decimal (sub-equipamento?)
+86;Tenderizadora;Salsicharia;Interna;Interna;Mensal;Mensal;222222222220;
+115;Detetor de Metais;Salsicharia;Interna+Externa;Interna/Ext;Trimestral;Trimestral;000000000000;"grafia de entidade; sem meses marcados"
+117;Cutter;Salsicharia;Interna;Interna;Trimestral;Trimestral;000000000000;sem meses marcados
+118;Máquina Gelo;Salsicharia;Interna+Externa;Interna/EXT;Anual;Anual;200110011000;grafia de entidade
+119;Estufa Elétrica nº 3;Salsicharia;Interna;Interna;;3VZ ANO;200110011000;periodicidade por rever: '3VZ ANO'
+121;Máquina Clipsar Sacos;Salsicharia;Interna;Interna;Trimestral;Trimestral;200110011000;
+154;Enchedora Handtmann;Salsicharia;Interna+Externa;Interna/ext;Mensal;Mensal;222222222220;grafia de entidade
+169;Enchedora Automática;Salsicharia;Interna+Externa;Interna/ext;Mensal;Mensal;222222222220;grafia de entidade
+175;Máquina Clipsar Sacos;Salsicharia;Interna;Interna;Trimestral;Trimestral;200110011000;
+177;Descouratadora Grasselli;Salsicharia;Interna;Interna;Mensal;Mensal;222222222220;
+178;Estufas Elétricas Verinox nº2;Salsicharia;Interna;Interna;Trimestral;Trimestral;200110011000;
+184;Detetor de Metais;Salsicharia;Externa;Externa;Anual;Anual;000000000000;sem meses marcados
+190;Bombo 3;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+209;Estufa VEMAG nº 5;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+248;Enchedora Rex;Salsicharia;Interna+Externa;Int+Ext;Mensal;Mensal;222222222200;grafia de entidade
+;Estufa Elétrica nº1;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;sem Nº
+13;Máquina Embalar Vácuo (E-453);Sala de Embalar;Interna+Externa;Interna/ext;Mensal;Mensal;222222222200;grafia de entidade
+15;Máquina Embalar Vácuo (VC99907 PENS 15);Salsicharia;Interna;Interna;Mensal;Mensal;222222222200;
+116;Tanque Retração;Salsicharia;Interna;Interna;Trimestral;Trimestral;200020002000;
+186;Máquina Embalar em Linha Multivac;Salsicharia;Interna+Externa;Int+Ext;Mensal;Mensal;222222222200;grafia de entidade
+231;Máquina Embalar sortido;Salsicharia;Interna+Externa;Int+Ext;Mensal;Mensal;222222222200;"grafia de entidade; Nº repetido"
+;Detetor de Metais;Salsicharia;Externa;Externa;Anual;ANUAL;000000000000;"sem Nº; sem meses marcados"
+225;Maquina Cortar Chouriço Inotec;Salsicharia;Interna;Interna;Trimestral;Trimestral;000000000000;"sem meses marcados; Nº repetido"
+127;Braço Hidráulico;Expedição;Interna;Interna;Trimestral;Trimestral;000000000000;sem meses marcados
+149;Serra p/Corte em Quartos;Expedição;Interna;Interna;Mensal;Mensal;000000000000;sem meses marcados
+170;Empilhador Nissan;Expedição;Externa;Externa;Anual;Anual;000000000000;sem meses marcados
+185;Máquina Partir Sortido;Expedição;Interna;Interna;Mensal;Mensal;000000000000;sem meses marcados
+189;Máquina Embalar Cuvetes;Expedição;Interna+Externa;Interna/Ext;Mensal;Mensal;000000000000;"grafia de entidade; sem meses marcados"
+50;Caldeira (RL2000/10,9);Exterior;Interna+Externa;Int+Ext;Anual;Anual;000000000000;"grafia de entidade; sem meses marcados"
+51;Caldeira (Nº Fabrico 731);Expedição;Interna+Externa;Int+Ext;Anual;Anual;000000000000;"grafia de entidade; sem meses marcados"
+90;Analisador Cloro;Expedição;Interna;Interna;Anual;Anual;000000000000;sem meses marcados
+93;Equipamento Frio;Expedição;Externa;Externa;;;000000000000;"periodicidade por rever: ''; sem meses marcados"
+171;Empilhador Exterior;Expedição;Externa;Externa;Anual;Anual;000000000000;sem meses marcados
+3;Túnel Lavagem Tabuleiros;Expedição;Interna;Interna;Trimestral;Trimestral;000000000000;sem meses marcados
+83;Máquina Lavar Varas;Expedição;Interna;Interna;Trimestral;Trimestral;000000000000;sem meses marcados
+188;Máquina Lavar Facas;Expedição;Interna;Interna;Trimestral;Trimestral;000000000000;sem meses marcados
+6;Central Espuma;Corredores;Interna+Externa;Int+Ext;;;000000000000;"grafia de entidade; periodicidade por rever: ''; sem meses marcados"
+52;Monta Cargas;Corredores;Externa;Externa;Anual;anual;000000000000;sem meses marcados
+5,1;Máquina Lavar Botas;Outros;Interna;Interna;Mensal;Mensal;000000000000;"Nº decimal (sub-equipamento?); sem meses marcados"
+82,1;Vias Aéreas;Corredores;Interna;Interna;Mensal;Mensal;000000000000;"Nº decimal (sub-equipamento?); sem meses marcados"
+150;PT;Corredores;Externa;Externa;Anual;Anual;000000000000;sem meses marcados
+151;Gasóleo;Corredores;Externa;Externa;Quinquenal;Quinquenal;000000000000;sem meses marcados
+172;Plataforma;Corredores;Externa;Externa;Anual;Anual;000000000000;sem meses marcados
+173;Máquina Lavar Mãos;Corredores;Interna;Interna;Mensal;Mensal;000000000000;sem meses marcados
+191;Estrelizadores;Corredores;Interna;Interna;Trimestral;Trimestral;000000000000;sem meses marcados
+225;Máquina de Cortar Unidades(Chouriço);Corredores;Interna;Interna;Mensal;Mensal;000000000000;"sem meses marcados; Nº repetido"
+226;Serra Elétrica (FREUND) Desmancha;Corredores;Interna;Interna;Mensal;Mensal;000000000000;sem meses marcados
+227;Serra Elétrica bogima (AB.Suinos);Corredores;Interna;Interna;Mensal;Mensal;000000000000;sem meses marcados
+228;Alicate de chifres bogima (AB.Bovinos);Corredores;Interna;Interna;Mensal;mensal;000000000000;sem meses marcados
+;Polyclip;Corredores;Externa;externo;Mensal;MENSAL;000000000000;"sem Nº; grafia de entidade; sem meses marcados"
+229;Plataforma elevatoria bombos;Corredores;Externa;externo;Mensal;MENSAL;000000000000;"grafia de entidade; sem meses marcados"
+230;Monta cargas ( sala lav);Corredores;Externa;externo;Anual;Anual;000000000000;"grafia de entidade; sem meses marcados"
+231;Tanques da salmoura;Corredores;Externa;externo;Mensal;MENSAL;000000000000;"grafia de entidade; sem meses marcados; Nº repetido"
+232;Maquina cintar paletes;Corredores;Externa;externo;Trimestral;TRIMESTRAL;000000000000;"grafia de entidade; sem meses marcados"
+233;Maquina fechar caixas;Corredores;Externa;externo;Trimestral;TRIMESTRAL;000000000000;"grafia de entidade; sem meses marcados; Nº repetido"
+233;equipamento de cintar paletes (cong);Corredores;Interna+Externa;interno+ext;Trimestral;TRIMESTRAL;000000000000;"grafia de entidade; sem meses marcados; Nº repetido"
+234;Alicate de corte de chispe (desm);Corredores;Interna;interno;Mensal;Mensal;000000000000;"grafia de entidade; sem meses marcados"
+235;descouratadora manual (desm);Corredores;Interna;interno;Mensal;Mensal;000000000000;"grafia de entidade; sem meses marcados"
+236;Tanque de retração;Corredores;Interna;interno;Mensal;Mensal;000000000000;"grafia de entidade; sem meses marcados"
+237;Maquina de meter fio (desm);Corredores;Interna;interno;Mensal;mensal;000000000000;"grafia de entidade; sem meses marcados"
