@@ -36,18 +36,24 @@
             <section aria-labelledby="@IdGrupo(grupo)">
                 <h2 id="@IdGrupo(grupo)" class="titulo-grupo">@grupo.Titulo <span class="contagem">@grupo.Itens.Count</span></h2>
                 <ul class="lista-intervencoes">
-                    @foreach (var i in grupo.Itens)
+                    @foreach (var i in grupo.Itens.Take(Limite(grupo)))
                     {
                         var atrasada = i.EstaAtrasada(_hoje);
                         <li>
                             <a class="intervencao @(atrasada ? "atrasada" : "")" href="intervencoes/@i.Id">
                                 <span class="intervencao-titulo">@i.Equipamento</span>
-                                <span class="intervencao-desc">@i.Zona · @(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                                <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(i.Zona) ? "" : i.Zona + " · ")@(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
                                 <span class="intervencao-data">@TextoData(i.DataPlaneada)</span>
                             </a>
                         </li>
                     }
                 </ul>
+                @if (grupo.Itens.Count > Limite(grupo))
+                {
+                    <button type="button" class="btn btn-secundario" @onclick="() => _limites[grupo.Titulo] = Limite(grupo) + PorPagina">
+                        Ver mais (@(grupo.Itens.Count - Limite(grupo)))
+                    </button>
+                }
             </section>
         }
     }
@@ -59,6 +65,11 @@
     private IReadOnlyList<GrupoIntervencoes> _grupos = [];
     private bool _a_carregar = true, _erro, _indisponivel;
     private DateOnly _hoje;
+    private const int PorPagina = 10;
+    private readonly Dictionary<string, int> _limites = [];
+
+    // Poucas fichas de cada vez: uma lista muito comprida cansa e esconde o que importa.
+    private int Limite(GrupoIntervencoes g) => _limites.GetValueOrDefault(g.Titulo, PorPagina);
 
     protected override async Task OnInitializedAsync() => await CarregarAsync();
 

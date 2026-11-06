@@ -20,7 +20,7 @@
     else
     {
         <dl class="ficha">
-            <dt>Zona</dt><dd>@_i.Zona</dd>
+            @if (!string.IsNullOrWhiteSpace(_i.Zona)) { <dt>Zona</dt><dd>@_i.Zona</dd> }
             <dt>Tipo</dt><dd>@(_i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</dd>
             <dt>Data prevista</dt><dd>@_i.DataPlaneada.ToString("dd/MM/yyyy")</dd>
             @if (!string.IsNullOrWhiteSpace(_i.Anomalia)) { <dt>Problema</dt><dd>@_i.Anomalia</dd> }
