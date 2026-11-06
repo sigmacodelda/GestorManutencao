@@ -34,7 +34,7 @@ Dependências de outras partes (diz-las no orçamento): P2-T02 precisa dos contr
 - Decisões: D-01 partes em paralelo; D-02 (proposta, a confirmar) projeto novo `ManutencaoMobile` que partilha bibliotecas por ficheiros ligados; D-03 Dapper direto ao SQL Server; D-05 planeadas são fichas com estado Planeada; D-06 PIN só no dispositivo; D-09 marca SigmaCode por defeito.
 - Prazos: protótipo clicável a 11/11/2026; 17/11/2026 (Suposição) primeiras intervenções nos equipamentos novos.
 - Risco R-01: o prazo de 17/11/2026 é irrealista para uma app offline completa. Marcos propostos (Suposição): M0 protótipo a 11/11; M1 login e lista online; M2 offline; M3 alertas e fotos. Até lá regista-se no ecrã PHC atual com o plano exportado do Word.
-- Risco R-03: o telemóvel liga ao SQL Server com a cadeia da app (que ficaria no APK) e login SQL por utilizador. Mitigação: só rede interna ou VPN, conta de mínimo privilégio, acesso remoto atrás de interface, e proposta de API fina antes de haver utilizadores reais (decisão D-10, a fechar em P2-T02).
+- Risco R-03: o telemóvel liga ao SQL Server com a cadeia da app (que ficaria no APK) e login SQL por utilizador. Mitigação: só rede interna ou VPN, conta de mínimo privilégio, acesso remoto atrás de interface, e sem API (decisão D-10 do utilizador: login igual ao do LandeiroMaui; a password fica cifrada no cofre do Android e o PIN, só na app, desbloqueia-a).
 Nota: sem credenciais, tokens nem connection strings.
 </context>
 
