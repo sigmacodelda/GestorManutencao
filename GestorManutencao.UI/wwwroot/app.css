@@ -232,7 +232,7 @@ h1:focus-visible { outline: none; }
 .formulario textarea { resize: vertical; }
 .formulario input:focus, .formulario textarea:focus { outline: none; border-color: var(--foco); box-shadow: 0 0 0 3px color-mix(in srgb, var(--foco) 35%, transparent); }
 .horas { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-3); }
-.btn-texto { align-self: flex-start; min-height: 44px; background: transparent; border: 0; color: var(--primario); font-weight: 700; cursor: pointer; }
+.btn-texto { align-self: flex-start; min-height: 44px; background: transparent; border: 0; color: var(--primario); font: 700 1rem var(--fonte-corpo); cursor: pointer; }
 .opcoes { list-style: none; margin: 0; padding: 0; border: 1px solid var(--borda-suave); border-radius: var(--raio); overflow: hidden; }
 .opcao { width: 100%; min-height: var(--alvo); display: flex; justify-content: space-between; gap: var(--esp-3); align-items: center; padding: 0 var(--esp-3); background: var(--superficie); color: var(--texto); border: 0; border-bottom: 1px solid var(--borda-suave); font: 600 1rem var(--fonte-corpo); cursor: pointer; text-align: left; }
 .opcao-zona { color: var(--texto-suave); font-weight: 400; font-size: .875rem; }
@@ -242,7 +242,10 @@ h1:focus-visible { outline: none; }
 .ficha dd { margin: 0; font-weight: 600; }
 a.intervencao { color: inherit; text-decoration: none; }
 .campo-pin { letter-spacing: .4em; font: 700 1.5rem var(--fonte-titulos); }
-.alerta-pin { align-items: flex-start; }
+.alerta-pin { align-items: flex-start; background: var(--superficie); color: var(--texto); border-color: var(--primario); }
+.alerta-pin .icone, .alerta-pin .pin-grande { color: var(--primario); }
+.alerta-pin > div { flex: 1; }
+.alerta-pin .btn-texto { width: 100%; min-height: var(--alvo); border: 2px solid var(--primario); border-radius: var(--raio); }
 .pin-grande { font: 800 2rem var(--fonte-titulos); letter-spacing: .3em; }
 .fab { position: fixed; right: calc(var(--esp-4) + env(safe-area-inset-right)); bottom: calc(var(--esp-5) + env(safe-area-inset-bottom)); width: 60px; height: 60px; display: grid; place-items: center; border-radius: 50%; background: var(--primario); color: var(--sobre-primario); box-shadow: var(--sombra); text-decoration: none; }
 

@@ -85,9 +85,12 @@ public class SegurancaTests
         using var fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
             .UseEnvironment("Production")
             .UseSetting("Jwt:Chave", new string('j', 40))
-            .UseSetting("Pin:Pepper", new string('p', 40)));
+            .UseSetting("Pin:Pepper", new string('p', 40))
+            // Pasta vazia: não lê o appsettings.Production.json local (com a ligação) que haja nesta máquina.
+            .UseContentRoot(Directory.CreateTempSubdirectory("gm-teste").FullName));
 
-        Assert.ThrowsAny<Exception>(() => fabrica.CreateClient());
+        var erro = Assert.ThrowsAny<Exception>(() => fabrica.CreateClient());
+        Assert.Contains("PHCConn", erro.ToString());
     }
 
     [Fact]

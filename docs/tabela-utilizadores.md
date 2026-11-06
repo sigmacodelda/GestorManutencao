@@ -17,6 +17,8 @@ Quem cria a tabela é o utilizador ou a Landeiro; o Claude Code não cria tabela
 | `pinalteradoem` | datetime | não | Quando |
 | `ousrinis` varchar(30), `ousrdata` datetime, `ousrhora` varchar(8), `usrinis` varchar(30), `usrdata` datetime, `usrhora` varchar(8) | padrão PHC | sim | Campos de auditoria habituais |
 
+O script de criação está em `docs/criar-u_manutil.sql` (a correr por quem administra, primeiro numa base de testes).
+
 Índices únicos: `utilizador` e `pinhash`. O segundo é o que impede dois utilizadores de terem o mesmo PIN (necessário porque se entra só com o PIN).
 
 Os supervisores criam-se diretamente na tabela por quem administra (`perfil = 'SUPERVISOR'`, `pinmudar = 1`). A app só cria operadores. Para gerar o PIN provisório e o `pinhash` do primeiro supervisor, com o `Pin:Pepper` já configurado:
@@ -36,6 +38,7 @@ Imprime o PIN (para entregar à pessoa) e o `pinhash` (para gravar na tabela). O
 ## Configuração da API (a preencher por quem instala)
 
 - `ConnectionStrings:PHCConn`: ligação com o login próprio da API.
+- Neste computador a ligação à base `LAND2_DEMO` está em `GestorManutencao.Api/appsettings.Production.json`, ficheiro que o git ignora (nunca vai para o repositório). Para outra base, substituir o valor nesse ficheiro. Em Development a API usa utilizadores em memória e não precisa da base.
 - `Jwt:Chave`: mínimo 32 caracteres.
 - `Pin:Pepper`: mínimo 32 caracteres e diferente da chave do token. Segredo do servidor com que o PIN é cifrado; **se se perder, todos os PINs ficam inválidos**, e se mudar, é preciso repô-los a todos. Guardar uma cópia segura, fora da base de dados e da pasta partilhada com o PHC (variáveis de ambiente ou cifrado com `tools/segredos/sc-segredos.ps1`).
 
