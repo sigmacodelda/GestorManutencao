@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;padding:20px;background:#fff;font-family:'Open Sans',sans-serif;color:#1A1731}
+.d{display:inline-block;margin:0 0 30px 0}
+text{font-family:'Open Sans',sans-serif;fill:#1A1731}
+.t{font-family:'Exo 2','Open Sans',sans-serif;font-weight:700}
+</style></head><body>
+<div id="out"></div>
+<script>
+const C={bo:'#3466AF',app:'#5BB572',phc:'#604696',navy:'#1A1731',grey:'#CAC9C9'};
+const NS='http://www.w3.org/2000/svg';
+function svg(w,h,id){const s=document.createElementNS(NS,'svg');s.setAttribute('width',w);s.setAttribute('height',h);s.setAttribute('viewBox',`0 0 ${w} ${h}`);const d=document.createElement('div');d.className='d';d.id=id;d.appendChild(s);document.getElementById('out').appendChild(d);
+ const defs=document.createElementNS(NS,'defs');defs.innerHTML=`<marker id="ar${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1A1731"/></marker>`;s.appendChild(defs);
+ const bg=document.createElementNS(NS,'rect');bg.setAttribute('width',w);bg.setAttribute('height',h);bg.setAttribute('fill','#fff');s.appendChild(bg);return s;}
+function el(s,t,a,txt){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;s.appendChild(e);return e;}
+function box(s,x,y,w,h,lines,color,opt={}){
+ el(s,'rect',{x,y,width:w,height:h,rx:10,fill:opt.fill||'#fff',stroke:color,'stroke-width':2.5});
+ if(opt.num){el(s,'circle',{cx:x+14,cy:y+14,r:12,fill:color});el(s,'text',{x:x+14,y:y+19,'text-anchor':'middle','font-size':13,'font-weight':700,style:'fill:#fff'},opt.num);}
+ const L=lines.split('|');const lh=21;let y0=y+h/2-(L.length-1)*lh/2+5;
+ L.forEach((l,i)=>el(s,'text',{x:x+w/2,y:y0+i*lh,'text-anchor':'middle','font-size':i==0&&opt.bold?16:15,'font-weight':(i==0&&opt.bold)?700:400},l));
+}
+function arrow(s,pts,id,dash){el(s,'polyline',{points:pts.map(p=>p.join(',')).join(' '),fill:'none',stroke:C.navy,'stroke-width':2,'marker-end':`url(#ar${id})`,'stroke-dasharray':dash?'6 4':''});}
+function label(s,x,y,t,anchor){el(s,'text',{x,y,'text-anchor':anchor||'middle','font-size':14,'font-style':'italic'},t);}
+
+/* D1 visao geral */
+(function(){const id='d1';const s=svg(1000,420,id);
+ box(s,40,60,250,150,'',C.app);box(s,375,60,250,150,'',C.phc);box(s,710,60,250,150,'',C.bo);
+ [['App móvel','Técnicos|Lista de intervenções|Registo no local, fotos|Funciona sem rede',165,C.app],['PHC','Dados e histórico|Infraestruturas, planos, fichas|Ligação às faturas',500,C.phc],['Backoffice','Responsável de manutenção|Planos, planeamento, alertas,|validação e dashboard',835,C.bo]].forEach(([t,d,cx,c])=>{
+  el(s,'rect',{x:cx-125,y:60,width:250,height:34,rx:10,fill:c});el(s,'text',{x:cx,y:83,'text-anchor':'middle','font-size':17,'class':'t',style:'fill:#fff'},t);
+  d.split('|').forEach((l,i)=>el(s,'text',{x:cx,y:125+i*19,'text-anchor':'middle','font-size':15},l));});
+ arrow(s,[[295,135],[370,135]],id);arrow(s,[[370,150],[295,150]],id);
+ arrow(s,[[630,135],[705,135]],id);arrow(s,[[705,150],[630,150]],id);
+ label(s,332,122,'sincroniza');label(s,668,122,'lê e grava');
+ box(s,350,290,300,90,'Compras (PHC)|Fatura do fornecedor ligada|à ficha, como hoje',C.phc,{bold:true});
+ arrow(s,[[500,290],[500,215]],id);
+ box(s,10,290,280,90,'Peças e armazém (2.ª fase)|Stock, etiquetas, leitura QR|e alerta de rutura',C.app,{bold:true,fill:'#F3FAF5'});
+ arrow(s,[[290,330],[500,330]].slice(0,1).concat([[330,330]]),id,true);
+ el(s,'path',{d:'M290 330 L335 330 L335 200 L370 200',fill:'none',stroke:C.navy,'stroke-width':2,'stroke-dasharray':'6 4','marker-end':`url(#ar${id})`});
+ label(s,500,50,'Uma só base de dados: o PHC');
+})();
+
+/* D2 preventiva swimlane vertical */
+(function(){const id='d2';const W=1000,H=790;const s=svg(W,H,id);
+ const lanes=[['Backoffice',C.bo],['PHC',C.phc],['App móvel',C.app]];const lw=320,gx=20;
+ lanes.forEach(([n,c],i)=>{const x=i*(lw+10);el(s,'rect',{x,y:0,width:lw,height:H,fill:i==1?'#F6F6F7':'#fff',stroke:C.grey});el(s,'rect',{x,y:0,width:lw,height:40,fill:c});
+  el(s,'text',{x:x+lw/2,y:26,'text-anchor':'middle','font-size':18,'class':'t',style:'fill:#fff'},n);});
+ const st=[[0,'Define o plano e a|periodicidade de cada tarefa'],[1,'Calcula a próxima data e cria|a intervenção Planeada'],[2,'Aviso com a antecedência|definida na configuração'],[2,'Técnico inicia (Em curso)|e executa a intervenção'],[2,'Conclui: escreve o que fez|e as horas'],[0,'Supervisor valida|ou devolve com nota'],[1,'Fica Validada; recalcula|a próxima data da tarefa']];
+ const bw=270,bh=78,step=104,y0=62;const pos=[];
+ st.forEach(([l,t],i)=>{const x=l*(lw+10)+(lw-bw)/2,y=y0+i*step;pos.push([x,y,l]);box(s,x,y,bw,bh,t,lanes[l][1],{num:i+1});});
+ for(let i=0;i<6;i++){const a=pos[i],b2=pos[i+1];const ax=a[0]+bw/2,ay=a[1]+bh,bx=b2[0]+bw/2,by=b2[1];const my=ay+(by-ay)/2;arrow(s,a[2]==b2[2]?[[ax,ay],[bx,by]]:[[ax,ay],[ax,my],[bx,my],[bx,by]],id);}
+ const my6=pos[5][1]+bh/2,my4=pos[3][1]+bh/2;
+ el(s,'path',{d:`M${pos[5][0]+bw} ${my6} L672 ${my6} L672 ${my4} L${pos[3][0]} ${my4}`,fill:'none',stroke:C.navy,'stroke-width':2,'stroke-dasharray':'6 4','marker-end':`url(#ar${id})`});
+ label(s,480,my6-8,'Se devolve, volta ao técnico');
+})();
+
+/* D3 curativa */
+(function(){const id='d3';const W=1000,H=330;const s=svg(W,H,id);
+ const r1=[['Avaria numa|máquina',C.app],['Técnico toca em|Registar avaria',C.app],['Procura a máquina e|escreve o problema',C.app],['Guarda no telemóvel|(com ou sem rede)',C.app]];
+ const bw=210,bh=84,gap=40;r1.forEach(([t,c],i)=>{const x=15+i*(bw+gap);box(s,x,20,bw,bh,t,c,{num:i+1});if(i<3)arrow(s,[[x+bw,62],[x+bw+gap,62]],id);});
+ const r2=[['Envia sozinha quando|há rede',C.phc],['Aparece no backoffice|para validar',C.bo],['Supervisor valida|ou devolve',C.bo],['Fatura do fornecedor|ligada à ficha (Compras)',C.phc]];
+ r2.forEach(([t,c],i)=>{const x=15+i*(bw+gap);box(s,x,200,bw,bh,t,c,{num:i+5});if(i<3)arrow(s,[[x+bw,242],[x+bw+gap,242]],id);});
+ el(s,'path',{d:`M${15+3*(bw+gap)+bw/2} 104 L${15+3*(bw+gap)+bw/2} 152 L${15+bw/2} 152 L${15+bw/2} 200`,fill:'none',stroke:C.navy,'stroke-width':2,'marker-end':`url(#ar${id})`});
+ label(s,500,142,'sincronização');label(s,985,310,'só se a intervenção for de um fornecedor','end');
+})();
+
+/* D4 offline */
+(function(){const id='d4';const W=1000,H=260;const s=svg(W,H,id);
+ const items=[['Sem rede na fábrica',C.app,'O técnico trabalha|normalmente'],['Guardado no telemóvel',C.app,'Estado: Pendente|de envio'],['A rede volta',C.phc,'A app envia|sozinha'],['Sincronizado',C.bo,'Sem duplicados']];
+ items.forEach(([t,c,d],i)=>{const x=15+i*(215+40);box(s,x,40,215,90,t+'|'+d,c,{bold:true});if(i<3)arrow(s,[[x+215,85],[x+255,85]],id);});
+ box(s,525-80,170,375,64,'Conflito? Fica como proposta|para o supervisor decidir',C.bo,{fill:'#F3F6FB'});
+ el(s,'path',{d:'M632 130 L632 170',fill:'none',stroke:C.navy,'stroke-width':2,'stroke-dasharray':'6 4','marker-end':`url(#ar${id})`});
+})();
+
+/* D5 estados */
+(function(){const id='d5';const W=1000,H=250;const s=svg(W,H,id);
+ const st=[['Planeada',C.bo],['Em curso',C.app],['Concluída|(a validar)',C.phc],['Validada',C.bo]];
+ const bw=170,bh=70;st.forEach(([t,c],i)=>{const x=20+i*(bw+62);box(s,x,40,bw,bh,t,c,{bold:true});if(i<3)arrow(s,[[x+bw,75],[x+bw+62,75]],id);});
+ box(s,20+2*(bw+62),170,bw,60,'Devolvida|(com nota)','#B33A3A',{bold:true});
+ el(s,'path',{d:`M${20+2*(bw+62)+bw/2} 110 L${20+2*(bw+62)+bw/2} 170`,fill:'none',stroke:C.navy,'stroke-width':2,'marker-end':`url(#ar${id})`});
+ el(s,'path',{d:`M${20+2*(bw+62)} 200 L${20+1*(bw+62)+bw/2} 200 L${20+1*(bw+62)+bw/2} 110`,fill:'none',stroke:C.navy,'stroke-width':2,'marker-end':`url(#ar${id})`});
+ label(s,350,218,'o técnico corrige');
+})();
+
+/* D6 pecas */
+(function(){const id='d6';const W=1000,H=340;const s=svg(W,H,id);
+ const bw=215,bh=90,X=[15,270,525,780];
+ box(s,X[0],20,bw,bh,'Intervenção planeada|lista as peças|necessárias',C.bo,{num:1});
+ box(s,X[1],20,bw,bh,'Há stock?|(armazém virtual)',C.phc,{num:2,bold:true});
+ box(s,X[2],20,bw,bh,'Técnico lê o QR ou|código de barras e|dá saída da peça',C.app,{num:3});
+ box(s,X[3],20,bw,bh,'Stock atualizado|e custo na ficha',C.phc,{num:4});
+ for(let i=0;i<3;i++)arrow(s,[[X[i]+bw,65],[X[i+1],65]],id);
+ label(s,X[1]+bw+20,55,'sim');
+ box(s,X[1],210,bw,bh,'Alerta de rutura|(conta o prazo|de entrega)',C.bo,{num:5});
+ arrow(s,[[X[1]+bw/2,110],[X[1]+bw/2,210]],id);label(s,X[1]+bw/2-12,165,'não','end');
+ box(s,X[2],210,bw,bh,'Compra ao fornecedor|e receção com|etiqueta',C.phc,{num:6});
+ arrow(s,[[X[1]+bw,255],[X[2],255]],id);
+ el(s,'path',{d:`M${X[2]+bw} 255 L${X[3]+bw/2} 255 L${X[3]+bw/2} 110`,fill:'none',stroke:C.navy,'stroke-width':2,'marker-end':`url(#ar${id})`});
+})();
+document.title='ok';
+</script></body></html>
