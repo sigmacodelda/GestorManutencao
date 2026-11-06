@@ -1,3 +1,5 @@
+> **Base = LandeiroMaui e app GestorManutencao (2026-11-06):** a app já está construída: login só por PIN (tabela PHC `u_manutil`, campo novo `tecno`), perfis operador e supervisor, ecrãs Início, As minhas intervenções, Registar avaria, Equipa, Validação; Planeadas e Material usado na ficha (substitui "Pedir peça") em construção. Estados, regras e tabelas em `../00-Comum/base-landeiromaui.md` (prevalece). Passagens abaixo sobre `ManutencaoMobile`, login SQL por utilizador, password no cofre (D-10) e PIN só local ficam como histórico.
+
 # Parte 2: tarefas da app de intervenções
 
 As seis tasks são as do `00-Comum/00-global.md` (P2-T01 a P2-T06). Dentro da parte são sequenciais (a task NN só arranca com a anterior CONCLUÍDA, com GATE confirmado). O prompt de cada task está em `prompts/`.
@@ -51,7 +53,7 @@ Critérios de conclusão: os 5 critérios do prompt 02. Dependências de outras 
 Precisa das decisões D-02 e D-10 e de um telemóvel ou emulador.
 
 - [ ] Spike S0: ligação a `TESTES_LAND2` a partir de Android com `SELECT` leve; registar resultado (4 a 8 h; é o maior risco técnico desta parte)
-- [ ] Projeto `ManutencaoMobile` (net9.0-android), manifesto, ficheiros ligados, CSS móvel com tokens SigmaCode, `appsettings` com campo vazio (3 a 5 h)
+- [ ] (App GestorManutencao já construída: rever o que falta) Projeto `ManutencaoMobile` (net9.0-android), manifesto, ficheiros ligados, CSS móvel com tokens SigmaCode, `appsettings` com campo vazio (3 a 5 h)
 - [ ] `SessaoMovelService` adaptado de `UserStateService`, resultado de login tipado, `ArmazenamentoSeguro` estrito (3 a 5 h)
 - [ ] PIN: `PinHasher`, `PinService`, política de bloqueio, contador persistente (3 a 5 h)
 - [ ] Ecrãs: login, definir PIN, desbloquear, landing (3 a 5 h)

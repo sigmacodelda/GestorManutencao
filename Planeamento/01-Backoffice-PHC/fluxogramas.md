@@ -74,7 +74,7 @@ sequenceDiagram
     participant DB as PHC SQL Server
     S->>E: Gerar planeadas
     E->>C: Obter horizonte e atrasadas max
-    C->>DB: SELECT u_manconfig NOLOCK
+    C->>DB: SELECT u_configman NOLOCK
     E->>P: GerarPlaneadasAsync
     P->>DB: SELECT planos ativos NOLOCK
     loop cada plano
@@ -112,7 +112,7 @@ flowchart TD
     C --> D{Divergencias?}
     D -- sim --> E[Luis ou Rui corrigem ou confirmam]
     E --> C
-    D -- nao --> F[Gerar script de carga u_manplano<br/>idempotente, so base de testes]
+    D -- nao --> F[Gerar script de carga em u_itmanutli<br/>idempotente, so base de testes]
     F --> G["Verificar: 1 plano por linha<br/>e soma de meses igual"]
     G --> H[Utilizador corre em producao]
     H --> I[Gerar planeadas]

@@ -6,12 +6,13 @@ Task: 03 (P2-T03) · Tipo: desenvolvimento
 Task global: `docs/tasks/00-global.md`
 Modo: Plan Mode (para no PLANO e espera a minha confirmação; depois autónomo até ao GATE)
 Papel do agente: desenvolvedor (implementa o que está no prompt, sem análises nem relatórios além de uma linha de contexto)
+BASE LANDEIROMAUI (2026-11-06, prevalece sobre o resto deste prompt): o planeamento SEGUE a base da LandeiroMaui, onde a manutenção já está implementada no PHC. Lê `C:\_SigmaRepos\GestorManutencao\Planeamento\00-Comum\base-landeiromaui.md` (ou a cópia em `docs/`). Onde este prompt cita `u_manplano`, `u_manconfig`, `u_manperiod`, `u_estado`, `u_planostamp`, `u_dataplan`, `u_hini`, `u_hfim`, `u_tecnico` ou `u_manintpec`, leia-se o que já existe: `u_itmanutli`/`u_itmanut`, `u_configman`, `u_periocid`, `u_fichaint.estado`, tarefa `u_itmanutli`, data da ficha, `hini`, `hfim`, `tecno`/`tecnome` e `u_matinterv`. Só o que a base não tem é NOVO: tabela/campo a criar por pessoa no PHC (nunca pelo Claude Code); confirma com leitura (SELECT) antes de assumir. Parte 2: a app GestorManutencao já está construída com login só por PIN (`u_manutil`, campo novo `tecno`), perfis operador e supervisor; o técnico é o utilizador PHC (`us.userno`) gravado em `tecno`/`tecnome`. Login SQL por utilizador e PIN local (D-03/D-06/D-10 antigos) deixam de valer. Ecrãs Planeadas e Material usado na ficha estão em construção.
 Entradas: `docs/manutencao/p2/levantamento.md`, `docs/manutencao/p2/desenho.md` (secções de login, PIN e credencial D-10); contratos de P1-T02
 Saídas: projeto `ManutencaoMobile` com alvo Android a compilar; módulo de sessão e PIN com testes xUnit; `docs/DEPENDENCIES.md`; `docs/tasks/00-global.md` atualizado
 Critérios de conclusão:
 1. Spike S0 feito e documentado: a app abre uma ligação a `TESTES_LAND2` a partir do emulador ou do telemóvel (SELECT leve) e o resultado fica no relatório; se falhar, `BLOQUEIO:` com 2 a 4 propostas (por exemplo, API fina).
-2. Projeto `ManutencaoMobile` (net9.0-android, MAUI Blazor Hybrid) compila sem avisos e arranca; o build do LandeiroMaui para Windows continua a compilar como antes (R-06).
-3. Login por utilizador e password com a base do LandeiroMaui (`LoginBDAsync` adaptado), a distinguir "credenciais inválidas" de "sem rede"; sem rede e sem sessão guardada, mensagem clara e nada de login falso.
+2. (Já construída como app GestorManutencao: confirmar em vez de criar) Projeto `ManutencaoMobile` (net9.0-android, MAUI Blazor Hybrid) compila sem avisos e arranca; o build do LandeiroMaui para Windows continua a compilar como antes (R-06).
+3. (Substituído: o login atual é só por PIN contra `u_manutil`) Login por utilizador e password com a base do LandeiroMaui (`LoginBDAsync` adaptado), a distinguir "credenciais inválidas" de "sem rede"; sem rede e sem sessão guardada, mensagem clara e nada de login falso.
 4. PIN: definição no 1.º acesso, desbloqueio, bloqueio ao atingir o máximo de tentativas, contador persistente; só hash com sal no armazenamento seguro; falhas de escrita e leitura nunca em silêncio.
 5. Sessão longa e logout: sem expiração por tempo; PIN ao abrir e após X minutos em segundo plano; logout com pendentes bloqueado (a fila é da task 04: usar a interface `IFilaPendentes` com implementação provisória); roles recarregados quando há rede; testes xUnit a passar e o roteiro manual no telemóvel escrito (declarado não corrido se não houver aparelho).
 Gate: manual
@@ -25,7 +26,7 @@ Agentes: `sc-dev` (implementação), `sc-revisor` (revisão obrigatória: segura
 - Projeto e cliente: Gestor de Manutenção da Carnes Landeiro. Passa o circuito de manutenção (hoje papel, Word e PHC) para a plataforma .NET MAUI da Landeiro. Esta é a Parte 2: app de telemóvel Android para registo de intervenções. A Parte 1 (backoffice Windows, dados e regras no PHC) e a Parte 3 (peças e armazém) correm em paralelo.
 - Repositórios: `C:\_SigmaRepos\Landeiro-Desmancha` (código; `LandeiroMaui` é a base) e `C:\_SigmaRepos\GestorManutencao` (planeamento); branch `dev-landeiro-manutencao-p2`. Documentos desta parte em `docs/manutencao/p2/` do repositório de código.
 - Requisitos da Parte 2:
-  - APP-01 Login por PIN ou utilizador e password (base: login do LandeiroMaui, que é o login SQL do próprio utilizador); a sessão mantém-se o máximo de tempo possível.
+  - APP-01 Login só por PIN (tabela PHC `u_manutil`; app GestorManutencao já construída; o login SQL por utilizador do LandeiroMaui deixou de ser a base); a sessão mantém-se o máximo de tempo possível.
   - APP-02 **Obrigatório trabalhar offline**: cache local SQLite, fila de saída e sincronização.
   - APP-03 Alerta de intervenções planeadas com a antecedência definida no backoffice (funciona offline).
   - APP-04 Lista de planeadas e pendentes, com botão "+" para criar.
@@ -68,9 +69,9 @@ Solução escolhida e porquê: reaproveitar a lógica de `UserStateService` e n�
 </task>
 
 <decisions>
-- D-02 (proposta, a confirmar antes de arrancar): projeto novo `ManutencaoMobile`. Se for decidido o alvo Android dentro do LandeiroMaui, o prompt muda e volta ao desenho.
+- D-02 (atualizada 2026-11-06): a app é a GestorManutencao, já construída, que segue a base da LandeiroMaui (sem projeto novo `ManutencaoMobile`). Se for decidido o alvo Android dentro do LandeiroMaui, o prompt muda e volta ao desenho.
 - D-03: acesso a dados como no LandeiroMaui. D-10 (a fechar em P2-T02): credencial de sincronização; esta task só implementa o que o desenho fixar e esconde o acesso atrás de interfaces.
-- D-06: PIN só no dispositivo. Alternativa rejeitada: PIN central, porque exige campo novo no PHC.
+- D-06 (atualizada): o PIN vive no PHC em `u_manutil` (pinhash, pinprov, versao, ativo; campo novo `tecno` = nº PHC do técnico, por defeito 0, NOVO: campo a criar por pessoa no PHC).
 - D-09: cores da marca SigmaCode por defeito, em tokens CSS num ficheiro único.
 </decisions>
 

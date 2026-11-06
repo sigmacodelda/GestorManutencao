@@ -6,6 +6,7 @@ Task: P1-T01 a P1-T06 · Tipo: projeto grande (levantamento, desenho, desenvolvi
 Task global: `docs/tasks/00-global.md` (em `C:\_SigmaRepos\GestorManutencao\docs\tasks\`; se não existir, copia-a de `C:\_SigmaRepos\GestorManutencao\Planeamento\00-Comum\00-global.md`)
 Modo: Plan Mode nas fases de desenvolvimento; Autónomo nas outras
 Papel do agente: orquestrador da Parte 1: decide, escreve os briefs, valida a evidência dos subagentes; delega código a `sc-dev`, leituras a `sc-leitor` e `sc-leitor-bd`, documentos a `sc-doc`, revisão a `sc-revisor`
+BASE LANDEIROMAUI (2026-11-06, prevalece sobre o resto deste prompt): o planeamento SEGUE a base da LandeiroMaui, onde a manutenção já está implementada no PHC. Lê `C:\_SigmaRepos\GestorManutencao\Planeamento\00-Comum\base-landeiromaui.md` (ou a cópia em `docs/`). Onde este prompt cita `u_manplano`, `u_manconfig`, `u_manperiod`, `u_estado`, `u_planostamp`, `u_dataplan`, `u_hini`, `u_hfim`, `u_tecnico` ou `u_manintpec`, leia-se o que já existe: `u_itmanutli`/`u_itmanut`, `u_configman`, `u_periocid`, `u_fichaint.estado`, tarefa `u_itmanutli`, data da ficha, `hini`, `hfim`, `tecno`/`tecnome` e `u_matinterv`. Só o que a base não tem é NOVO: tabela/campo a criar por pessoa no PHC (nunca pelo Claude Code); confirma com leitura (SELECT) antes de assumir. Parte 1: estados, iniciar/concluir/validar/devolver/cancelar, geração das planeadas e config já estão na LandeiroMaui; o desenho não os reinventa, mapeia-os e propõe só o que falta (por confirmar).
 Gate: manual (um por task)
 
 ## COMO COMEÇAR

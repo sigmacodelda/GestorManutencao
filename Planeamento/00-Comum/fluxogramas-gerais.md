@@ -44,14 +44,17 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> Planeada: gerada pelo plano
-    [*] --> EmCurso: curativa criada no telemóvel
+    [*] --> EmCurso: curativa criada no telemóvel (estado inicial por confirmar)
     Planeada --> EmCurso: técnico inicia
     EmCurso --> Concluida: técnico conclui no telemóvel
     Concluida --> Validada: supervisão valida no backoffice
     Concluida --> EmCurso: supervisão devolve
     Validada --> [*]: ficha Fechada
-    Planeada --> Cancelada: supervisão cancela
+    Planeada --> Cancelada: cancela com motivo
+    EmCurso --> Cancelada: cancela com motivo
 ```
+
+Derivados, nunca gravados (base LandeiroMaui, `base-landeiromaui.md`): **Atrasada** (Planeada/EmCurso com data < hoje) e **A vencer** (Planeada com data até hoje + antecedência). Estado vazio = ficha antiga (legado).
 
 ## 3. Criação de uma intervenção (quadro 1)
 

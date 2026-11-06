@@ -6,12 +6,13 @@ Task: 02 (P1-T02) · Tipo: desenho
 Task global: `docs/tasks/00-global.md` (em `C:\_SigmaRepos\GestorManutencao\docs\tasks\`)
 Modo: Autónomo
 Papel do agente: analista: desenha e documenta; não escreve código da aplicação nem toca na base
+BASE LANDEIROMAUI (2026-11-06, prevalece sobre o resto deste prompt): o planeamento SEGUE a base da LandeiroMaui, onde a manutenção já está implementada no PHC. Lê `C:\_SigmaRepos\GestorManutencao\Planeamento\00-Comum\base-landeiromaui.md` (ou a cópia em `docs/`). Onde este prompt cita `u_manplano`, `u_manconfig`, `u_manperiod`, `u_estado`, `u_planostamp`, `u_dataplan`, `u_hini`, `u_hfim`, `u_tecnico` ou `u_manintpec`, leia-se o que já existe: `u_itmanutli`/`u_itmanut`, `u_configman`, `u_periocid`, `u_fichaint.estado`, tarefa `u_itmanutli`, data da ficha, `hini`, `hfim`, `tecno`/`tecnome` e `u_matinterv`. Só o que a base não tem é NOVO: tabela/campo a criar por pessoa no PHC (nunca pelo Claude Code); confirma com leitura (SELECT) antes de assumir. Parte 1: estados, iniciar/concluir/validar/devolver/cancelar, geração das planeadas e config já estão na LandeiroMaui; o desenho não os reinventa, mapeia-os e propõe só o que falta (por confirmar).
 Entradas: `C:\_SigmaRepos\GestorManutencao\docs\levantamento.md` (P1-T01); opcional: mockup inicial `[PREENCHER: caminho de mockups/backoffice.html, se existir]`
 Saídas: `docs\desenho.md`, `docs\contratos.md`, `docs\sql\01_verificar_manutencao.sql`, `docs\prototipo\backoffice.html` (todos em `C:\_SigmaRepos\GestorManutencao\`)
 Critérios de conclusão:
 1. Modelo de dados final em `<phc-tables>` (tabelas novas, campos novos na Ficha, índices propostos) já corrigido pelo levantamento, com o script de verificação só leitura, e a lista ordenada do que o utilizador tem de criar no PHC (tabelas, campos, roles, índice).
 2. Lista única de periodicidades e algoritmo de geração de planeadas escritos sem ambiguidade, com pelo menos 12 casos de teste (data de hoje, plano, resultado esperado).
-3. Matriz de perfis (operador, supervisor, administrador de manutenção), permissões e chaves de `u_manconfig`, coerente com a matriz de partida (secção Âmbito, ponto 3) e com as roles reais.
+3. Matriz de perfis (operador, supervisor, administrador de manutenção), permissões e campos de `u_configman`, coerente com a matriz de partida (secção Âmbito, ponto 3) e com as roles reais.
 4. `docs/contratos.md` publicado (interfaces, DTOs, exemplos, erros) e confirmado como suficiente para as Partes 2 e 3 (o utilizador valida com os agentes P2 e P3).
 5. Wireframes dos 6 ecrãs (Equipamentos, Planos, Planeadas, Validação, Configuração, Dashboard) e protótipo clicável com a marca SigmaCode, validado pelo utilizador antes de 11/11/2026.
 Gate: manual
@@ -42,6 +43,8 @@ Nota: sem credenciais, tokens nem connection strings.
 
 <phc-tables>
 Nota: modelo candidato, a corrigir com o levantamento (nomes reais, tipos, convenções de nulos e datas das tabelas `u_` existentes). O Claude Code NUNCA cria estes objetos: o utilizador cria-os no PHC. Campos standard do PHC (stamp `u_<nome>stamp`, `ousrinis`, `ousrdata`, `ousrhora`, `usrinis`, `usrdata`, `usrhora`, `marcada`) não estão listados. Convenção assumida: sem nulos; data vazia = `19000101`; se o levantamento mostrar outra, segue-a. Se a edição não permitir tabelas `u_`: alternativa D-04, base própria `MANUTENCAO`.
+
+**Atualização 2026-11-06 (base LandeiroMaui):** as definições seguintes de `u_manperiod`, `u_manplano`, `u_manconfig` e dos campos novos da Ficha são o desenho antigo e ficam SUBSTITUÍDAS pelo que existe: `u_periocid` (periodicidades), `u_itmanutli` + `u_itmanut` (plano/tarefas), `u_configman` (`antecedencia`, `gerarplaneadas`, `avancaordem`, `validarpropria`, `extexigedoc`, `pinmaxtent`, `comprasfichaint`) e `u_fichaint` (`estado`, `hini`, `hfim`, `tecno`, `tecnome`, `foraordem`, `valobs`, `fechada`, `supervisao`, `valinis`, `valdata`). Só se desenham como NOVO (tabela/campo a criar por pessoa no PHC) os campos que o levantamento provar que faltam (candidatos por confirmar: Trimestral e Anual em `u_periocid`, `u_origem`, `u_extid` para anti-duplicados offline, horizonte de geração). O texto abaixo serve apenas de referência histórica.
 
 Tabela `u_manperiod` (lista única de periodicidades, risco R-08): `codigo` varchar(30) = texto exato da lista da Ficha; `descricao` varchar(60); `tipocalc` char(1) D (dias), M (meses) ou N (nenhum, só meses marcados); `intervalo` int; `geraauto` bit (0 para "Sempre que necessário"); `ordem` int; `inativo` bit. Valores iniciais: os 10 da lista (Diária 1 D, Semanal 7 D, Quinzenal 14 D, Mensal 1 M, Trimestral 3 M, Semestral 6 M, Anual 12 M, Regular N, De acordo com procedimento N, Sempre que necessário N com `geraauto` 0).
 

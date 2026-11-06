@@ -6,6 +6,7 @@ Task: 02 (P2-T02) · Tipo: desenho
 Task global: `docs/tasks/00-global.md`
 Modo: Plan Mode (para no PLANO e espera a minha confirmação; depois autónomo até ao GATE)
 Papel do agente: analista (desenha e documenta; não escreve código da app; o protótipo HTML é documento)
+BASE LANDEIROMAUI (2026-11-06, prevalece sobre o resto deste prompt): o planeamento SEGUE a base da LandeiroMaui, onde a manutenção já está implementada no PHC. Lê `C:\_SigmaRepos\GestorManutencao\Planeamento\00-Comum\base-landeiromaui.md` (ou a cópia em `docs/`). Onde este prompt cita `u_manplano`, `u_manconfig`, `u_manperiod`, `u_estado`, `u_planostamp`, `u_dataplan`, `u_hini`, `u_hfim`, `u_tecnico` ou `u_manintpec`, leia-se o que já existe: `u_itmanutli`/`u_itmanut`, `u_configman`, `u_periocid`, `u_fichaint.estado`, tarefa `u_itmanutli`, data da ficha, `hini`, `hfim`, `tecno`/`tecnome` e `u_matinterv`. Só o que a base não tem é NOVO: tabela/campo a criar por pessoa no PHC (nunca pelo Claude Code); confirma com leitura (SELECT) antes de assumir. Parte 2: a app GestorManutencao já está construída com login só por PIN (`u_manutil`, campo novo `tecno`), perfis operador e supervisor; o técnico é o utilizador PHC (`us.userno`) gravado em `tecno`/`tecnome`. Login SQL por utilizador e PIN local (D-03/D-06/D-10 antigos) deixam de valer. Ecrãs Planeadas e Material usado na ficha estão em construção.
 Entradas: `docs/manutencao/p2/levantamento.md` (P2-T01); `docs/manutencao/p1/desenho.md` com os contratos (P1-T02); protótipo de partida `ecras-telemovel.html`, se o utilizador o fornecer
 Saídas: `docs/manutencao/p2/desenho.md`; `docs/manutencao/p2/prototipo/index.html` (protótipo clicável, ficheiro único); `docs/tasks/00-global.md` atualizado
 Critérios de conclusão:
@@ -25,7 +26,7 @@ Agentes: `sc-leitor` (ler o desenho da Parte 1), `sc-revisor` (revisão final do
 - Projeto e cliente: Gestor de Manutenção da Carnes Landeiro. Passa o circuito de manutenção (hoje papel, Word e PHC) para a plataforma .NET MAUI da Landeiro. Esta é a Parte 2: app de telemóvel Android para registo de intervenções. A Parte 1 (backoffice Windows, dados e regras no PHC) e a Parte 3 (peças e armazém) correm em paralelo.
 - Repositórios: `C:\_SigmaRepos\Landeiro-Desmancha` (código; `LandeiroMaui` é a base) e `C:\_SigmaRepos\GestorManutencao` (planeamento); branch `dev-landeiro-manutencao-p2`. Documentos desta parte em `docs/manutencao/p2/` do repositório de código.
 - Requisitos da Parte 2:
-  - APP-01 Login por PIN ou utilizador e password (base: login do LandeiroMaui, que é o login SQL do próprio utilizador); a sessão mantém-se o máximo de tempo possível.
+  - APP-01 Login só por PIN (tabela PHC `u_manutil`; app GestorManutencao já construída; o login SQL por utilizador do LandeiroMaui deixou de ser a base); a sessão mantém-se o máximo de tempo possível.
   - APP-02 **Obrigatório trabalhar offline**: cache local SQLite, fila de saída e sincronização.
   - APP-03 Alerta de intervenções planeadas com a antecedência definida no backoffice (funciona offline).
   - APP-04 Lista de planeadas e pendentes, com botão "+" para criar.
@@ -55,8 +56,8 @@ Nota: sem credenciais, tokens nem connection strings.
 
 <phc-tables>
 Esta task não cria nem especifica tabelas novas: usa as da Parte 1 (a definir em P1-T02). Candidatos que a app vai ler e escrever, com nomes provisórios que P1-T02 fixa (não os dês como definitivos):
-- Ficha de Intervenção (já existe; nomes reais confirmados em P1-T01), com campos novos candidatos: `u_estado` (Planeada, EmCurso, Concluida, Validada, Cancelada), `u_planostamp`, `u_dataplan`, `u_hini`, `u_hfim`, `u_tecnico`, `u_ordem`.
-- `u_manplano` (periodicidade, antecedência por plano) e `u_manconfig` (chaves `ALERTA_ANTECEDENCIA_DIAS`, `AVANCAR_ORDEM_<ROLE>`, `PIN_MAX_TENTATIVAS`).
+- Ficha de Intervenção `u_fichaint` (já existe na base): `estado` (Planeada, EmCurso, Concluida, Validada, Cancelada), `hini`, `hfim`, `tecno`, `tecnome`, `foraordem`, `valobs`; sem `u_planostamp`/`u_dataplan`/`u_ordem` por defeito (por confirmar se algum falta: seria NOVO).
+- `u_itmanutli`, `u_periocid` e `u_configman` (`antecedencia`, `avancaordem`, `pinmaxtent`, entre outros) já existem; `u_manutil` (login por PIN) já existe, com campo novo `tecno`.
 Pedidos opcionais a P1-T02 que o desenho deve avaliar: nota da supervisão ao devolver (`varchar(254)`), indicação "fora de ordem", e onde ficam as fotos (anexos do PHC ou pasta de rede; decide-se em P1-T01 e P1-T02). Idempotência e deteção de mudanças usam o stamp da ficha e `usrdata` + `usrhora` (campos standard), por isso não se pede campo para isso.
 </phc-tables>
 
@@ -76,10 +77,10 @@ Solução escolhida e porquê: sincronização por assinatura e fila idempotente
 </task>
 
 <decisions>
-- D-02 (proposta): projeto `ManutencaoMobile`. Alternativa rejeitada: alvo Android no LandeiroMaui, porque põe em risco os postos em produção. Confirmar com o utilizador antes de fechar o desenho.
-- D-03: Dapper direto ao SQL Server, um login SQL por utilizador. Alternativa: API intermédia (ver D-10).
-- D-05: as planeadas materializam-se como fichas com `u_estado = Planeada`, geradas pelo backoffice. Alternativa rejeitada: calcular em memória, porque a app offline precisa de linhas com stamp.
-- D-06: PIN só no dispositivo. Alternativa rejeitada: PIN central no PHC, porque exige campo novo.
+- D-02 (atualizada 2026-11-06): a app é a GestorManutencao, já construída, que segue a base da LandeiroMaui (sem projeto novo `ManutencaoMobile`). Alternativa rejeitada: alvo Android no LandeiroMaui, porque põe em risco os postos em produção. Confirmar com o utilizador antes de fechar o desenho.
+- D-03 (atualizada): acesso a dados como a LandeiroMaui (Dapper direto ao SQL Server); login da app GestorManutencao só por PIN contra a tabela PHC `u_manutil` (não login SQL por utilizador). Alternativa: API intermédia (ver D-10).
+- D-05: as planeadas materializam-se como fichas com `u_fichaint.estado = Planeada` (já é assim na base), geradas pela app a partir das tarefas `u_itmanutli`. Alternativa rejeitada: calcular em memória, porque a app offline precisa de linhas com stamp.
+- D-06 (atualizada): o PIN vive no PHC em `u_manutil` (pinhash, pinprov, versao, ativo; campo novo `tecno` = nº PHC do técnico, por defeito 0, NOVO: campo a criar por pessoa no PHC).
 - D-09: protótipo e documentos com a paleta SigmaCode (#5BB572, #3466AF, #604696, #1A1731, #CAC9C9; Exo 2 e Open Sans); só muda com "Cliente: Landeiro, usar cores do cliente".
 </decisions>
 

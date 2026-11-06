@@ -1,3 +1,5 @@
+> **Base = LandeiroMaui e app GestorManutencao (2026-11-06):** a app já está construída: login só por PIN (tabela PHC `u_manutil`, campo novo `tecno`), perfis operador e supervisor, ecrãs Início, As minhas intervenções, Registar avaria, Equipa, Validação; Planeadas e Material usado na ficha (substitui "Pedir peça") em construção. Estados, regras e tabelas em `../00-Comum/base-landeiromaui.md` (prevalece). Passagens abaixo sobre `ManutencaoMobile`, login SQL por utilizador, password no cofre (D-10) e PIN só local ficam como histórico.
+
 # Parte 2: requisitos da app de intervenções (APP-01 a APP-08)
 
 Fonte: `00-Comum/requisitos-gerais.md` (secção 3, Parte 2), quadro 3 da reunião de 04/11/2026 e os PATs. Utilizadores: **operador** (técnico de manutenção, usa o telemóvel), **supervisor** (valida no backoffice, Parte 1) e **administrador de manutenção**. Os nomes dos perfis (roles) são a pendência 10; aqui usam-se os termos genéricos.
@@ -21,7 +23,7 @@ Convenção: "Suposição:" marca o que não vem do `00-global.md` nem dos PATs.
 ## APP-01 Login por PIN ou por utilizador e password
 
 - **Utilizador:** operador, supervisor.
-- **Regra de negócio:** 1.º acesso no dispositivo: utilizador e password (login SQL do próprio utilizador, como no LandeiroMaui; exige rede). A app pede para definir um PIN de 4 a 6 dígitos. Acessos seguintes: PIN desbloqueia a sessão guardada, mesmo sem rede. A password nunca se guarda; o PIN só existe como hash com sal no armazenamento seguro (D-06). A sessão não expira por tempo. Termina por logout, utilizador desativado ou sem o perfil (verificado quando há rede), troca de dispositivo, ou PIN bloqueado (volta a pedir utilizador e password).
+- **Regra de negócio:** **Base atual:** login só por PIN contra `u_manutil` (utilizador, nome, perfil, pinhash, ativo, pinprov, versao, marcada; campo novo `tecno` = nº PHC do técnico, NOVO: campo a criar por pessoa no PHC), com PIN provisório e máximo de tentativas em `u_configman.pinmaxtent`. Desenho antigo (histórico): 1.º acesso no dispositivo com utilizador e password SQL; a app pede para definir um PIN de 4 a 6 dígitos. Acessos seguintes: PIN desbloqueia a sessão guardada, mesmo sem rede. A password nunca se guarda; o PIN só existe como hash com sal no armazenamento seguro (D-06). A sessão não expira por tempo. Termina por logout, utilizador desativado ou sem o perfil (verificado quando há rede), troca de dispositivo, ou PIN bloqueado (volta a pedir utilizador e password).
 - **Critérios de aceitação:**
   1. Com rede e credenciais certas, entra e guarda nome, iniciais e perfis; credenciais erradas mostram "Utilizador ou password incorretos" e sem rede mostram "Sem ligação ao servidor", nunca o mesmo texto para as duas causas.
   2. Definir PIN guarda só hash, sal e iterações; um teste confirma que o PIN em claro não existe em armazenamento, log nem SQLite.

@@ -35,7 +35,7 @@ Passar o circuito de manutenção que hoje vive em papel, Word e PHC (ecrãs Inf
 
 | ID | Requisito | Origem |
 |---|---|---|
-| APP-01 | Login por PIN ou por utilizador e password, com base no login do LandeiroMaui; a sessão mantém-se o máximo de tempo possível | Quadro 3; instrução do utilizador |
+| APP-01 | Login só por PIN (tabela PHC `u_manutil`; app GestorManutencao já construída; ver `base-landeiromaui.md`); a sessão mantém-se o máximo de tempo possível | Quadro 3; instrução do utilizador |
 | APP-02 | **Obrigatório trabalhar offline**: cache local, fila de gravações e sincronização | Quadro 3 |
 | APP-03 | Alerta de intervenções planeadas, com a antecedência definida no backoffice (funciona offline) | PAT 1 |
 | APP-04 | Listagem de intervenções planeadas (e pendentes), com botão "+" para criar | PAT 1; quadro 3 |

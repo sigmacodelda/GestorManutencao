@@ -1,3 +1,5 @@
+> **Base = LandeiroMaui (2026-11-06):** as tabelas e regras de manutenção já existem na LandeiroMaui; ver `../00-Comum/base-landeiromaui.md` (prevalece). Onde as decisões abaixo citam `u_manplano`, `u_manconfig`, `u_estado`, `u_planostamp`, `u_dataplan`, `u_hini` ou `u_tecnico`, leia-se `u_itmanutli`, `u_configman`, `u_fichaint.estado`, tarefa `u_itmanutli`, data da ficha, `hini` e `tecno`/`tecnome`.
+
 # Parte 1: Backoffice e PHC (Gestor de Manutenção, Carnes Landeiro)
 
 Versão 0.1 · 05/11/2026. Parte do planeamento em `Planeamento/`; base comum em `../00-Comum/` (fonte de verdade).
@@ -56,12 +58,12 @@ Nota de prazos (risco R-01): até 17/11/2026 a Parte 1 não chega a código; a s
 2. Lista única de 10 periodicidades guardada em `u_manperiod` (acrescenta Trimestral e Anual às 8 da Ficha); a lista da Ficha no PHC alinha-se.
 3. Calendário fixo: a próxima data conta a partir da data planeada anterior, não da data de execução.
 4. Datas só como dias; dia do mês por plano (defeito 1) nos planos com meses marcados; mês curto usa o último dia.
-5. Geração: horizonte de 60 dias (`HORIZONTE_GERACAO_DIAS`), no máximo 1 ocorrência atrasada criada (`GERAR_ATRASADAS_MAX`), idempotente por (plano, data); disparada à mão e 1 vez por dia ao abrir o módulo (sem serviço Windows).
-6. Índice único filtrado em (`u_planostamp`, `u_dataplan`) proposto para impedir duplicados em gerações simultâneas (precisa de autorização).
-7. Fichas antigas sem `u_estado` são "legado": Fechada = Validada, aberta = Concluída; não entram nas planeadas.
+5. Geração (base LandeiroMaui): a planeada seguinte da tarefa gera-se ao concluir (`u_configman.gerarplaneadas`), última feita + periodicidade; uma só planeada/em curso por tarefa; geração diária ao abrir as Planeadas; nunca se gera planeada já atrasada (fica para hoje). O horizonte de 60 dias e `GERAR_ATRASADAS_MAX` do desenho antigo ficam só se a Landeiro os pedir (NOVO: campo a criar por pessoa em `u_configman`).
+6. Índice único filtrado em (tarefa `u_itmanutli`, data) proposto (por confirmar se a base já garante unicidade; antes era `u_planostamp`) para impedir duplicados em gerações simultâneas (precisa de autorização).
+7. Fichas antigas sem `estado` (`u_fichaint.estado` vazio) são "legado" (já assim na base): Fechada = Validada, aberta = Concluída; não entram nas planeadas.
 8. Estado `Cancelada` existe (o diagrama geral tinha-o, o modelo candidato não).
-9. "Avançar fora de ordem": fila por zona (`u_dataplan`, `u_ordem`); origem: operador não, supervisor e admin sim; quem concluiu não valida a própria ficha.
-10. Perfis e roles: `MAN_OPERADOR`, `MAN_SUPERVISOR`, `MAN_ADMIN`, criadas pelo utilizador.
+9. "Avançar fora de ordem": fila por zona (`u_equip.local`), por data, ordem e nº; regra `u_configman.avancaordem` (por confirmar se por perfil; origem antiga: operador não, supervisor e admin sim); quem concluiu não valida a própria ficha (`validarpropria`).
+10. Perfis: a app GestorManutencao tem operador e supervisor em `u_manutil`; as roles `MAN_*` do desenho antigo ficam por confirmar (a base não controla perfis no código de manutenção).
 11. Externa exige fornecedor e doc. externo para concluir e validar.
 12. Carga inicial do Word: Word → CSV → relatório de correspondência → script idempotente (só testes pelo agente; produção pelo utilizador); linhas a vermelho entram inativas; sem ecrã de importação na v1.
 13. Criar e editar a infraestrutura mantém-se no PHC se a escrita direta não for segura (decide o levantamento).
@@ -74,7 +76,7 @@ Nota de prazos (risco R-01): até 17/11/2026 a Parte 1 não chega a código; a s
 
 1. Estados: o modelo candidato (`arquitetura-e-modelo-de-dados.md`) lista Planeada, EmCurso, Concluida, Validada; o diagrama geral tem também Cancelada. Segui o diagrama (5 estados).
 2. BO-02 lista trimestral e anual; a lista da Ficha não as tem. Resolvido com a lista única (R-08).
-3. `u_manplano` candidato guarda `periodicidade` e `intervalodias` (redundante) e usa nulo para "valor global". Passa a intervalo em `u_manperiod` e `-1` para "usa o global" (convenção PHC de campos sem nulos, a confirmar em P1-T01).
+3. `u_manplano`, `u_manconfig` e `u_manperiod` deixam de ser propostos: a base já tem `u_itmanutli`, `u_configman` e `u_periocid` (2026-11-06, ver `../00-Comum/base-landeiromaui.md`). Os números 1, 2 e 3 acima ficam por rever contra essas tabelas.
 4. `00-global.md` pede branch por parte (`dev-landeiro-manutencao-p1`); o `CLAUDE.md` do LandeiroMaui e os blocos comuns proíbem git ali. Segui a norma do projeto (só editar ficheiros); o utilizador cria o branch fora do agente.
 5. D-09 (paleta SigmaCode por defeito) contra o `tokens.css` vermelho do LandeiroMaui onde os ecrãs vivem: segui D-09 (norma) e registei a diferença.
 6. Saídas: `00-global.md` indica `docs/desenho.md` para P1-T02; acrescentei `docs/contratos.md` (exigido como critério), `docs/sql/` e `docs/prototipo/`.

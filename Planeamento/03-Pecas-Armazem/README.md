@@ -1,3 +1,8 @@
+> **Base = LandeiroMaui (2026-11-06), ver `../00-Comum/base-landeiromaui.md`:**
+> - JÁ COBRE: `u_matinterv` (design, qtt, epv, custo, ref) regista o material usado na ficha; é o que a app GestorManutencao liga ao ecrã "Material usado na ficha" (substitui "Pedir peça"). Compras ligadas à ficha só em leitura (`fn.u_fichaint`, `fo`). Deixa de ser necessário `u_manintpec`.
+> - NOVO (a base NÃO tem; tabela/campo a criar por pessoa no PHC): pedido de peças ao armazém, stock/rutura (`u_manlocstk`), etiquetas, receção, inventário (`u_maninv`, `u_maninvlin`), saída por leitura e movimentos de armazém (`u_manmovloc`), referências de peças (`u_manpeca`, `u_manpecaequip`, `u_manlead`, `u_manplanopec`). Todos os pedidos da reunião mantêm-se.
+> - `u_manconfig` lê-se como `u_configman`; as chaves de rutura são campos NOVOS em `u_configman`.
+
 # Parte 3: Peças e armazém
 
 Gestor de Manutenção · Carnes Landeiro · Planeamento criado em 05/11/2026 · Estado: rascunho, nenhuma task arrancou.
@@ -80,7 +85,7 @@ Estimativa de esforço da parte (planeamento, a rever depois de P3-T02): 108 a 1
 
 1. **Decisões novas:** D-11 (autorização para tratar o PDF Marel com serviços externos) e D-12 (um artigo por código do fabricante). Ambas por tomar.
 2. Referência interna `M<MMM>-<CCC>.<PPP>` com 3 dígitos por nível e prefixo `M`; subconjuntos do manual achatam-se no conjunto; localização `<Z><EE>-<P>-<PP>` e `RECEC`; payloads `PEC:` e `LOC:` (QR e Code 128).
-3. Tabelas novas além das do `arquitetura-e-modelo-de-dados.md`: `u_manmaq`, `u_manconj`, `u_manmovloc` (substitui `u_manintpec` se os Movimentos da ficha não servirem), `u_maninv`, `u_maninvlin`; campos novos em `u_manpeca` (`codbarras`, `idiomaorig`, `locdefeito`, `conjunto`) e em `u_manpecaequip` (`conjunto`, `itemno`).
+3. Tabelas novas além das do `arquitetura-e-modelo-de-dados.md`: `u_manmaq`, `u_manconj`, `u_manmovloc` (movimentos de armazém, NOVO; o consumo registado na ficha já existe em `u_matinterv`), `u_maninv`, `u_maninvlin`; campos novos em `u_manpeca` (`codbarras`, `idiomaorig`, `locdefeito`, `conjunto`) e em `u_manpecaequip` (`conjunto`, `itemno`).
 4. Prazo de entrega: dias de calendário; efetivo = o mais longo entre par artigo+fornecedor, artigo e fornecedor; `u_manlead` com `ref` vazio = por fornecedor e `fornecedor` 0 = por artigo.
 5. Alerta: margem 7 dias, prazo por defeito 30 dias, necessidade inclui planeadas atrasadas, reservas = o previsto ainda não saído das EmCurso, encomendas em trânsito fora da v1 (parâmetro previsto), painel e contador no menu (e-mail fora da v1).
 6. Movimentos de armazém: um movimento = uma linha com `opid` único (anti-duplicação offline); saída offline nunca recusada; estorno até a ficha ser Validada.
@@ -97,7 +102,7 @@ Estimativa de esforço da parte (planeamento, a rever depois de P3-T02): 108 a 1
 2. `00-global.md` fixa `docs/levantamento.md` e `docs/desenho.md` como saída das três partes (colidem no mesmo repositório). Nesta parte uso `docs/pecas-armazem/`.
 3. `00-global.md` fala em branch por parte (`dev-landeiro-manutencao-p3`), mas o bloco `<environment>` comum diz que no LandeiroMaui não se fazem branches, commits nem push. Segui o bloco comum (só edição de ficheiros).
 4. O brief diz que o Claude Code "processa localmente" o PDF; na prática o texto que lê é enviado ao modelo, o que conta como serviço externo. Por isso a D-11 e o modo sem IA.
-5. A arquitetura prevê `u_manintpec` para o consumo; o desenho pode precisar de `u_manmovloc` (movimentos com rasto e `opid`). Resolve-se em P3-T02.
+5. `u_manintpec` deixou de ser necessário (a base tem `u_matinterv`); `u_manmovloc` (movimentos de armazém com rasto e `opid`) é NOVO e a saída por leitura grava também em `u_matinterv`. Resolve-se em P3-T02.
 
 ## 9. Perguntas que bloqueiam
 

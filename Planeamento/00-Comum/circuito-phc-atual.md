@@ -39,7 +39,7 @@ Cabeçalho: **Supervisão?** (desativado para o operador), **Fechada?**, **Obsol
 | Mão de Obra, Materiais/Peças, Total Ficha Intervenção | valores calculados (0,000 nos exemplos) |
 | Marcada | campo standard PHC |
 
-**Hipótese a confirmar no levantamento:** as abas Movimentos Internos/Externos guardam as peças e custos (Mão de Obra e Materiais/Peças somam deles). Se for verdade, a ligação "peças usadas numa intervenção" já existe e deve ser reaproveitada em vez de criar tabela nova.
+**CONFIRMADA (2026-11-06, ver `base-landeiromaui.md`): "peças usadas numa intervenção" existe em `u_matinterv`.** Hipótese original: as abas Movimentos Internos/Externos guardam as peças e custos (Mão de Obra e Materiais/Peças somam deles). Se for verdade, a ligação "peças usadas numa intervenção" já existe e deve ser reaproveitada em vez de criar tabela nova.
 
 ## 4. Fluxo atual (como é feito hoje)
 

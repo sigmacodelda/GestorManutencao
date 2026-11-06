@@ -1,3 +1,5 @@
+> **Base = LandeiroMaui e app GestorManutencao (2026-11-06):** a app já está construída: login só por PIN (tabela PHC `u_manutil`, campo novo `tecno`), perfis operador e supervisor, ecrãs Início, As minhas intervenções, Registar avaria, Equipa, Validação; Planeadas e Material usado na ficha (substitui "Pedir peça") em construção. Estados, regras e tabelas em `../00-Comum/base-landeiromaui.md` (prevalece). Passagens abaixo sobre `ManutencaoMobile`, login SQL por utilizador, password no cofre (D-10) e PIN só local ficam como histórico.
+
 # Parte 2: app Android de intervenções (Gestor de Manutenção, Landeiro)
 
 Estado: planeamento (rascunho 0.1, 05/11/2026). Nenhuma task arrancou. Requisitos da parte: APP-01 a APP-08 (`../00-Comum/requisitos-gerais.md`).
@@ -50,7 +52,7 @@ A Parte 3 depende desta: P3-T05 precisa do ponto de ligação `IPecasIntervencao
 
 ## 6. Como arrancar
 
-1. Confirmar com o utilizador D-02 (projeto novo `ManutencaoMobile`, recomendado) e a resposta à pergunta de segurança da secção 8.
+1. D-02 já resolvida (app GestorManutencao construída). Falta rever a pergunta de segurança da secção 8 contra o login por PIN com `u_manutil`.
 2. Abrir uma sessão do Claude Code na raiz do repositório de código e colar `prompts/01-levantamento.md` (ou o prompt-mestre, que pede primeiro a orçamentação e termina com `ORÇAMENTO:`).
 3. Em paralelo, mostrar `mockups/ecras-telemovel.html` num browser (PIN de demonstração 1234) e preparar a reunião de 11/11.
 4. Quando o levantamento fechar e P1-T02 estiver pronto, rever o prompt 02 e arrancar.
@@ -71,8 +73,8 @@ Uma app offline completa (Android, PIN, SQLite, fila, conflitos, alertas, fotos)
 
 ## 8. Perguntas que bloqueiam
 
-1. **D-10, credencial de sincronização (bloqueia P2-T03).** O LandeiroMaui valida o login SQL do utilizador mas depois usa a cadeia de ligação da app (`RecarregarRolesAsync`). No telemóvel isso põe essa credencial dentro do APK (o LandeiroMaui já a cifra com chave fixa no código), e o PIN não permite voltar a pedir a password para ligar ao SQL. **Isto está mal para utilizadores reais; é melhor assim:** (A) API fina intermédia, recomendada antes de haver utilizadores reais; (B) cadeia da app com conta SQL de mínimo privilégio, só `TESTES_LAND2` durante M1 e M2, com o acesso atrás de `IRemotoIntervencoes` para trocar por A depois; (C) guardar a password cifrada pelo Keystore (rejeitada: contraria "a password nunca se guarda"). Recomendação: B só em testes, A antes de produção.
-2. D-02 (projeto novo `ManutencaoMobile`) e D-07 (backoffice Windows no LandeiroMaui).
+1. **D-10 (por rever com o login por PIN em `u_manutil`; o texto seguinte é o desenho antigo, por confirmar como a app obtém a ligação ao SQL).** O LandeiroMaui valida o login SQL do utilizador mas depois usa a cadeia de ligação da app (`RecarregarRolesAsync`). No telemóvel isso põe essa credencial dentro do APK (o LandeiroMaui já a cifra com chave fixa no código), e o PIN não permite voltar a pedir a password para ligar ao SQL. **Isto está mal para utilizadores reais; é melhor assim:** (A) API fina intermédia, recomendada antes de haver utilizadores reais; (B) cadeia da app com conta SQL de mínimo privilégio, só `TESTES_LAND2` durante M1 e M2, com o acesso atrás de `IRemotoIntervencoes` para trocar por A depois; (C) guardar a password cifrada pelo Keystore (rejeitada: contraria "a password nunca se guarda"). Recomendação: B só em testes, A antes de produção.
+2. D-02 (resolvida: app GestorManutencao) e D-07 (backoffice Windows no LandeiroMaui).
 3. Pendências 5 (modelos de telemóvel) e 10 (nomes dos perfis), e o filtro das planeadas (todas, por zona ou por técnico).
 
 ## 9. Pressupostos novos (todos "Suposição:", não estão no `00-global.md`)

@@ -1,5 +1,7 @@
 # Arquitetura, reaproveitamento e modelo de dados (proposta)
 
+> **Base = LandeiroMaui (2026-11-06):** ver `base-landeiromaui.md`, que prevalece sobre este ficheiro. Onde a proposta abaixo está riscada, a base já cobre.
+
 Estado: **proposta de planeamento**. Os nomes reais das tabelas e campos do PHC só se conhecem depois do levantamento (tarefa P1-T01, só SELECT). Tudo o que está marcado como candidato pode mudar.
 
 ## 1. Arquitetura alvo
@@ -28,7 +30,7 @@ flowchart LR
     Posto --> PHC
 ```
 
-Decisão D-03: o acesso a dados segue a base do LandeiroMaui (Dapper direto ao SQL Server, um login SQL por utilizador). Risco R-03 no `00-global.md`.
+Decisão D-03 (atualizada): o acesso a dados segue a base do LandeiroMaui (Dapper direto ao SQL Server); o login da app GestorManutencao é por PIN contra `u_manutil`, não por login SQL de cada utilizador. Risco R-03 no `00-global.md`.
 
 ## 2. O que se reaproveita do LandeiroMaui (C:\_SigmaRepos\Landeiro-Desmancha\LandeiroMaui)
 
@@ -46,41 +48,45 @@ Decisão D-03: o acesso a dados segue a base do LandeiroMaui (Dapper direto ao S
 | Testes | `LandeiroMaui.Testes` (xUnit, ficheiros ligados) | Regras novas em helpers têm teste |
 | Fluxo de funcionalidades grandes | `agente-prd` → `agente-techspec` → `agente-tasks` e `templates/` | Alternativa ao fluxo desta pasta, só se o utilizador pedir |
 
-Diferenças que obrigam a trabalho novo: o LandeiroMaui só compila para **Windows** (`net9.0-windows10.0.19041.0`), é pensado para postos táteis 1024×768 e o alvo Android foi retirado. A app de telemóvel exige alvo Android (SDK, permissões de câmara e notificações, ecrã vertical, teclado nativo em vez do virtual). **Decisão D-02 por tomar:** o alvo Android entra no projeto LandeiroMaui (um só código, mais risco para o posto) ou num projeto novo `ManutencaoMobile` que partilha as bibliotecas (menos risco). Recomendação: projeto novo que partilha `Helpers`, `Models` e serviços de manutenção, para não pôr em risco os postos em produção.
+Diferenças que obrigam a trabalho novo: o LandeiroMaui só compila para **Windows** (`net9.0-windows10.0.19041.0`), é pensado para postos táteis 1024×768 e o alvo Android foi retirado. A app de telemóvel exige alvo Android (SDK, permissões de câmara e notificações, ecrã vertical, teclado nativo em vez do virtual). **Decisão D-02 (atualizada 2026-11-06):** a app de telemóvel é a **GestorManutencao, já construída**, que segue a base da LandeiroMaui (`base-landeiromaui.md`). O projeto novo `ManutencaoMobile` deixa de existir como proposta.
 
 ## 3. Login com PIN (APP-01)
+
+> **Atualizado 2026-11-06:** a app GestorManutencao já construída faz login só por PIN contra a tabela PHC `u_manutil` (perfil operador/supervisor, `pinprov`, `pinmaxtent` de `u_configman`). Os passos 1 a 5 abaixo descrevem o desenho antigo (login SQL por utilizador + PIN local) e ficam só como histórico, substituídos por esta nota.
 
 1. 1.º acesso no dispositivo: utilizador e password (`LoginBDAsync`, valida contra o SQL Server).
 2. A app pede para definir um PIN (4 a 6 dígitos). Guarda-se **só o hash com sal** no armazenamento seguro; a password nunca se guarda (a base já remove `password` no logout).
 3. Acessos seguintes: PIN desbloqueia a sessão guardada. Offline funciona com a sessão e os roles em cache; ao voltar a haver rede, `RecarregarRolesAsync`.
 4. Falhas de PIN: bloqueio temporário após 5 tentativas e volta a pedir utilizador e password.
 5. A sessão mantém-se o máximo possível (sem expirar por tempo); termina em logout, troca de dispositivo ou utilizador desativado.
-6. Não é preciso campo novo no PHC (o PIN é local). Se a Landeiro quiser PIN central, é um campo novo (decisão D-06).
+6. A app nova GestorManutencao usa PIN com a tabela PHC `u_manutil` (campo novo `tecno`, ver `base-landeiromaui.md` secção 8). Decisão D-06 atualizada.
 
 ## 4. Modelo de dados candidato
 
 Convenção das tabelas `u_` do Landeiro: campos standard `u_<nome>stamp` (char(25), chave), `ousrinis`, `ousrdata`, `ousrhora`, `usrinis`, `usrdata`, `usrhora`, `marcada` (o PHC acrescenta-os). As tabelas e campos **criam-se no PHC pelo utilizador**; o Claude Code só verifica.
 
-### 4.1 Já existente (a confirmar no levantamento)
+### 4.1 Já existente
+
+**A fonte da verdade é `base-landeiromaui.md`** (tabelas `u_equip`, `u_itmanut`, `u_itmanutli`, `u_fichaint`, `u_tempinterv`, `u_matinterv`, `u_histstats`, `u_periocid`, `u_configman`, `us`).
 
 Ecrã Infraestruturas (equipamento) e Ficha de Intervenção, ver `circuito-phc-atual.md`. A tarefa P1-T01 devolve nomes de tabelas, campos, tipos e triggers, e diz o que se reaproveita.
 
-### 4.2 Novas (candidatas)
+### 4.2 Novas (candidatas) e substituídas pela base
 
 | Tabela | Finalidade | Parte | Campos principais (tipo, tamanho) |
 |---|---|---|---|
-| `u_manplano` | Plano de manutenção por equipamento | 1 | `infrastamp` char(25) [chave da infraestrutura, confirmar]; `periodicidade` varchar(30); `tipoman` varchar(10) Interna/Externa; `tipoint` varchar(10) Preventiva; `meses` char(12) com 0/1; `intervalodias` int; `ultimadata` datetime; `proxdata` datetime; `antecedencia` int (dias, nulo = valor global); `ativo` bit; `obs` varchar(254) |
-| `u_manconfig` | Configurações (chave/valor) | 1 | `chave` varchar(40) única; `valor` varchar(100); `descricao` varchar(100). Chaves: `ALERTA_ANTECEDENCIA_DIAS`, `AVANCAR_ORDEM_<ROLE>`, `PIN_MAX_TENTATIVAS` |
-| Campos novos na Ficha de Intervenção | Estado e ligação ao plano | 1 | `u_estado` varchar(12) (Planeada, EmCurso, Concluida, Validada); `u_planostamp` char(25); `u_dataplan` datetime; `u_hini` datetime; `u_hfim` datetime; `u_tecnico` varchar(30); `u_ordem` int |
-| `u_manplanopec` | Peças necessárias por plano | 3 | `planostamp` char(25); `ref` varchar(18); `qtt` numeric(11,3); `obs` varchar(100) |
-| `u_manpeca` | Extensão da referência da peça (se as referências forem para o PHC) | 3 | `ref` varchar(18); `reffabric` varchar(40); `desigen` varchar(120); `desigpt` varchar(120); `maquina` varchar(10); `conjunto` varchar(10); `fabricante` varchar(40) |
-| `u_manpecaequip` | Peça ↔ equipamento (lista de peças da máquina) | 3 | `infrastamp` char(25); `ref` varchar(18); `qtt` numeric(11,3) |
-| `u_manloc` | Localizações do armazém virtual | 3 | `codigo` varchar(20); `descricao` varchar(60); `armazem` numeric(5,0) |
-| `u_manlocstk` | Stock por localização | 3 | `ref` varchar(18); `loc` varchar(20); `qtt` numeric(11,3) |
-| `u_manlead` | Tempo de entrega por artigo e fornecedor | 3 | `ref` varchar(18); `fornecedor` numeric(10,0); `dias` int |
-| `u_manintpec` | Consumo de peças por intervenção, **só se** os Movimentos da ficha não servirem | 3 | `fichastamp` char(25); `ref` varchar(18); `qtt` numeric(11,3); `loc` varchar(20); `data` datetime |
+| ~~`u_manplano`~~ | **Substituída pela base:** o plano vive em `u_itmanutli` (tarefas) + `u_itmanut` (instruções) + `u_periocid` (periodicidades). Ver `base-landeiromaui.md` | 1 | já existe |
+| ~~`u_manconfig`~~ | **Substituída pela base:** `u_configman` (`antecedencia`, `gerarplaneadas`, `avancaordem`, `validarpropria`, `extexigedoc`, `pinmaxtent`, `comprasfichaint`). Chaves novas das Partes 1 e 3 (horizonte, rutura) são **NOVO: campo a criar por pessoa no PHC** em `u_configman` | 1 | já existe (campos novos a criar) |
+| ~~Campos novos na Ficha~~ | **Já existem em `u_fichaint`:** `estado` (Planeada, EmCurso, Concluida, Validada, Cancelada), `hini`, `hfim`, `tecno`, `tecnome`, `foraordem`, `valobs`, `fechada`, `supervisao`, `valinis`, `valdata`. Sem `u_planostamp`/`u_dataplan`/`u_ordem` por defeito: a ligação à tarefa é por `u_itmanutli` e a ordem por data/ordem/nº (por confirmar se falta algum campo) | 1 | já existe |
+| `u_manplanopec` | Peças necessárias por plano | 3 (NOVO: tabela a criar por pessoa no PHC) | `planostamp` char(25); `ref` varchar(18); `qtt` numeric(11,3); `obs` varchar(100) |
+| `u_manpeca` | Extensão da referência da peça (se as referências forem para o PHC) | 3 (NOVO: tabela a criar por pessoa no PHC) | `ref` varchar(18); `reffabric` varchar(40); `desigen` varchar(120); `desigpt` varchar(120); `maquina` varchar(10); `conjunto` varchar(10); `fabricante` varchar(40) |
+| `u_manpecaequip` | Peça ↔ equipamento (lista de peças da máquina) | 3 (NOVO: tabela a criar por pessoa no PHC) | `infrastamp` char(25); `ref` varchar(18); `qtt` numeric(11,3) |
+| `u_manloc` | Localizações do armazém virtual | 3 (NOVO: tabela a criar por pessoa no PHC) | `codigo` varchar(20); `descricao` varchar(60); `armazem` numeric(5,0) |
+| `u_manlocstk` | Stock por localização | 3 (NOVO: tabela a criar por pessoa no PHC) | `ref` varchar(18); `loc` varchar(20); `qtt` numeric(11,3) |
+| `u_manlead` | Tempo de entrega por artigo e fornecedor | 3 (NOVO: tabela a criar por pessoa no PHC) | `ref` varchar(18); `fornecedor` numeric(10,0); `dias` int |
+| ~~`u_manintpec`~~ | **Já existe:** `u_matinterv` (`design`, `qtt`, `epv`, `custo`, `ref`) regista o material usado na ficha e reaproveita-se. A saída do armazém por leitura é NOVO (`u_manmovloc`, Parte 3) | 3 | já existe (consumo); NOVO (movimentos de armazém) |
 
-Decisão D-05 (proposta): as intervenções **planeadas materializam-se como fichas** com `u_estado = Planeada`, geradas pelo backoffice a partir do plano. Alternativa rejeitada: calcular planeadas só em memória, porque a app offline precisa de linhas com stamp para sincronizar e para a ordem de avanço.
+Decisão D-05 (já é assim na base): as intervenções **planeadas materializam-se como fichas** com `u_fichaint.estado = Planeada`, geradas pela app a partir das tarefas (`u_itmanutli`). Alternativa rejeitada: calcular planeadas só em memória, porque a app offline precisa de linhas com stamp para sincronizar e para a ordem de avanço.
 
 Se a edição do PHC não permitir criar tabelas de utilizador (cada cliente), a alternativa é guardar fora do PHC, numa base própria `MANUTENCAO` na mesma instância (decisão D-04). Confirmar no levantamento.
 

@@ -12,11 +12,13 @@ Versão 0.1 · 05/11/2026. Fonte: `00-Comum/requisitos-gerais.md` (BO-01 a BO-10
 | Supervisor | `MAN_SUPERVISOR` | Supervisão que valida e fecha fichas | Validação, planeadas, dashboard, planos |
 | Administrador de manutenção | `MAN_ADMIN` | Responsável que configura tudo | Tudo, incluindo configuração e equipamentos |
 
+> **Atualização 2026-11-06:** a base não controla perfis no código de manutenção; a app GestorManutencao tem perfis operador e supervisor em `u_manutil`. As roles `MAN_*` abaixo são desenho antigo (por confirmar se se mantêm).
+
 As roles são roles de base de dados lidas no login (padrão `UserStateService`/`Perfis` do LandeiroMaui). Criá-las é ação do utilizador (roles só com autorização explícita). O acesso a cada ecrã é decidido no menu (`HasRole`), nunca dentro da página.
 
-### 1.2 Estados da intervenção (campo novo `u_estado`)
+### 1.2 Estados da intervenção (campo `u_fichaint.estado`, já existe na base LandeiroMaui)
 
-`Planeada` → `EmCurso` → `Concluida` → `Validada` (ficha com `Fechada? = sim`); `Cancelada` (supervisão). `Concluida` pode voltar a `EmCurso` (devolvida). Derivados, nunca gravados: **Atrasada** = `Planeada` ou `EmCurso` com `u_dataplan` anterior a hoje; **A vencer** = `Planeada` com `u_dataplan` entre hoje e hoje + antecedência.
+`Planeada` → `EmCurso` → `Concluida` → `Validada` (ficha com `Fechada? = sim`); `Cancelada` (supervisão). `Concluida` pode voltar a `EmCurso` (devolvida). Derivados, nunca gravados: **Atrasada** = `Planeada` ou `EmCurso` com data da ficha anterior a hoje; **A vencer** = `Planeada` com data entre hoje e hoje + antecedência (`u_configman.antecedencia`). `Cancelada` vale também para `EmCurso`. Ficha com `estado` vazio = legado. Ver `../00-Comum/base-landeiromaui.md`.
 
 ### 1.3 Lista única de periodicidades (risco R-08)
 
@@ -37,7 +39,7 @@ Os 8 valores atuais da Ficha (De acordo com procedimento, Diária, Mensal, Quinz
 
 ## 2. Matriz perfil × permissão
 
-S = sim; N = não; C = configurável em `u_manconfig` (valor de origem indicado). Suposição: valores de origem a validar com a Landeiro.
+S = sim; N = não; C = configurável em `u_configman` (campo existente; por confirmar se por perfil). Suposição: valores de origem a validar com a Landeiro.
 
 | Permissão | Operador | Supervisor | Admin | Req. |
 |---|---|---|---|---|
@@ -91,7 +93,7 @@ S = sim; N = não; C = configurável em `u_manconfig` (valor de origem indicado)
 ### BO-03 Geração das intervenções planeadas
 
 - **Utilizador:** supervisor e administrador (manual); automático 1 vez por dia ao abrir o módulo (Suposição, sem serviço Windows).
-- **Regra (decisão D-05):** cada ocorrência futura do plano materializa-se numa ficha com `u_estado = Planeada`, `u_planostamp` e `u_dataplan`. Janela: gera até hoje + horizonte (`HORIZONTE_GERACAO_DIAS`, defeito 60, nunca inferior à maior antecedência). Atrasadas: gera no máximo `GERAR_ATRASADAS_MAX` (defeito 1) ocorrências passadas, a mais recente; as anteriores ficam registadas no relatório de geração como "saltadas". Idempotente: a mesma ocorrência (plano + data) nunca gera duas fichas. Algoritmo completo em `fluxogramas.md` (secção 3) e no prompt P1-T02.
+- **Regra (decisão D-05):** cada ocorrência futura da tarefa (`u_itmanutli`) materializa-se numa ficha `u_fichaint` com `estado = Planeada`. **Base:** a LandeiroMaui já gera a planeada seguinte ao concluir (config `gerarplaneadas`: última feita + periodicidade `u_periocid`), uma só planeada/em curso por tarefa, geração diária ao abrir as Planeadas, e nunca gera planeada já atrasada (fica para hoje, decisão 2026-11-05). O horizonte de 60 dias e o "gera atrasadas" abaixo são o desenho antigo: mantêm-se só se a Landeiro os pedir (NOVO: campo a criar por pessoa em `u_configman`). Janela: gera até hoje + horizonte (`HORIZONTE_GERACAO_DIAS`, defeito 60, nunca inferior à maior antecedência). Atrasadas: gera no máximo `GERAR_ATRASADAS_MAX` (defeito 1) ocorrências passadas, a mais recente; as anteriores ficam registadas no relatório de geração como "saltadas". Idempotente: a mesma ocorrência (plano + data) nunca gera duas fichas. Algoritmo completo em `fluxogramas.md` (secção 3) e no prompt P1-T02.
 - **Critérios de aceitação** (hoje = 2026-11-05, horizonte 60 dias, até 2027-01-04):
   1. BO-03-C1: plano Mensal, dia 10, todos os meses, última data 2026-09-10: gera 2026-10-10 (atrasada), 2026-11-10 e 2026-12-10; não gera 2027-01-10.
   2. BO-03-C2: plano Quinzenal, última data 2026-10-30: gera 11-13, 11-27, 12-11 e 12-25 e nada mais.
@@ -115,7 +117,7 @@ S = sim; N = não; C = configurável em `u_manconfig` (valor de origem indicado)
 ### BO-05 Permissão de avançar fora de ordem
 
 - **Utilizador:** administrador configura; a app aplica (Parte 2).
-- **Regra:** uma chave por perfil, `AVANCAR_ORDEM_<ROLE>` (0 ou 1). "Ordem" (Suposição): fila das planeadas em aberto de cada zona, por `u_dataplan` e `u_ordem`. Sem permissão, o utilizador só pode iniciar a primeira da fila de cada zona; com permissão, qualquer uma.
+- **Regra (base LandeiroMaui):** `u_configman.avancaordem` (por confirmar se único ou por perfil). "Ordem" (confirmada na base): fila das planeadas em aberto da mesma zona (`u_equip.local`), por data, ordem e nº; gravado `foraordem` ao iniciar fora de ordem. Sem permissão, o utilizador só pode iniciar a primeira da fila de cada zona; com permissão, qualquer uma.
 - **Critérios:** (1) BO-05-C1: alterar a chave de um perfil altera `PodeAvancarForaDeOrdem(role)` na próxima leitura; (2) BO-05-C2: o ecrã mostra os 3 perfis, com origem 0/1/1; (3) BO-05-C3: só o administrador grava.
 - **Casos limite:** utilizador com dois perfis (vale o mais permissivo); fila vazia; planeada atrasada de outra zona.
 - **Perguntas abertas:** a ordem é por zona, por equipamento ou global? (pendência: quadro 3 só diz "avançar ordem intervenções").
@@ -123,7 +125,7 @@ S = sim; N = não; C = configurável em `u_manconfig` (valor de origem indicado)
 ### BO-06 Validação de intervenções
 
 - **Utilizador:** supervisor e administrador.
-- **Regra:** a lista mostra as fichas `Concluida`. O supervisor abre, confere (anomalia, intervenção, tempos, custos, doc. externo se externa), e **Valida** (`u_estado = Validada`, `Fechada? = sim`, `u_valinis`, `u_valdata`) ou **Devolve** ao técnico com motivo (`EmCurso`, `u_valobs`). Ficha `Validada` fica só de leitura. Suposição: quem concluiu não valida a própria ficha (`VALIDAR_PROPRIA_INTERVENCAO = 0`).
+- **Regra:** a lista mostra as fichas `Concluida`. O supervisor abre, confere (anomalia, intervenção, tempos, custos, doc. externo se externa), e **Valida** (`estado = Validada`, `fechada = 1`, `supervisao = 1`, `valinis`, `valdata`) ou **Devolve** ao técnico com motivo (`EmCurso`, `valobs`). Ficha `Validada` fica só de leitura. Base: quem concluiu não valida a própria ficha (`u_configman.validarpropria`, por defeito não; comparação `tecno` = `userno`) e a externa exige fornecedor e documento externo (`extexigedoc`). Ver `../00-Comum/base-landeiromaui.md`.
 - **Critérios:** (1) BO-06-C1: só fichas `Concluida` aparecem em "Por validar"; (2) BO-06-C2: Validar grava estado, `Fechada?`, iniciais e data e remove-a da lista; (3) BO-06-C3: Devolver exige motivo e a ficha reaparece `EmCurso` na app; (4) BO-06-C4: ficha externa sem doc. externo/folha de serviço não valida (mensagem clara); (5) BO-06-C5: operador não vê o ecrã nem consegue chamar o serviço (verificação por perfil no serviço); (6) BO-06-C6: tentar validar uma ficha já `Validada` ou alterada entretanto falha com aviso, sem gravar.
 - **Casos limite:** duas validações em simultâneo; ficha concluída offline que chega depois de validada (a alteração vira proposta, ver arquitetura secção 6); supervisor único que também executa.
 - **Perguntas abertas:** validar a própria ficha é aceitável em equipas pequenas? Valida-se em bloco (várias fichas de uma vez)? Fecho do PHC (campo Fechada?) tem triggers ou regras?

@@ -6,6 +6,7 @@ Task: 02 (P3-T02) · Tipo: desenho
 Task global: `docs/tasks/00-global.md`
 Modo: Plan Mode (para no PLANO do documento e espera a minha confirmação; depois escreve)
 Papel do agente: analista: desenha e propõe; não escreve código da app nem altera a base de dados
+BASE LANDEIROMAUI (2026-11-06, prevalece sobre o resto deste prompt): o planeamento SEGUE a base da LandeiroMaui, onde a manutenção já está implementada no PHC. Lê `C:\_SigmaRepos\GestorManutencao\Planeamento\00-Comum\base-landeiromaui.md` (ou a cópia em `docs/`). Onde este prompt cita `u_manplano`, `u_configman`, `u_manperiod`, `u_estado`, `u_planostamp`, `u_dataplan`, `u_hini`, `u_hfim`, `u_tecnico` ou `u_manintpec`, leia-se o que já existe: `u_itmanutli`/`u_itmanut`, `u_configman`, `u_periocid`, `u_fichaint.estado`, tarefa `u_itmanutli`, data da ficha, `hini`, `hfim`, `tecno`/`tecnome` e `u_matinterv`. Só o que a base não tem é NOVO: tabela/campo a criar por pessoa no PHC (nunca pelo Claude Code); confirma com leitura (SELECT) antes de assumir. Parte 3: `u_matinterv` (design, qtt, epv, custo, ref) já regista o material usado na ficha e reaproveita-se (substitui `u_manintpec` e o ecrã 'Pedir peça'). NÃO existem na base: pedido ao armazém, stock/rutura, etiquetas, receção, inventário, saída por leitura: esses mantêm-se como NOVO.
 Entradas: `docs/pecas-armazem/levantamento.md` (P3-T01), contratos e modelo de P1-T02 (`docs/desenho.md` da Parte 1 ou o caminho que a Parte 1 tiver fixado)
 Saídas: `docs/pecas-armazem/desenho.md`, `docs/pecas-armazem/mockups/armazem-e-etiquetas.html` (a partir do mockup do planeamento, se me fornecerem)
 Critérios de conclusão:
@@ -27,7 +28,7 @@ Agentes: `sc-leitor` (ler contratos da Parte 1), `sc-regras-leitor` (dicionário
 - Situação: a Landeiro não tem referências nem controlo de stock das peças de manutenção (estimativa dita: 3.300 a 4.000 peças; só o equipamento Midas cerca de 300). Origem das peças: manuais do fabricante (Marel, "Slaughterline Renovation", PDF de cerca de 350 MB, inglês misturado com português; cada conjunto tem lista de peças com "Item no.", "Marel code", descrição e quantidade). Fluxo alvo: compra → receção → etiqueta e localização → saída por leitura na intervenção → alerta de rutura.
 - Requisitos da Parte 3: PEC-01 referências das peças no PHC (família própria, ref interna e do fabricante, designação EN e PT) ou ambiente separado; PEC-02 carga das peças por máquina a partir do PDF com IA e tradução; PEC-03 peças necessárias por plano e por intervenção (plano → equipamento → peças); PEC-04 tempo de entrega por artigo e fornecedor (se diferentes, o mais longo); PEC-05 armazém virtual (localizações); PEC-06 criador de etiquetas da peça e da localização; PEC-07 receção de peças; PEC-08 inventário por picagem; PEC-09 saída por leitura de código de barras ou QR; PEC-10 alerta de rutura (planeadas vs stock vs prazo de entrega).
 - Arquitetura: módulo `Manutencao` no LandeiroMaui (Dapper, `NOLOCK`, registo manual em `MauiProgram.cs`). Contratos da parte: `IPecaService` (referências, peças por equipamento e por plano) e `IArmazemVirtualService` (localizações, stock por local, entradas, saídas, inventário), a fixar em coerência com P1-T02. Intervenções planeadas são fichas com estado Planeada (D-05). Etiquetas: `Services/Impressao/ImpressaoEtiquetasService` e o editor de modelos em `Services/Etiquetas` (`CatalogoEtiquetas`, `TemplateEtiquetaStore`, `GeradorZplService`). Leitura de códigos: ZXing.Net já existe no projeto; no Windows há leitores tipo teclado (listener JS de scanner); a leitura por câmara no Android é nova e depende da Parte 2 (P2-T05).
-- Tabelas candidatas (nomes provisórios, a fechar em P3-T02; nunca se criam por código): `u_manmaq`, `u_manconj`, `u_manpeca`, `u_manpecaequip`, `u_manplanopec`, `u_manloc`, `u_manlocstk`, `u_manlead`, `u_manmovloc`, `u_maninv`, `u_maninvlin`, mais a `u_manconfig` da Parte 1 (chaves de configuração). Nomes reais das tabelas e campos do PHC existente (artigos, stock, fornecedores, ficha de intervenção) não se assumem: confirmam-se no levantamento P3-T01.
+- Tabelas candidatas (nomes provisórios, a fechar em P3-T02; nunca se criam por código): `u_manmaq`, `u_manconj`, `u_manpeca`, `u_manpecaequip`, `u_manplanopec`, `u_manloc`, `u_manlocstk`, `u_manlead`, `u_manmovloc`, `u_maninv`, `u_maninvlin`, mais campos novos na `u_configman` da base (chaves de rutura; NOVO). `u_matinterv` já cobre o material usado na ficha. Nomes reais das tabelas e campos do PHC existente (artigos, stock, fornecedores, ficha de intervenção) não se assumem: confirmam-se no levantamento P3-T01.
 - Anexos: nenhum (o PDF Marel está numa pasta da Landeiro e só se abre com autorização D-11).
 Nota: sem credenciais, tokens nem connection strings. Referenciar pela configuração.
 </context>
@@ -60,7 +61,7 @@ Nota: tabelas candidatas (nomes provisórios). O Claude Code NUNCA as cria: o ut
 | `u_maninvlin` | Contagens da sessão | `invstamp` char(25), `ref` varchar(18), `loc` varchar(20), `qttcontada` numeric(11,3), `qttsistema` numeric(11,3), `aprovado` bit, `opid` char(36) único |
 
 - Campos standard do PHC (stamp, auditoria, marcada): o PHC acrescenta-os.
-- Configuração: chaves novas na `u_manconfig` da Parte 1 (`RUTURA_MARGEM_DIAS`, `RUTURA_PRAZO_DEFEITO_DIAS`, `RUTURA_CONTAR_ENCOMENDAS`, limiar de validação da carga). Não se cria tabela.
+- Configuração: chaves novas na `u_configman` da Parte 1 (`RUTURA_MARGEM_DIAS`, `RUTURA_PRAZO_DEFEITO_DIAS`, `RUTURA_CONTAR_ENCOMENDAS`, limiar de validação da carga). Não se cria tabela.
 - Verificação: `01_verificar_<tabela>.sql` só leitura (`INFORMATION_SCHEMA` e `sys.*`), `RAISERROR` (severidade 16) com mensagem clara; se falhar, parar a parte dependente e escrever "BLOQUEIO:". Os scripts escrevem-se na P3-T03; aqui especificam-se.
 - Pode ser criada neste cliente? [CONFIRMAR: pendência 2]. Criada por: o utilizador, no PHC, antes da P3-T03.
 </phc-tables>
@@ -93,7 +94,7 @@ Solução escolhida e porquê: um documento de desenho com `<phc-tables>` por ta
 - Validações de teste: `M001-001.001` e `M999-999.999` válidas; `M001-001.000`, `M000-001.001`, `M1-1.1`, `M001-001.0001` inválidas como peça; `A03-2-05` e `RECEC` válidas, `A3-2-05` e `A03-0-05` inválidas; `0070001` e `70001` são referências de fabricante diferentes; próxima peça de um conjunto com `.999` falha.
 
 ### Regra do alerta de rutura (PEC-10) e prazo de entrega (PEC-04)
-- Parâmetros em `u_manconfig`: `RUTURA_MARGEM_DIAS` M (Suposição 7), `RUTURA_PRAZO_DEFEITO_DIAS` (Suposição 30), `RUTURA_CONTAR_ENCOMENDAS` (0 por defeito). `hoje` = data local sem hora.
+- Parâmetros em `u_configman`: `RUTURA_MARGEM_DIAS` M (Suposição 7), `RUTURA_PRAZO_DEFEITO_DIAS` (Suposição 30), `RUTURA_CONTAR_ENCOMENDAS` (0 por defeito). `hoje` = data local sem hora.
 - Prazo efetivo `L(p)` = o mais longo dos aplicáveis ao fornecedor principal da peça: prazo do par (artigo, fornecedor), prazo do artigo, prazo do fornecedor; sem nenhum, o prazo por defeito (peça marcada "prazo assumido"). Dias de calendário (Suposição).
 - Janela `J(p) = L(p) + M`; fim da janela = `hoje + J(p)`.
 - Necessidade `N(p)` = soma das quantidades de `p` nas intervenções Planeadas (plano ativo, equipamento não obsoleto, não canceladas) com data planeada ≤ fim da janela; as atrasadas contam com data efetiva `hoje`.
@@ -105,9 +106,9 @@ Solução escolhida e porquê: um documento de desenho com `<phc-tables>` por ta
 
 <decisions>
 - D-01: as 3 partes correm em paralelo, com dependências explícitas. Alternativa rejeitada: sequencial, porque demora mais.
-- D-03: acesso a dados como no LandeiroMaui (Dapper direto ao SQL Server, login SQL por utilizador). Alternativa rejeitada: App → API → serviços, porque acrescenta camadas e prazo.
+- D-03 (atualizada): acesso a dados como a LandeiroMaui (Dapper direto ao SQL Server); login da app GestorManutencao só por PIN contra a tabela PHC `u_manutil` (não login SQL por utilizador). Alternativa rejeitada: App → API → serviços, porque acrescenta camadas e prazo.
 - D-04 **por decidir**: referências das peças no PHC com família própria (recomendado, para stock, compras e receção nativos) ou ambiente separado (base própria `MANUTENCAO` na mesma instância; duplica stock e compras). Não avançar código dependente sem a decisão registada em `docs/tasks/00-global.md`.
-- D-05: intervenções planeadas materializam-se como fichas com `u_estado = Planeada`. Alternativa rejeitada: calcular só em memória, porque a app offline precisa de linhas com stamp.
+- D-05: intervenções planeadas materializam-se como fichas com `u_fichaint.estado = Planeada` (já é assim na base). Alternativa rejeitada: calcular só em memória, porque a app offline precisa de linhas com stamp.
 - D-07 (suposição a confirmar): "backoffice" = ecrãs Windows do módulo Manutenção no LandeiroMaui.
 - D-11 **por tomar** (nova): autorização para tratar o PDF Marel e os dados extraídos com serviços externos (modelos de IA em nuvem, incluindo o do Claude Code, que envia ao modelo o texto que lê). Sem autorização expressa registada: extração só com ferramentas locais, tradução por glossário e revisão humana, e o agente não abre páginas do PDF.
 - D-12 **por tomar** (nova): um artigo por código do fabricante, com ligações por máquina e conjunto (recomendado). Alternativa: um artigo por posição na máquina.

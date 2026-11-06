@@ -1,3 +1,8 @@
+> **Base = LandeiroMaui (2026-11-06), ver `../00-Comum/base-landeiromaui.md`:**
+> - JÁ COBRE: `u_matinterv` (design, qtt, epv, custo, ref) regista o material usado na ficha; é o que a app GestorManutencao liga ao ecrã "Material usado na ficha" (substitui "Pedir peça"). Compras ligadas à ficha só em leitura (`fn.u_fichaint`, `fo`). Deixa de ser necessário `u_manintpec`.
+> - NOVO (a base NÃO tem; tabela/campo a criar por pessoa no PHC): pedido de peças ao armazém, stock/rutura (`u_manlocstk`), etiquetas, receção, inventário (`u_maninv`, `u_maninvlin`), saída por leitura e movimentos de armazém (`u_manmovloc`), referências de peças (`u_manpeca`, `u_manpecaequip`, `u_manlead`, `u_manplanopec`). Todos os pedidos da reunião mantêm-se.
+> - `u_manconfig` lê-se como `u_configman`; as chaves de rutura são campos NOVOS em `u_configman`.
+
 # Tarefas da Parte 3: Peças e armazém
 
 Fonte: `00-Comum/00-global.md` (secção 3). Dentro da parte as tasks são sequenciais; cada uma só arranca com a anterior CONCLUÍDA e com o gate confirmado pelo utilizador. Esforço em horas de trabalho de planeamento e desenvolvimento (não tokens), com intervalo mínimo a máximo: **Suposição** de planeamento, a rever depois de P3-T02 (e depois de a Landeiro dizer se cria as tabelas, pendência 4).
@@ -24,7 +29,7 @@ Só leitura. Resultado: `docs/pecas-armazem/levantamento.md`.
 - [ ] Stock: tabela de stock por armazém, armazéns existentes (há um de manutenção?), como se movimenta (documentos de entrada e de saída; receção de encomenda a fornecedor existente).
 - [ ] Fornecedores: tabela, fornecedor principal do artigo, campo de prazo de entrega se existir.
 - [ ] Referências de peças já existentes (a Landeiro disse que não existem): contagem de artigos candidatos (famílias, referências com `M…`) e colisão do prefixo.
-- [ ] Ficha de Intervenção: onde se guardam os Movimentos Internos/Externos e as peças (confirmar a hipótese de `circuito-phc-atual.md` secção 3).
+- [ ] Ficha de Intervenção: peças usadas já existem em `u_matinterv` (hipótese de `circuito-phc-atual.md` secção 3 CONFIRMADA); confirmar por SELECT os campos e como se liga a `st` e a `fn`/`fo`.
 - [ ] Tabelas `u_` existentes (nomes, para evitar colisões) e se há sinal de que se podem criar (pendência 4).
 - [ ] Amostra do PDF (se autorizado): número de páginas, camada de texto, estrutura de um conjunto, colunas "Item no.", "Marel code", quantidade, onde há códigos de barras.
 - [ ] Leitura existente no LandeiroMaui: como se lê código no Windows (leitor tipo teclado) e se há leitura por câmara; como se liga o editor de etiquetas ao `ImpressaoEtiquetasService`.
@@ -40,7 +45,7 @@ Resultado: `docs/pecas-armazem/desenho.md` (e mockup `docs/pecas-armazem/mockups
 - [ ] Modelo de dados final em formato `<phc-tables>` por tabela (campos, tipos, nulos, defeitos, regras, verificação só leitura): `u_manmaq`, `u_manconj`, `u_manpeca`, `u_manpecaequip`, `u_manplanopec`, `u_manloc`, `u_manlocstk`, `u_manlead`, `u_manmovloc`, `u_maninv`, `u_maninvlin`. Se D-04 = ambiente separado, a variante.
 - [ ] Como se cria o artigo no PHC (escolha fundamentada: importação nativa do PHC, INSERT replicando os campos obrigatórios na base de testes, ou outra) e como se movimenta o stock PHC.
 - [ ] Contratos `IPecaService` e `IArmazemVirtualService` (métodos, DTOs, erros) alinhados com P1-T02; contrato com a Parte 2 (peças da intervenção, saída, inventário).
-- [ ] Regras do alerta (fórmula de `requisitos.md` PEC-10), parâmetros em `u_manconfig`, casos de teste.
+- [ ] Regras do alerta (fórmula de `requisitos.md` PEC-10), parâmetros em `u_configman` (campos NOVOS), casos de teste.
 - [ ] Fluxos de receção, saída, inventário, etiquetas (conteúdo do QR e da localização).
 - [ ] Pipeline da carga por IA (extrair → propor → validar → importar) e regra de privacidade D-11.
 - [ ] Mockups clicáveis (partir do mockup do planeamento).
@@ -80,7 +85,7 @@ Critérios (5): receção e transferência atualizam o stock sem duplicar; inven
 - [ ] Ecrã Windows de saída com leitor tipo teclado (não depende da Parte 2).
 - [ ] Ecrã do telemóvel: leitura por câmara (ZXing.Net), inventário por picagem, peças da intervenção (**só depois de P2-T05**; se não estiver fechada, entrega o serviço e a parte Windows e marca a parte do telemóvel BLOQUEADA).
 - [ ] `CalculadorRutura` (puro, testes xUnit com os 9 casos de PEC-10), serviço e painel de alertas, contador no menu e feed para o dashboard (P1-T05).
-- [ ] Parâmetros (`u_manconfig`): margem, prazo por defeito, contar encomendas.
+- [ ] Parâmetros (`u_configman`, campos NOVOS): margem, prazo por defeito, contar encomendas.
 - [ ] Medição do cálculo (4.000 peças, 500 planeadas).
 
 Critérios (5): saída por leitura baixa o stock e liga à ficha, sem duplicar; peças do plano aparecem na intervenção; alerta de rutura igual aos casos de teste; leitura no telemóvel (câmara) a funcionar ou parte declarada BLOQUEADA com motivo; desempenho dentro dos alvos ou desvio explicado.

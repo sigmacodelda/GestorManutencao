@@ -27,10 +27,10 @@ Total da parte: 57 a 102 h. Caminho crítico para 11/11/2026 (protótipo): só P
 
 ## P1-T02 Desenho (8 a 14 h)
 
-- [ ] Modelo de dados final em `<phc-tables>` (`u_manperiod`, `u_manplano`, `u_manconfig`, campos novos da Ficha) e índice único proposto. (2 a 3 h)
+- [ ] Modelo de dados final em `<phc-tables>`: já existem `u_itmanutli`, `u_periocid`, `u_configman` e os campos de estado em `u_fichaint` (ver `../00-Comum/base-landeiromaui.md`); só se descrevem os campos realmente NOVOS (a criar por pessoa no PHC) e o índice único proposto. (1 a 2 h)
 - [ ] Scripts de verificação só leitura `01_verificar_*.sql`. (1 a 1,5 h)
 - [ ] Lista única de periodicidades e algoritmo de geração com tabela de casos de teste (mínimo 12). (1,5 a 2,5 h)
-- [ ] Matriz de perfis e permissões, roles a criar e chaves `u_manconfig`. (0,5 a 1 h)
+- [ ] Matriz de perfis e permissões, perfis (operador e supervisor em `u_manutil`) e campos de `u_configman`. (0,5 a 1 h)
 - [ ] Contratos: interfaces, DTOs e exemplos em `docs/contratos.md`; rever com P2 e P3. (2 a 3 h)
 - [ ] Wireframes dos 6 ecrãs. (1 a 2 h)
 - [ ] Protótipo clicável refinado (parte do `mockups/backoffice.html` deste planeamento) validado com o utilizador para 11/11. (1 a 2 h)

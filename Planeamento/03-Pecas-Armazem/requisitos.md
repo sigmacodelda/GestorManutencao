@@ -1,3 +1,8 @@
+> **Base = LandeiroMaui (2026-11-06), ver `../00-Comum/base-landeiromaui.md`:**
+> - JÁ COBRE: `u_matinterv` (design, qtt, epv, custo, ref) regista o material usado na ficha; é o que a app GestorManutencao liga ao ecrã "Material usado na ficha" (substitui "Pedir peça"). Compras ligadas à ficha só em leitura (`fn.u_fichaint`, `fo`). Deixa de ser necessário `u_manintpec`.
+> - NOVO (a base NÃO tem; tabela/campo a criar por pessoa no PHC): pedido de peças ao armazém, stock/rutura (`u_manlocstk`), etiquetas, receção, inventário (`u_maninv`, `u_maninvlin`), saída por leitura e movimentos de armazém (`u_manmovloc`), referências de peças (`u_manpeca`, `u_manpecaequip`, `u_manlead`, `u_manplanopec`). Todos os pedidos da reunião mantêm-se.
+> - `u_manconfig` lê-se como `u_configman`; as chaves de rutura são campos NOVOS em `u_configman`.
+
 # Requisitos da Parte 3: Peças e armazém
 
 Fonte: `00-Comum/requisitos-gerais.md` (PEC-01 a PEC-10), PAT 1 (2.ª fase), PAT 3, quadro 1 e reunião de 04/11/2026. Termos: **peça** = artigo de manutenção; **referência interna** = código da Landeiro (`codificacao-pecas.md`); **localização** = posição no armazém virtual; **planeada** = intervenção em estado Planeada (decisão D-05).

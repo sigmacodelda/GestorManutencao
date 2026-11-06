@@ -6,6 +6,7 @@ Task: 01 (P2-T01) · Tipo: levantamento
 Task global: `docs/tasks/00-global.md`
 Modo: Autónomo (só leitura; para no GATE)
 Papel do agente: analista (lê e conclui com evidência; só escreve `docs/manutencao/p2/levantamento.md` e o `00-global.md`; não escreve código nem altera o LandeiroMaui)
+BASE LANDEIROMAUI (2026-11-06, prevalece sobre o resto deste prompt): o planeamento SEGUE a base da LandeiroMaui, onde a manutenção já está implementada no PHC. Lê `C:\_SigmaRepos\GestorManutencao\Planeamento\00-Comum\base-landeiromaui.md` (ou a cópia em `docs/`). Onde este prompt cita `u_manplano`, `u_manconfig`, `u_manperiod`, `u_estado`, `u_planostamp`, `u_dataplan`, `u_hini`, `u_hfim`, `u_tecnico` ou `u_manintpec`, leia-se o que já existe: `u_itmanutli`/`u_itmanut`, `u_configman`, `u_periocid`, `u_fichaint.estado`, tarefa `u_itmanutli`, data da ficha, `hini`, `hfim`, `tecno`/`tecnome` e `u_matinterv`. Só o que a base não tem é NOVO: tabela/campo a criar por pessoa no PHC (nunca pelo Claude Code); confirma com leitura (SELECT) antes de assumir. Parte 2: a app GestorManutencao já está construída com login só por PIN (`u_manutil`, campo novo `tecno`), perfis operador e supervisor; o técnico é o utilizador PHC (`us.userno`) gravado em `tecno`/`tecnome`. Login SQL por utilizador e PIN local (D-03/D-06/D-10 antigos) deixam de valer. Ecrãs Planeadas e Material usado na ficha estão em construção.
 Entradas: no LandeiroMaui (`C:\_SigmaRepos\Landeiro-Desmancha\LandeiroMaui`): `Components/Pages/Login/Login.razor`, `Services/UserStateService.cs`, `Services/SafeSecureStorage.cs`, `CLAUDE.md`, `ARQUITETURA.md` (secção 3), `docs/plano-modo-offline-cache.md`, `LandeiroMaui.csproj` (só as propriedades de alvo e pacotes), `Platforms/Android/`, `Helpers/Perfis.cs`, `Helpers/FalhaServidorHelper.cs`, `LandeiroMaui.Testes/LandeiroMaui.Testes.csproj`. Nunca leias `appsettings.json`, `bin/` nem `obj/`.
 Saídas: `docs/manutencao/p2/levantamento.md`; `docs/tasks/00-global.md` atualizado
 Critérios de conclusão:
@@ -25,7 +26,7 @@ Agentes: `sc-leitor`
 - Projeto e cliente: Gestor de Manutenção da Carnes Landeiro. Passa o circuito de manutenção (hoje papel, Word e PHC) para a plataforma .NET MAUI da Landeiro. Esta é a Parte 2: app de telemóvel Android para registo de intervenções. A Parte 1 (backoffice Windows, dados e regras no PHC) e a Parte 3 (peças e armazém) correm em paralelo.
 - Repositórios: `C:\_SigmaRepos\Landeiro-Desmancha` (código; `LandeiroMaui` é a base) e `C:\_SigmaRepos\GestorManutencao` (planeamento); branch `dev-landeiro-manutencao-p2`. Documentos desta parte em `docs/manutencao/p2/` do repositório de código.
 - Requisitos da Parte 2:
-  - APP-01 Login por PIN ou utilizador e password (base: login do LandeiroMaui, que é o login SQL do próprio utilizador); a sessão mantém-se o máximo de tempo possível.
+  - APP-01 Login só por PIN (tabela PHC `u_manutil`; app GestorManutencao já construída; o login SQL por utilizador do LandeiroMaui deixou de ser a base); a sessão mantém-se o máximo de tempo possível.
   - APP-02 **Obrigatório trabalhar offline**: cache local SQLite, fila de saída e sincronização.
   - APP-03 Alerta de intervenções planeadas com a antecedência definida no backoffice (funciona offline).
   - APP-04 Lista de planeadas e pendentes, com botão "+" para criar.
@@ -67,9 +68,9 @@ Solução escolhida e porquê: levantamento por leitura de excertos (Grep, Read 
 
 <decisions>
 - D-01: as 3 partes correm em paralelo; esta task não depende de nenhuma outra.
-- D-02 (proposta, a confirmar): projeto novo `ManutencaoMobile` que partilha bibliotecas com o LandeiroMaui. Alternativa: alvo Android dentro do LandeiroMaui, com mais risco para os postos em produção.
-- D-03: acesso a dados como no LandeiroMaui (Dapper direto ao SQL Server, login SQL por utilizador). Alternativa (API intermédia) fica como opção se a segurança o exigir.
-- D-06: PIN só no dispositivo (hash com sal), sem campo novo no PHC.
+- D-02 (atualizada 2026-11-06): a app é a GestorManutencao, já construída, que segue a base da LandeiroMaui (sem projeto novo `ManutencaoMobile`). Alternativa: alvo Android dentro do LandeiroMaui, com mais risco para os postos em produção.
+- D-03 (atualizada): acesso a dados como a LandeiroMaui (Dapper direto ao SQL Server); login da app GestorManutencao só por PIN contra a tabela PHC `u_manutil` (não login SQL por utilizador). Alternativa (API intermédia) fica como opção se a segurança o exigir.
+- D-06 (atualizada): o PIN vive no PHC em `u_manutil` (pinhash, pinprov, versao, ativo; campo novo `tecno` = nº PHC do técnico, por defeito 0, NOVO: campo a criar por pessoa no PHC).
 - D-09: a marca do documento é SigmaCode; a app só usa as cores do LandeiroMaui se o pedido disser "Cliente: Landeiro, usar cores do cliente".
 </decisions>
 
