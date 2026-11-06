@@ -11,7 +11,8 @@ namespace GestorManutencao.Api;
 public enum Perfil { Operador, Supervisor }
 
 // Versao muda sempre que o PIN muda; vai no token e permite revogar os tokens antigos.
-public sealed record UtilizadorApp(string Codigo, string Nome, Perfil Perfil, bool Ativo, bool PinProvisorio, long Versao = 0);
+// Tecno é o número de utilizador do PHC (0 = ainda sem número): é a identidade da pessoa nas fichas de intervenção.
+public sealed record UtilizadorApp(string Codigo, string Nome, Perfil Perfil, bool Ativo, bool PinProvisorio, long Versao = 0, int Tecno = 0);
 
 public sealed record PedidoLogin(string? Pin)
 {
@@ -23,7 +24,9 @@ public sealed record PedidoMudarPin(string? PinAtual, string? PinNovo)
     private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
 }
 
-public sealed record PedidoNovoUtilizador(string? Utilizador, string? Nome);
+public sealed record PedidoNovoUtilizador(string? Utilizador, string? Nome, int? Tecno = null);
+
+public sealed record PedidoTecno(int? Tecno);
 
 public sealed record RespostaLogin(string Token, DateTimeOffset ExpiraEm, string Nome, Perfil Perfil, bool PinProvisorio)
 {
@@ -84,7 +87,7 @@ public sealed class PinHasher(Microsoft.Extensions.Options.IOptions<PinOpcoes> o
         Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(opcoes.Value.Pepper), Encoding.UTF8.GetBytes(pin)));
 }
 
-public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste }
+public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste, TecnoEmUso }
 
 public sealed class RepositorioIndisponivelException(Exception? interna = null)
     : Exception("A base de dados dos utilizadores não está disponível.", interna);
@@ -96,7 +99,9 @@ public interface IRepositorioUtilizadores
     Task<UtilizadorApp?> ObterAsync(string codigo, CancellationToken ct);
     Task<IReadOnlyList<UtilizadorApp>> ListarAsync(CancellationToken ct);
     // Cria sempre um operador, já com o seu PIN provisório.
-    Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, string pinHash, string porQuem, CancellationToken ct);
+    Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, int tecno, string pinHash, string porQuem, CancellationToken ct);
+    // Cada número do PHC só pode estar numa pessoa (0 = sem número).
+    Task<ResultadoPin> DefinirTecnoAsync(string codigo, int tecno, string porQuem, CancellationToken ct);
     // Com pinHashAtual só muda se o PIN ainda for esse (evita que duas alterações em simultâneo se atropelem).
     Task<ResultadoPin> DefinirPinAsync(string codigo, string pinHash, bool provisorio, string porQuem, CancellationToken ct, string? pinHashAtual = null);
 }

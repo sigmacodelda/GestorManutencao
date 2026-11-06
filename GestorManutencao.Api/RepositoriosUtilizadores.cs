@@ -33,13 +33,25 @@ public sealed class RepositorioUtilizadoresMemoria : IRepositorioUtilizadores
         lock (_trinco) return Task.FromResult<IReadOnlyList<UtilizadorApp>>(_dados.Values.Select(x => x.U).OrderBy(u => u.Nome).ToList());
     }
 
-    public Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, string pinHash, string porQuem, CancellationToken ct)
+    public Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, int tecno, string pinHash, string porQuem, CancellationToken ct)
     {
         lock (_trinco)
         {
             if (_dados.ContainsKey(codigo)) return Task.FromResult(ResultadoPin.JaExiste);
             if (_dados.Values.Any(x => x.Hash == pinHash)) return Task.FromResult(ResultadoPin.PinEmUso);
-            _dados[codigo] = (new UtilizadorApp(codigo, nome, Perfil.Operador, true, true), pinHash);
+            if (tecno > 0 && _dados.Values.Any(x => x.U.Tecno == tecno)) return Task.FromResult(ResultadoPin.TecnoEmUso);
+            _dados[codigo] = (new UtilizadorApp(codigo, nome, Perfil.Operador, true, true, Tecno: tecno), pinHash);
+            return Task.FromResult(ResultadoPin.Ok);
+        }
+    }
+
+    public Task<ResultadoPin> DefinirTecnoAsync(string codigo, int tecno, string porQuem, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (!_dados.TryGetValue(codigo, out var x)) return Task.FromResult(ResultadoPin.NaoExiste);
+            if (tecno > 0 && _dados.Values.Any(o => o.U.Codigo != codigo && o.U.Tecno == tecno)) return Task.FromResult(ResultadoPin.TecnoEmUso);
+            _dados[codigo] = (x.U with { Tecno = tecno }, x.Hash);
             return Task.FromResult(ResultadoPin.Ok);
         }
     }
@@ -61,7 +73,7 @@ public sealed class RepositorioUtilizadoresMemoria : IRepositorioUtilizadores
 public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, TimeProvider relogio, ILogger<SqlRepositorioUtilizadores> log)
     : IRepositorioUtilizadores
 {
-    private const string Colunas = "utilizador, nome, perfil, ativo, pinmudar, pinalteradoem";
+    private const string Colunas = "utilizador, nome, perfil, ativo, pinmudar, pinalteradoem, tecno";
 
     private const string SqlPorPin = $"select {Colunas} from u_manutil where pinhash = @hash and ativo = 1";
     private const string SqlPorCodigo = $"select {Colunas} from u_manutil where utilizador = @codigo";
@@ -70,9 +82,18 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
     private const string SqlCriar =
         """
         insert into u_manutil (u_manutilstamp, utilizador, nome, perfil, ativo, pinhash, pinmudar,
-                               pinalteradopor, pinalteradoem, ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        values (@stamp, @codigo, @nome, 'OPERADOR', 1, @hash, 1, @por, @agora, @por, @dia, @hora, @por, @dia, @hora)
+                               pinalteradopor, pinalteradoem, tecno, ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
+        values (@stamp, @codigo, @nome, 'OPERADOR', 1, @hash, 1, @por, @agora, @tecno, @por, @dia, @hora, @por, @dia, @hora)
         """;
+
+    private const string SqlDefinirTecno =
+        """
+        update u_manutil set tecno = @tecno, usrinis = @por, usrdata = @dia, usrhora = @hora
+        where utilizador = @codigo
+        """;
+
+    // Um número do PHC por pessoa: verifica-se antes de gravar (o campo não tem índice único, porque 0 = sem número).
+    private const string SqlTecnoEmUso = "select count(*) from u_manutil where tecno = @tecno and utilizador <> @codigo";
 
     private const string SqlDefinirPin =
         """
@@ -92,7 +113,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
     private static UtilizadorApp Ler(SqlDataReader r) => new(
         r.GetString(0).Trim(), r.GetString(1).Trim(),
         string.Equals(r.GetString(2).Trim(), "SUPERVISOR", StringComparison.OrdinalIgnoreCase) ? Perfil.Supervisor : Perfil.Operador,
-        r.GetBoolean(3), r.GetBoolean(4), r.IsDBNull(5) ? 0 : r.GetDateTime(5).Ticks);
+        r.GetBoolean(3), r.GetBoolean(4), r.IsDBNull(5) ? 0 : r.GetDateTime(5).Ticks, (int)r.GetDecimal(6));
 
     private static void Texto(SqlCommand cmd, string nome, int tamanho, string valor) =>
         cmd.Parameters.Add(nome, SqlDbType.VarChar, tamanho).Value = valor;
@@ -138,13 +159,34 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         return lista;
     });
 
-    public async Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, string pinHash, string porQuem, CancellationToken ct)
+    private static async Task<bool> TecnoEmUsoAsync(SqlConnection conn, string codigo, int tecno, CancellationToken ct)
+    {
+        if (tecno <= 0) return false;
+        await using var cmd = new SqlCommand(SqlTecnoEmUso, conn);
+        Texto(cmd, "@codigo", 30, codigo);
+        cmd.Parameters.Add("@tecno", SqlDbType.Decimal).Value = (decimal)tecno;
+        return (int)(await cmd.ExecuteScalarAsync(ct))! > 0;
+    }
+
+    public Task<ResultadoPin> DefinirTecnoAsync(string codigo, int tecno, string porQuem, CancellationToken ct) => Executar(async conn =>
+    {
+        if (await TecnoEmUsoAsync(conn, codigo, tecno, ct)) return ResultadoPin.TecnoEmUso;
+        await using var cmd = new SqlCommand(SqlDefinirTecno, conn);
+        Texto(cmd, "@codigo", 30, codigo);
+        cmd.Parameters.Add("@tecno", SqlDbType.Decimal).Value = (decimal)tecno;
+        Auditoria(cmd, porQuem);
+        return await cmd.ExecuteNonQueryAsync(ct) == 0 ? ResultadoPin.NaoExiste : ResultadoPin.Ok;
+    });
+
+    public async Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, int tecno, string pinHash, string porQuem, CancellationToken ct)
     {
         try
         {
             return await Executar(async conn =>
             {
+                if (await TecnoEmUsoAsync(conn, codigo, tecno, ct)) return ResultadoPin.TecnoEmUso;
                 await using var cmd = new SqlCommand(SqlCriar, conn);
+                cmd.Parameters.Add("@tecno", SqlDbType.Decimal).Value = (decimal)tecno;
                 Texto(cmd, "@stamp", 25, NovoStamp());
                 Texto(cmd, "@codigo", 30, codigo);
                 Texto(cmd, "@nome", 60, nome);

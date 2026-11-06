@@ -55,8 +55,8 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn
     if (!emDesenvolvimento) throw new InvalidOperationException("ConnectionStrings:PHCConn não está configurada.");
     builder.Services.AddSingleton<IRepositorioUtilizadores>(sp => new RepositorioUtilizadoresMemoria(
     [
-        (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false), sp.GetRequiredService<PinHasher>().Hash("482913")),
-        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false), sp.GetRequiredService<PinHasher>().Hash("795316"))
+        (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), sp.GetRequiredService<PinHasher>().Hash("482913")),
+        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("795316"))
     ]));
     builder.Services.AddSingleton<IRepositorioIntervencoes, RepositorioIntervencoesMemoria>();
 }
@@ -263,21 +263,38 @@ equipa.MapPost("/", async (PedidoNovoUtilizador pedido, ClaimsPrincipal eu, IRep
     {
         if (await SupervisorAtual(eu, repo, ct) is not { } supervisor) return Results.Forbid();
 
-        // As fichas identificam o técnico pelo nome (45 letras): dois nomes iguais veriam as fichas um do outro.
-        var nomeFicha = EndpointsIntervencoes.Truncar(pedido.Nome!.Trim());
-        if ((await repo.ListarAsync(ct)).Any(u => string.Equals(EndpointsIntervencoes.Truncar(u.Nome), nomeFicha, StringComparison.OrdinalIgnoreCase)))
-            return Erro(409, "nome_repetido");
+        // As fichas identificam o técnico pelo número do PHC: tem de ser de uma só pessoa.
+        var tecno = pedido.Tecno ?? 0;
+        if (tecno is < 0 or > 99999) return Erro(400, "pedido_invalido");
 
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {
             var pin = RegrasPin.Gerar();
-            switch (await repo.CriarOperadorAsync(codigo!, pedido.Nome!.Trim(), hasher.Hash(pin), supervisor.Codigo, ct))
+            switch (await repo.CriarOperadorAsync(codigo!, pedido.Nome!.Trim(), tecno, hasher.Hash(pin), supervisor.Codigo, ct))
             {
                 case ResultadoPin.Ok: return Results.Json(new RespostaPin(pin), statusCode: StatusCodes.Status201Created);
                 case ResultadoPin.JaExiste: return Erro(409, "ja_existe");
+                case ResultadoPin.TecnoEmUso: return Erro(409, "tecno_em_uso");
             }
         }
         return Erro(503, "indisponivel");
+    }
+    catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
+});
+
+equipa.MapPut("/{codigo}/tecno", async (string codigo, PedidoTecno pedido, ClaimsPrincipal eu, IRepositorioUtilizadores repo, CancellationToken ct) =>
+{
+    if (!RegrasUtilizador.CodigoOk(codigo) || pedido.Tecno is null or < 0 or > 99999) return Erro(400, "pedido_invalido");
+
+    try
+    {
+        if (await SupervisorAtual(eu, repo, ct) is not { } supervisor) return Results.Forbid();
+        return await repo.DefinirTecnoAsync(codigo, pedido.Tecno.Value, supervisor.Codigo, ct) switch
+        {
+            ResultadoPin.Ok => Results.NoContent(),
+            ResultadoPin.TecnoEmUso => Erro(409, "tecno_em_uso"),
+            _ => Erro(404, "nao_existe")
+        };
     }
     catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
 });

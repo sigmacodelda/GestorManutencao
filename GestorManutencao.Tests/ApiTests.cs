@@ -104,7 +104,8 @@ public class ApiTests : IDisposable
         public Task<UtilizadorApp?> ObterPorPinAsync(string pinHash, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<UtilizadorApp?> ObterAsync(string codigo, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<IReadOnlyList<UtilizadorApp>> ListarAsync(CancellationToken ct) => throw new RepositorioIndisponivelException();
-        public Task<ResultadoPin> CriarOperadorAsync(string c, string n, string h, string p, CancellationToken ct) => throw new RepositorioIndisponivelException();
+        public Task<ResultadoPin> CriarOperadorAsync(string c, string n, int tecno, string h, string p, CancellationToken ct) => throw new RepositorioIndisponivelException();
+        public Task<ResultadoPin> DefinirTecnoAsync(string c, int tecno, string p, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<ResultadoPin> DefinirPinAsync(string c, string h, bool p, string q, CancellationToken ct, string? a = null) => throw new RepositorioIndisponivelException();
     }
 
