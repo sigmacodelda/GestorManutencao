@@ -18,7 +18,8 @@ public sealed record Intervencao(
     string? Anomalia = null,
     string? Feito = null,
     TimeOnly? HoraInicio = null,
-    TimeOnly? HoraFim = null)
+    TimeOnly? HoraFim = null,
+    string? Tecnico = null)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 

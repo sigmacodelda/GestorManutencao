@@ -1,0 +1,129 @@
+@page "/validacao"
+@inject SessaoService Sessao
+@inject IIntervencoesService Intervencoes
+
+<PageTitle>Validação · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Validação</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_indisponivel)
+    {
+        <p class="estado-lista" role="status">Esta parte ainda não está disponível.</p>
+    }
+    else if (_falhou)
+    {
+        <div class="estado-lista" role="alert">
+            <p>Não foi possível carregar as fichas.</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        @if (_aviso is not null)
+        {
+            <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p>
+        }
+        @if (_fichas.Count == 0)
+        {
+            <p class="estado-lista" role="status">Não há fichas por validar. Está tudo em dia!</p>
+        }
+        else
+        {
+            <h2 class="titulo-grupo">Por validar <span class="contagem">@_fichas.Count</span></h2>
+            <ul class="lista-intervencoes">
+                @foreach (var f in _fichas.Take(_limite))
+                {
+                    var minha = string.Equals(f.Tecnico, Sessao.Utilizador?.Nome, StringComparison.OrdinalIgnoreCase);
+                    <li class="intervencao ficha-validar">
+                        <span class="intervencao-titulo">@f.Equipamento</span>
+                        <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(f.Zona) ? "" : f.Zona + " · ")@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")@(f.Tecnico is null ? "" : " · " + f.Tecnico)</span>
+                        <span class="intervencao-data">@f.DataPlaneada.ToString("dd/MM")</span>
+                        @if (!string.IsNullOrWhiteSpace(f.Anomalia))
+                        {
+                            <p class="ficha-texto"><strong>Problema:</strong> @f.Anomalia</p>
+                        }
+                        <p class="ficha-texto"><strong>Feito:</strong> @(f.Feito ?? "—")@(f.HoraInicio is null ? "" : $" ({f.HoraInicio:HH\\:mm}–{f.HoraFim:HH\\:mm})")</p>
+                        @if (minha)
+                        {
+                            <p class="ficha-texto">Concluiu esta ficha: tem de ser outra pessoa a validar.</p>
+                        }
+                        else if (_aConfirmar == f.Id)
+                        {
+                            <div class="ficha-acoes">
+                                <button type="button" class="btn" disabled="@_ocupado" @onclick="() => ValidarAsync(f)">
+                                    <Icone Nome="circle-check" /><span>Confirmar</span>
+                                </button>
+                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aConfirmar = null">Cancelar</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="ficha-acoes">
+                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aConfirmar = f.Id">
+                                    <Icone Nome="shield-check" /><span>Validar</span>
+                                </button>
+                            </div>
+                        }
+                    </li>
+                }
+            </ul>
+            @if (_fichas.Count > _limite)
+            {
+                <button type="button" class="btn btn-secundario" @onclick="() => _limite += PorPagina">Ver mais (@(_fichas.Count - _limite))</button>
+            }
+        }
+    }
+</section>
+
+@code {
+    private List<Intervencao> _fichas = [];
+    private bool _a_carregar = true, _falhou, _indisponivel, _ocupado;
+    private string? _aConfirmar, _aviso;
+    private const int PorPagina = 10;
+    private int _limite = PorPagina;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sessao.PodeSerSupervisor) await CarregarAsync();
+        else _a_carregar = false;
+    }
+
+    private async Task CarregarAsync()
+    {
+        _a_carregar = true; _falhou = false; _indisponivel = false; _aConfirmar = null;
+        try { _fichas = (await Intervencoes.ListarPorValidarAsync()).ToList(); }
+        catch (NotSupportedException) { _indisponivel = true; }
+        catch (Exception) { _falhou = true; }
+        finally { _a_carregar = false; }
+    }
+
+    private async Task ValidarAsync(Intervencao f)
+    {
+        _ocupado = true; _aviso = null;
+        try
+        {
+            await Intervencoes.ValidarAsync(f.Id);
+            _fichas.Remove(f);
+            _aviso = $"Validada: {f.Equipamento}.";
+        }
+        catch (InvalidOperationException)
+        {
+            _aviso = "Essa ficha já mudou. A lista foi atualizada.";
+            await CarregarAsync();
+        }
+        catch (Exception) { _aviso = "Não foi possível validar. Tente outra vez."; }
+        finally { _ocupado = false; _aConfirmar = null; }
+    }
+}

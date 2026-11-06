@@ -13,7 +13,7 @@ public enum TipoIntervencao { Preventiva, Curativa }
 
 public sealed record IntervencaoDto(
     string Id, string Equipamento, string Zona, TipoIntervencao Tipo, DateOnly DataPlaneada, EstadoIntervencao Estado,
-    string? Anomalia = null, string? Feito = null, TimeOnly? HoraInicio = null, TimeOnly? HoraFim = null);
+    string? Anomalia = null, string? Feito = null, TimeOnly? HoraInicio = null, TimeOnly? HoraFim = null, string? Tecnico = null);
 
 public sealed record EquipamentoDto(string Id, string Nome, string Zona);
 
@@ -50,6 +50,9 @@ public interface IRepositorioIntervencoes
     Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> IniciarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirAsync(string id, TecnicoAtual tecnico, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct);
+    // Fichas concluídas por validar (de qualquer técnico). Quem concluiu não valida a própria ficha.
+    Task<IReadOnlyList<IntervencaoDto>> ListarPorValidarAsync(CancellationToken ct);
+    Task<(ResultadoIntervencao, IntervencaoDto?)> ValidarAsync(string id, TecnicoAtual supervisor, CancellationToken ct);
 }
 
 public static class EndpointsIntervencoes
@@ -86,6 +89,14 @@ public static class EndpointsIntervencoes
         g.MapPost("/intervencoes/{id}/iniciar", async (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             await Tecnico(eu, utilizadores, ct) is { } t ? Resposta(await repo.IniciarAsync(id, t, ct)) : Results.Forbid());
 
+        g.MapGet("/validacao", async (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            await Supervisor(eu, utilizadores, ct) is not null ? Results.Ok(await repo.ListarPorValidarAsync(ct)) : Results.Forbid())
+            .RequireAuthorization("Supervisor");
+
+        g.MapPost("/validacao/{id}", async (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            await Supervisor(eu, utilizadores, ct) is { } s ? Resposta(await repo.ValidarAsync(id, s, ct)) : Results.Forbid())
+            .RequireAuthorization("Supervisor");
+
         g.MapPost("/intervencoes/{id}/concluir", async (string id, PedidoConclusao p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
         {
             if (RegrasIntervencao.ValidarConclusao(p.Feito, p.Inicio, p.Fim) is not null) return Results.BadRequest();
@@ -101,6 +112,14 @@ public static class EndpointsIntervencoes
         if (codigo is null) return null;
         var u = await utilizadores.ObterAsync(codigo, ct);
         return u is { Ativo: true, PinProvisorio: false } ? new TecnicoAtual(u.Codigo, Truncar(u.Nome)) : null;
+    }
+
+    // O token dura um turno; a validação confirma na base que o supervisor continua ativo.
+    private static async Task<TecnicoAtual?> Supervisor(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct)
+    {
+        var codigo = eu.FindFirstValue("sub") ?? eu.FindFirstValue(ClaimTypes.NameIdentifier);
+        var u = codigo is null ? null : await utilizadores.ObterAsync(codigo, ct);
+        return u is { Ativo: true, Perfil: Perfil.Supervisor, PinProvisorio: false } ? new TecnicoAtual(u.Codigo, Truncar(u.Nome)) : null;
     }
 
     // Na ficha, o nome do técnico cabe em 45 caracteres.
@@ -125,7 +144,9 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio) : IRepo
     private readonly List<(IntervencaoDto I, string? Dono)> _lista =
     [
         (new("F1", "Compressor de ar 02", "Produção", TipoIntervencao.Preventiva, DateOnly.FromDateTime(DateTime.Today), EstadoIntervencao.Planeada), null),
-        (new("F2", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, DateOnly.FromDateTime(DateTime.Today), EstadoIntervencao.Planeada), "Outra Pessoa")
+        (new("F2", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, DateOnly.FromDateTime(DateTime.Today), EstadoIntervencao.Planeada), "Outra Pessoa"),
+        (new("F3", "Balança 03", "Expedição", TipoIntervencao.Curativa, DateOnly.FromDateTime(DateTime.Today), EstadoIntervencao.Concluida,
+            "Mostrador apagado", "Trocado o cabo", new TimeOnly(8, 0), new TimeOnly(9, 0)), "Ana Silva")
     ];
 
     private static bool Meu(string? dono, TecnicoAtual t) => dono is null || dono == t.Nome;
@@ -162,6 +183,26 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio) : IRepo
     public Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirAsync(string id, TecnicoAtual tecnico, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct) =>
         Alterar(id, tecnico, EstadoIntervencao.EmCurso, i => i with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim });
 
+    public Task<IReadOnlyList<IntervencaoDto>> ListarPorValidarAsync(CancellationToken ct)
+    {
+        lock (_trinco)
+            return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista.Where(x => x.I.Estado == EstadoIntervencao.Concluida)
+                .Select(x => x.I with { Tecnico = x.Dono }).ToList());
+    }
+
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> ValidarAsync(string id, TecnicoAtual supervisor, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            var n = _lista.FindIndex(x => x.I.Id == id);
+            if (n < 0) return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.NaoExiste, null));
+            if (_lista[n].I.Estado != EstadoIntervencao.Concluida || _lista[n].Dono == supervisor.Nome)
+                return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Conflito, null));
+            _lista[n] = (_lista[n].I with { Estado = EstadoIntervencao.Validada }, _lista[n].Dono);
+            return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, _lista[n].I with { Tecnico = _lista[n].Dono }));
+        }
+    }
+
     private Task<(ResultadoIntervencao, IntervencaoDto?)> Alterar(string id, TecnicoAtual tecnico, EstadoIntervencao de, Func<IntervencaoDto, IntervencaoDto> muda)
     {
         lock (_trinco)
@@ -188,7 +229,7 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
                f.tipointerv, f.data,
                case when f.valinis <> '' then 'Validada' when f.estado = 'Concluida' then 'Concluida'
                     when f.estado = 'Cancelada' then 'Cancelada' when f.hini > '19000101' then 'EmCurso' else 'Planeada' end,
-               f.problema, f.resolucao, f.hini, f.hfim
+               f.problema, f.resolucao, f.hini, f.hfim, f.tecnome
         from u_fichaint f left join u_equip e on e.u_equipstamp = f.u_equipstamp
         """;
 
@@ -205,6 +246,26 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
         """
 
         where f.u_fichaintstamp = @id and f.fechada = 0 and f.obsoleto = 0 and (f.tecnome = @tecnico or (f.tecno = 0 and f.tecnome = ''))
+        """;
+
+    private const string SqlObterQualquer = Selecao +
+        """
+
+        where f.u_fichaintstamp = @id and f.fechada = 0 and f.obsoleto = 0
+        """;
+
+    // Concluídas e ainda sem validação, do último ano; as mais recentes primeiro.
+    private const string SqlPorValidar = Selecao +
+        """
+
+        where f.fechada = 0 and f.obsoleto = 0 and f.estado = 'Concluida' and f.valinis = '' and f.data >= @desde
+        order by f.data desc, f.u_fichaintstamp
+        """;
+
+    private const string SqlValidar =
+        """
+        update u_fichaint set valinis = @codigo, valdata = @agora, usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        where u_fichaintstamp = @id and fechada = 0 and obsoleto = 0 and estado = 'Concluida' and valinis = '' and tecnome <> @tecnico
         """;
 
     private const string SqlEquipamentos =
@@ -282,7 +343,7 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
         return new IntervencaoDto(
             r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim(), tipo, DateOnly.FromDateTime(r.GetDateTime(4)), estado,
             Vazio(r.GetString(6)), Vazio(r.GetString(7)),
-            hini > SemData ? TimeOnly.FromDateTime(hini) : null, hfim > SemData ? TimeOnly.FromDateTime(hfim) : null);
+            hini > SemData ? TimeOnly.FromDateTime(hini) : null, hfim > SemData ? TimeOnly.FromDateTime(hfim) : null, Vazio(r.GetString(10)));
     }
 
     private static string? Vazio(string valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
@@ -310,6 +371,29 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct) ? Ler(r) : null;
     }
+
+    public Task<IReadOnlyList<IntervencaoDto>> ListarPorValidarAsync(CancellationToken ct) => Executar<IReadOnlyList<IntervencaoDto>>(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlPorValidar, conn);
+        Momento(cmd, "@desde", relogio.GetLocalNow().Date.AddDays(-365));
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        var lista = new List<IntervencaoDto>();
+        while (lista.Count < 100 && await r.ReadAsync(ct)) lista.Add(Ler(r));
+        return lista;
+    });
+
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> ValidarAsync(string id, TecnicoAtual supervisor, CancellationToken ct) => Executar(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlValidar, conn);
+        Texto(cmd, "@id", 25, id);
+        Auditoria(cmd, supervisor, relogio.GetLocalNow().DateTime);
+        var feito = await cmd.ExecuteNonQueryAsync(ct) > 0;
+        await using var ler = new SqlCommand(SqlObterQualquer, conn);
+        Texto(ler, "@id", 25, id);
+        await using var r = await ler.ExecuteReaderAsync(ct);
+        var ficha = await r.ReadAsync(ct) ? Ler(r) : null;
+        return ficha is null ? (ResultadoIntervencao.NaoExiste, null) : feito ? (ResultadoIntervencao.Ok, ficha) : (ResultadoIntervencao.Conflito, null);
+    });
 
     public Task<IReadOnlyList<EquipamentoDto>> PesquisarEquipamentosAsync(string texto, CancellationToken ct) => Executar<IReadOnlyList<EquipamentoDto>>(async conn =>
     {

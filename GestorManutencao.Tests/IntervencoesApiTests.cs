@@ -24,7 +24,9 @@ public class IntervencoesApiTests : IDisposable
             s.Replace(ServiceDescriptor.Singleton<IRepositorioUtilizadores>(new RepositorioUtilizadoresMemoria(
             [
                 (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false), Hasher.Hash("482913")),
-                (new UtilizadorApp("rui", "Rui Costa", Perfil.Operador, true, true), Hasher.Hash("357159"))
+                (new UtilizadorApp("rui", "Rui Costa", Perfil.Operador, true, true), Hasher.Hash("357159")),
+                (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false), Hasher.Hash("603918")),
+                (new UtilizadorApp("anasup", "Ana Silva", Perfil.Supervisor, true, false), Hasher.Hash("846213"))
             ])));
         }));
 
@@ -143,5 +145,47 @@ public class IntervencoesApiTests : IDisposable
 
         Assert.Empty((await c.GetFromJsonAsync<List<EquipamentoDto>>("/equipamentos?q=e"))!);
         Assert.NotEmpty((await c.GetFromJsonAsync<List<EquipamentoDto>>("/equipamentos?q=emp"))!);
+    }
+
+    [Fact]
+    public async Task Operador_nao_ve_nem_valida_fichas()
+    {
+        var c = await ComoAsync("482913");
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/validacao")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsync("/validacao/F3", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Supervisor_valida_ficha_concluida_uma_so_vez()
+    {
+        var c = await ComoAsync("603918");
+
+        var lista = (await c.GetFromJsonAsync<List<IntervencaoDto>>("/validacao"))!;
+        Assert.Equal("F3", Assert.Single(lista).Id);
+        Assert.Equal("Ana Silva", lista[0].Tecnico);
+
+        var ok = await c.PostAsync("/validacao/F3", null);
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        Assert.Equal(EstadoIntervencao.Validada, (await ok.Content.ReadFromJsonAsync<IntervencaoDto>())!.Estado);
+        Assert.Empty((await c.GetFromJsonAsync<List<IntervencaoDto>>("/validacao"))!);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync("/validacao/F3", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Quem_concluiu_nao_valida_a_propria_ficha()
+    {
+        var c = await ComoAsync("846213");
+
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync("/validacao/F3", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Validar_ficha_que_nao_esta_concluida_da_409_e_inexistente_404()
+    {
+        var c = await ComoAsync("603918");
+
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync("/validacao/F1", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsync("/validacao/nao-existe", null)).StatusCode);
     }
 }

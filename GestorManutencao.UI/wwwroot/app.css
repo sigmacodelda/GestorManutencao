@@ -284,3 +284,7 @@ a.intervencao { color: inherit; text-decoration: none; }
     .login-marca { padding-bottom: var(--esp-4); }
     .tecla { min-height: 62px; }
 }
+
+.ficha-texto { grid-column: 1 / -1; margin: var(--esp-2) 0 0; font-size: .9375rem; overflow-wrap: anywhere; }
+.ficha-acoes { grid-column: 1 / -1; display: flex; gap: var(--esp-3); margin-top: var(--esp-3); }
+.ficha-acoes .btn { flex: 1; }

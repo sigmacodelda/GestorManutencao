@@ -12,6 +12,9 @@ public interface IIntervencoesService
     Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default);
     Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default);
     Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default);
+    // Só para supervisores: fichas concluídas por validar e a validação (quem concluiu não valida a sua).
+    Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default);
+    Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default);
 }
 
 public interface IEquipamentosService
@@ -39,7 +42,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
             new("T2", "Empilhador 05", "Armazém", TipoIntervencao.Curativa, hoje, EstadoIntervencao.EmCurso, "Trava a meio da subida", null, new TimeOnly(8, 30)),
             new("T3", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje, EstadoIntervencao.Planeada),
             new("T4", "Linha de embalagem", "Produção", TipoIntervencao.Preventiva, hoje.AddDays(4), EstadoIntervencao.Planeada),
-            new("T5", "Balança 03", "Expedição", TipoIntervencao.Preventiva, hoje.AddDays(-10), EstadoIntervencao.Concluida)
+            new("T5", "Balança 03", "Expedição", TipoIntervencao.Preventiva, hoje.AddDays(-10), EstadoIntervencao.Concluida, null, "Trocado o cabo de ligação", new TimeOnly(9, 0), new TimeOnly(10, 15), "Ana Silva")
         ];
     }
 
@@ -79,6 +82,14 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         });
     }
 
+    public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(_lista.Where(i => i.Estado == EstadoIntervencao.Concluida).ToList());
+    }
+
+    public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) =>
+        Alterar(id, EstadoIntervencao.Concluida, i => i with { Estado = EstadoIntervencao.Validada });
+
     public Task<IReadOnlyList<Equipamento>> PesquisarAsync(string texto, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<Equipamento>>(Equipamentos
             .Where(e => string.IsNullOrWhiteSpace(texto) || e.Nome.Contains(texto.Trim(), StringComparison.CurrentCultureIgnoreCase))
@@ -104,5 +115,7 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Equipamento>> PesquisarAsync(string texto, CancellationToken ct = default) => throw new NotSupportedException();
 }
