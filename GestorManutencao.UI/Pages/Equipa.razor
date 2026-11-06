@@ -39,6 +39,10 @@
                 <label for="codigo">Código curto (sem espaços)</label>
                 <input id="codigo" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" @bind="_codigo" @bind:event="oninput" />
             </div>
+            <div class="campo">
+                <label for="tecno">Número do utilizador no PHC</label>
+                <input id="tecno" type="text" inputmode="numeric" autocomplete="off" @bind="_tecno" @bind:event="oninput" />
+            </div>
             <button type="submit" class="btn btn-secundario" disabled="@_ocupado">Criar e dar PIN</button>
         </form>
 
@@ -55,10 +59,21 @@
                 {
                     <li class="intervencao">
                         <span class="intervencao-titulo">@m.Nome</span>
-                        <span class="intervencao-desc">@(m.Perfil == Perfil.Supervisor ? "Supervisor" : "Operador")@(m.PinProvisorio ? " · PIN por escolher" : "")@(m.Ativo ? "" : " · Inativo")</span>
+                        <span class="intervencao-desc">@(m.Perfil == Perfil.Supervisor ? "Supervisor" : "Operador")@(m.PinProvisorio ? " · PIN por escolher" : "")@(m.Ativo ? "" : " · Inativo")@(m.Tecno > 0 ? $" · PHC {m.Tecno}" : " · sem número do PHC")</span>
                         @if (m.Perfil == Perfil.Operador && m.Ativo)
                         {
                             <button type="button" class="btn-texto intervencao-data" disabled="@_ocupado" @onclick="() => NovoPinAsync(m)">Novo PIN</button>
+                        }
+                        @if (_aEditar == m.Codigo)
+                        {
+                            <div class="ficha-acoes">
+                                <input type="text" inputmode="numeric" autocomplete="off" aria-label="Número do utilizador no PHC" @bind="_tecnoEditado" @bind:event="oninput" />
+                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => GuardarTecnoAsync(m)">Guardar</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => Editar(m)">Mudar o número do PHC</button>
                         }
                     </li>
                 }
@@ -69,7 +84,8 @@
 
 @code {
     private IReadOnlyList<MembroEquipa> _membros = [];
-    private string _nome = "", _codigo = "", _erro = "", _pinDe = "";
+    private string _nome = "", _codigo = "", _tecno = "", _tecnoEditado = "", _erro = "", _pinDe = "";
+    private string? _aEditar;
     private string? _pinNovo;
     private bool _a_carregar = true, _ocupado;
 
@@ -94,11 +110,36 @@
         if (!System.Text.RegularExpressions.Regex.IsMatch(codigo, "^[a-z0-9._-]{2,30}$"))
         { _erro = "O código só pode ter letras, números, ponto, hífen ou sublinhado (2 a 30)."; return; }
 
+        if (!NumeroPhc(_tecno, out var tecno)) { _erro = "O número do PHC tem de ser um número inteiro (ou fica em branco)."; return; }
+
         _ocupado = true;
         try
         {
-            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim());
-            if (Tratar(r, _nome.Trim())) { _nome = _codigo = ""; await CarregarAsync(); }
+            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim(), tecno);
+            if (Tratar(r, _nome.Trim())) { _nome = _codigo = _tecno = ""; await CarregarAsync(); }
+        }
+        finally { _ocupado = false; }
+    }
+
+    // Em branco = ainda sem número (a pessoa só vê fichas depois de o supervisor o indicar).
+    private static bool NumeroPhc(string texto, out int tecno)
+    {
+        tecno = 0;
+        return string.IsNullOrWhiteSpace(texto) || (int.TryParse(texto.Trim(), out tecno) && tecno is >= 0 and <= 99999);
+    }
+
+    private void Editar(MembroEquipa m) { _aEditar = m.Codigo; _tecnoEditado = m.Tecno > 0 ? m.Tecno.ToString() : ""; _erro = ""; }
+
+    private async Task GuardarTecnoAsync(MembroEquipa m)
+    {
+        _erro = "";
+        if (!NumeroPhc(_tecnoEditado, out var tecno)) { _erro = "O número do PHC tem de ser um número inteiro (ou fica em branco)."; return; }
+        _ocupado = true;
+        try
+        {
+            var r = await ServicoEquipa.DefinirTecnoAsync(Sessao.Utilizador?.Token, m.Codigo, tecno);
+            if (r.Resultado == ResultadoEquipa.Ok) { _aEditar = null; await CarregarAsync(); }
+            else Tratar(r, m.Nome);
         }
         finally { _ocupado = false; }
     }
@@ -119,7 +160,8 @@
         switch (r.Resultado)
         {
             case ResultadoEquipa.Ok: _pinNovo = r.Pin; _pinDe = nome; return true;
-            case ResultadoEquipa.JaExiste: _erro = "Já existe alguém com esse código ou com esse nome."; break;
+            case ResultadoEquipa.JaExiste: _erro = "Já existe alguém com esse código."; break;
+            case ResultadoEquipa.TecnoEmUso: _erro = "Esse número do PHC já é de outra pessoa."; break;
             case ResultadoEquipa.SemPermissao: _erro = "Não tem permissão para isto."; break;
             default: _erro = "Não foi possível ligar ao servidor. Tente outra vez."; break;
         }

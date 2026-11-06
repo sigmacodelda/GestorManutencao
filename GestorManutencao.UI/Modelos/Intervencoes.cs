@@ -19,7 +19,9 @@ public sealed record Intervencao(
     string? Feito = null,
     TimeOnly? HoraInicio = null,
     TimeOnly? HoraFim = null,
-    string? Tecnico = null)
+    string? Tecnico = null,
+    int Tecno = 0,
+    bool PodeValidar = true)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
@@ -28,6 +30,23 @@ public sealed record Intervencao(
 }
 
 public sealed record Equipamento(string Id, string Nome, string Zona);
+
+public sealed record Material(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo);
+
+public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros);
+
+public static class RegrasMaterial
+{
+    // Tamanho da coluna do PHC.
+    public const int MaxDesign = 35;
+
+    public static string? Validar(string? design, decimal? qtt, decimal? epv) =>
+        string.IsNullOrWhiteSpace(design) ? "Escreva o material."
+        : design.Trim().Length > MaxDesign ? $"Escreva menos: no máximo {MaxDesign} letras."
+        : qtt is null or <= 0 ? "Indique a quantidade."
+        : epv is < 0 ? "O preço não pode ser negativo."
+        : null;
+}
 
 // Regras de preenchimento: devolvem a mensagem para o técnico, ou null se estiver tudo certo.
 public static class RegrasIntervencao

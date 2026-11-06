@@ -108,3 +108,52 @@ public class RegistoTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => s.RegistarAvariaAsync("", "x"));
     }
 }
+
+public class MaterialEPlaneadasTests
+{
+    [Theory]
+    [InlineData(null, 1, 1, "Escreva o material.")]
+    [InlineData("Filtro", 0, 1, "Indique a quantidade.")]
+    [InlineData("Filtro", null, 1, "Indique a quantidade.")]
+    [InlineData("Filtro", 1, -1, "O preço não pode ser negativo.")]
+    [InlineData("Filtro", 2, null, null)]
+    public void Material_exige_nome_e_quantidade(string? design, int? qtt, int? epv, string? esperado) =>
+        Assert.Equal(esperado, RegrasMaterial.Validar(design, (decimal?)qtt, (decimal?)epv));
+
+    [Fact]
+    public void Material_com_nome_maior_que_a_coluna_do_PHC_e_recusado() =>
+        Assert.NotNull(RegrasMaterial.Validar(new string('x', RegrasMaterial.MaxDesign + 1), 1, 1));
+
+    [Theory]
+    [InlineData("fora_de_ordem", "mais antigas")]
+    [InlineData("externa_sem_documento", "documento externo")]
+    [InlineData("propria", "feita por si")]
+    [InlineData("conflito", "já mudou")]
+    [InlineData(null, "já mudou")]
+    public void Mensagens_dos_conflitos_explicam_o_que_fazer(string? codigo, string trecho) =>
+        Assert.Contains(trecho, MensagensIntervencao.Para(codigo));
+
+    [Fact]
+    public async Task Servico_de_desenvolvimento_atribui_valida_devolve_e_lanca_material()
+    {
+        var s = new DevIntervencoesService();
+
+        var atribuida = await s.AtribuirAsync("T3", 101);
+        Assert.Equal(101, atribuida.Tecno);
+        Assert.Equal("Operador de Teste", atribuida.Tecnico);
+        Assert.Equal(0, (await s.AtribuirAsync("T3", 0)).Tecno);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => s.AtribuirAsync("T5", 101));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => s.AdicionarMaterialAsync("T3", "Filtro", 1, 2));
+        var material = await s.AdicionarMaterialAsync("T2", "Filtro", 2, 1.5m);
+        Assert.Equal(3m, material.Custo);
+        Assert.Single(await s.ListarMateriaisAsync("T2"));
+        await s.ApagarMaterialAsync("T2", material.Id);
+        Assert.Empty(await s.ListarMateriaisAsync("T2"));
+
+        Assert.Equal(EstadoIntervencao.EmCurso, (await s.DevolverAsync("T5", "Falta o tempo")).Estado);
+        await s.ConcluirAsync("T5", "Refeito", new TimeOnly(8, 0), new TimeOnly(9, 0));
+        Assert.Equal(EstadoIntervencao.Validada, (await s.ValidarAsync("T5")).Estado);
+        Assert.Empty(await s.ListarPorValidarAsync());
+    }
+}

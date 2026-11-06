@@ -26,6 +26,53 @@
             @if (!string.IsNullOrWhiteSpace(_i.Anomalia)) { <dt>Problema</dt><dd>@_i.Anomalia</dd> }
         </dl>
 
+        @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
+        {
+            <section class="materiais" aria-labelledby="titulo-materiais">
+                <h2 id="titulo-materiais" class="titulo-grupo"><Icone Nome="package" /> Material usado <span class="contagem">@_materiais.Count</span></h2>
+                @if (_materiais.Count == 0)
+                {
+                    <p class="estado-lista" role="status">Ainda sem material.</p>
+                }
+                <ul class="lista-intervencoes">
+                    @foreach (var m in _materiais)
+                    {
+                        <li class="intervencao material-linha">
+                            <span>
+                                <span class="intervencao-titulo">@m.Design</span><br />
+                                <span class="intervencao-desc">@m.Qtt.ToString("0.###") × @m.Epv.ToString("0.00") € = @m.Custo.ToString("0.00") €</span>
+                            </span>
+                            @if (_i.Estado == EstadoIntervencao.EmCurso)
+                            {
+                                <button type="button" class="btn-texto" aria-label="Tirar @m.Design" disabled="@_a_gravar" @onclick="() => ApagarMaterialAsync(m)"><Icone Nome="trash" /></button>
+                            }
+                        </li>
+                    }
+                </ul>
+                @if (_i.Estado == EstadoIntervencao.EmCurso)
+                {
+                    <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
+                        <div class="material-novo">
+                            <div class="campo">
+                                <label for="material">Material</label>
+                                <input id="material" type="text" maxlength="35" autocomplete="off" @bind="_material" @bind:event="oninput" />
+                            </div>
+                            <div class="campo">
+                                <label for="qtt">Quantidade</label>
+                                <input id="qtt" type="number" inputmode="decimal" step="any" min="0" @bind="_qtt" />
+                            </div>
+                            <div class="campo">
+                                <label for="epv">Preço (€, se souber)</label>
+                                <input id="epv" type="number" inputmode="decimal" step="any" min="0" @bind="_epv" />
+                            </div>
+                        </div>
+                        <p class="campo-erro" role="alert">@_erroMaterial</p>
+                        <button type="submit" class="btn btn-secundario" disabled="@_a_gravar"><Icone Nome="plus" /><span>Juntar material</span></button>
+                    </form>
+                }
+            </section>
+        }
+
         @if (_i.Estado == EstadoIntervencao.Planeada)
         {
             <button type="button" class="btn btn-primario btn-grande" disabled="@_a_gravar" @onclick="IniciarAsync"><Icone Nome="play" /><span>Começar</span></button>
@@ -68,14 +115,16 @@
     [Parameter] public string Id { get; set; } = "";
 
     private Intervencao? _i;
-    private string _feito = "", _erro = "";
+    private string _feito = "", _erro = "", _material = "", _erroMaterial = "";
+    private decimal? _qtt, _epv;
+    private IReadOnlyList<Material> _materiais = [];
     private TimeOnly? _inicio, _fim;
     private bool _a_carregar = true, _a_gravar, _indisponivel;
 
     protected override async Task OnParametersSetAsync()
     {
         _a_carregar = true;
-        try { Usar(await Intervencoes.ObterAsync(Id)); }
+        try { Usar(await Intervencoes.ObterAsync(Id)); await CarregarMateriaisAsync(); }
         catch (NotSupportedException) { _indisponivel = true; }
         catch (Exception) { _erro = "Não foi possível carregar."; }
         finally { _a_carregar = false; }
@@ -86,6 +135,38 @@
         _i = i;
         _inicio = i?.HoraInicio;
         _fim = i?.HoraFim ?? TimeOnly.FromDateTime(DateTime.Now);
+    }
+
+    private async Task CarregarMateriaisAsync()
+    {
+        _materiais = [];
+        if (_i is not { Estado: EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida }) return;
+        try { _materiais = await Intervencoes.ListarMateriaisAsync(Id); }
+        catch (Exception) { _materiais = []; }
+    }
+
+    private async Task AdicionarMaterialAsync()
+    {
+        _erroMaterial = RegrasMaterial.Validar(_material, _qtt, _epv) ?? "";
+        if (_erroMaterial.Length > 0) return;
+        _a_gravar = true;
+        try
+        {
+            await Intervencoes.AdicionarMaterialAsync(Id, _material.Trim(), _qtt!.Value, _epv ?? 0);
+            _material = ""; _qtt = _epv = null;
+            await CarregarMateriaisAsync();
+        }
+        catch (InvalidOperationException ex) { _erroMaterial = ex.Message; }
+        catch (Exception) { _erroMaterial = "Não foi possível guardar. Tente outra vez."; }
+        finally { _a_gravar = false; }
+    }
+
+    private async Task ApagarMaterialAsync(Material m)
+    {
+        _a_gravar = true; _erroMaterial = "";
+        try { await Intervencoes.ApagarMaterialAsync(Id, m.Id); await CarregarMateriaisAsync(); }
+        catch (Exception) { _erroMaterial = "Não foi possível tirar o material. Tente outra vez."; }
+        finally { _a_gravar = false; }
     }
 
     private async Task IniciarAsync() => await Gravar(() => Intervencoes.IniciarAsync(Id));
@@ -100,8 +181,8 @@
     private async Task Gravar(Func<Task<Intervencao>> operacao)
     {
         _a_gravar = true; _erro = "";
-        try { Usar(await operacao()); }
-        catch (InvalidOperationException) { _erro = "Esta intervenção já mudou. Volte à lista e abra-a outra vez."; }
+        try { Usar(await operacao()); await CarregarMateriaisAsync(); }
+        catch (InvalidOperationException ex) { _erro = ex.Message; }
         catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
         finally { _a_gravar = false; }
     }

@@ -288,3 +288,15 @@ a.intervencao { color: inherit; text-decoration: none; }
 .ficha-texto { grid-column: 1 / -1; margin: var(--esp-2) 0 0; font-size: .9375rem; overflow-wrap: anywhere; }
 .ficha-acoes { grid-column: 1 / -1; display: flex; gap: var(--esp-3); margin-top: var(--esp-3); }
 .ficha-acoes .btn { flex: 1; }
+
+.ficha-texto textarea, .ficha-texto select, .ficha-acoes input {
+    width: 100%; min-height: var(--alvo); padding: var(--esp-3);
+    background: var(--superficie); color: var(--texto);
+    border: 2px solid var(--borda); border-radius: var(--raio); font: 400 1rem var(--fonte-corpo);
+}
+.ficha-texto textarea { resize: vertical; }
+.ficha-acoes input { flex: 1; width: auto; }
+.materiais { display: grid; gap: var(--esp-3); }
+.material-linha { display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); }
+.material-novo { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-3); }
+.material-novo .campo:first-child { grid-column: 1 / -1; }

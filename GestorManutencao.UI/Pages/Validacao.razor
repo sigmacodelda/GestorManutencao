@@ -35,6 +35,10 @@
         {
             <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p>
         }
+        @if (_erro is not null)
+        {
+            <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>@_erro</span></p>
+        }
         @if (_fichas.Count == 0)
         {
             <p class="estado-lista" role="status">Não há fichas por validar. Está tudo em dia!</p>
@@ -45,7 +49,6 @@
             <ul class="lista-intervencoes">
                 @foreach (var f in _fichas.Take(_limite))
                 {
-                    var minha = string.Equals(f.Tecnico, Sessao.Utilizador?.Nome, StringComparison.OrdinalIgnoreCase);
                     <li class="intervencao ficha-validar">
                         <span class="intervencao-titulo">@f.Equipamento</span>
                         <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(f.Zona) ? "" : f.Zona + " · ")@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")@(f.Tecnico is null ? "" : " · " + f.Tecnico)</span>
@@ -54,10 +57,23 @@
                         {
                             <p class="ficha-texto"><strong>Problema:</strong> @f.Anomalia</p>
                         }
-                        <p class="ficha-texto"><strong>Feito:</strong> @(f.Feito ?? "—")@(f.HoraInicio is null ? "" : $" ({f.HoraInicio:HH\\:mm}–{f.HoraFim:HH\\:mm})")</p>
-                        @if (minha)
+                        <p class="ficha-texto"><strong>Feito:</strong> @(f.Feito ?? "—")@(f.HoraInicio is null || f.HoraFim is null ? "" : $" ({f.HoraInicio:HH\\:mm}–{f.HoraFim:HH\\:mm})")</p>
+                        @if (!f.PodeValidar)
                         {
                             <p class="ficha-texto">Concluiu esta ficha: tem de ser outra pessoa a validar.</p>
+                        }
+                        else if (_aDevolver == f.Id)
+                        {
+                            <div class="campo ficha-texto">
+                                <label for="motivo-@f.Id">Porque devolve?</label>
+                                <textarea id="motivo-@f.Id" rows="2" maxlength="254" @bind="_motivo" @bind:event="oninput"></textarea>
+                            </div>
+                            <div class="ficha-acoes">
+                                <button type="button" class="btn" disabled="@(_ocupado || string.IsNullOrWhiteSpace(_motivo))" @onclick="() => DevolverAsync(f)">
+                                    <Icone Nome="rotate-ccw" /><span>Devolver</span>
+                                </button>
+                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aDevolver = null">Cancelar</button>
+                            </div>
                         }
                         else if (_aConfirmar == f.Id)
                         {
@@ -71,8 +87,11 @@
                         else
                         {
                             <div class="ficha-acoes">
-                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aConfirmar = f.Id">
+                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => { _aConfirmar = f.Id; _aDevolver = null; }">
                                     <Icone Nome="shield-check" /><span>Validar</span>
+                                </button>
+                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => { _aDevolver = f.Id; _aConfirmar = null; _motivo = string.Empty; }">
+                                    <Icone Nome="rotate-ccw" /><span>Devolver</span>
                                 </button>
                             </div>
                         }
@@ -90,7 +109,8 @@
 @code {
     private List<Intervencao> _fichas = [];
     private bool _a_carregar = true, _falhou, _indisponivel, _ocupado;
-    private string? _aConfirmar, _aviso;
+    private string? _aConfirmar, _aDevolver, _aviso, _erro;
+    private string _motivo = "";
     private const int PorPagina = 10;
     private int _limite = PorPagina;
 
@@ -102,28 +122,32 @@
 
     private async Task CarregarAsync()
     {
-        _a_carregar = true; _falhou = false; _indisponivel = false; _aConfirmar = null;
+        _a_carregar = true; _falhou = false; _indisponivel = false; _aConfirmar = _aDevolver = null;
         try { _fichas = (await Intervencoes.ListarPorValidarAsync()).ToList(); }
         catch (NotSupportedException) { _indisponivel = true; }
         catch (Exception) { _falhou = true; }
         finally { _a_carregar = false; }
     }
 
-    private async Task ValidarAsync(Intervencao f)
+    private Task ValidarAsync(Intervencao f) => AgirAsync(f, () => Intervencoes.ValidarAsync(f.Id), $"Validada: {f.Equipamento}.");
+
+    private Task DevolverAsync(Intervencao f) => AgirAsync(f, () => Intervencoes.DevolverAsync(f.Id, _motivo.Trim()), $"Devolvida ao técnico: {f.Equipamento}.");
+
+    private async Task AgirAsync(Intervencao f, Func<Task<Intervencao>> acao, string sucesso)
     {
-        _ocupado = true; _aviso = null;
+        _ocupado = true; _aviso = _erro = null;
         try
         {
-            await Intervencoes.ValidarAsync(f.Id);
+            await acao();
             _fichas.Remove(f);
-            _aviso = $"Validada: {f.Equipamento}.";
+            _aviso = sucesso;
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            _aviso = "Essa ficha já mudou. A lista foi atualizada.";
             await CarregarAsync();
+            _erro = ex.Message;
         }
-        catch (Exception) { _aviso = "Não foi possível validar. Tente outra vez."; }
-        finally { _ocupado = false; _aConfirmar = null; }
+        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _ocupado = false; _aConfirmar = _aDevolver = null; }
     }
 }

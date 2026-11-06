@@ -15,9 +15,10 @@ Quem cria a tabela é o utilizador ou a Landeiro; o Claude Code não cria tabela
 | `pinmudar` | bit | sim, por defeito 1 | 1 = PIN provisório, a pessoa tem de escolher outro ao entrar |
 | `pinalteradopor` | varchar(30) | não | Quem definiu o último PIN |
 | `pinalteradoem` | datetime | não | Quando |
+| `tecno` | numeric(5,0) | sim, por defeito 0 | **Número de utilizador do PHC** (`us.userno`) da pessoa. É a identidade dela nas fichas de intervenção (`u_fichaint.tecno`), como na LandeiroMaui. 0 = ainda sem número: a pessoa entra, mas não vê fichas até o supervisor o indicar na Equipa. Cada número só pode estar numa pessoa (a app verifica; não há índice único porque o 0 repete-se) |
 | `ousrinis` varchar(30), `ousrdata` datetime, `ousrhora` varchar(8), `usrinis` varchar(30), `usrdata` datetime, `usrhora` varchar(8) | padrão PHC | sim | Campos de auditoria habituais |
 
-O script de criação está em `docs/criar-u_manutil.sql` (a correr por quem administra, primeiro numa base de testes).
+O script de criação está em `docs/criar-u_manutil.sql` (a correr por quem administra, primeiro numa base de testes). **A tabela que já existe na base de testes foi criada antes do campo `tecno`**: o mesmo script tem o `ALTER TABLE` que o acrescenta (ou criar o campo `tecno`, numérico 5,0, por defeito 0, no PHC). A API não arranca a ler utilizadores sem este campo.
 
 Índices únicos: `utilizador` e `pinhash`. O segundo é o que impede dois utilizadores de terem o mesmo PIN (necessário porque se entra só com o PIN).
 

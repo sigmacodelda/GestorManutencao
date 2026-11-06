@@ -15,6 +15,7 @@ BEGIN
         pinmudar        bit          NOT NULL CONSTRAINT DF_u_manutil_pinmudar DEFAULT (1),
         pinalteradopor  varchar(30)  NOT NULL CONSTRAINT DF_u_manutil_pinpor DEFAULT (''),
         pinalteradoem   datetime     NULL,
+        tecno           numeric(5,0) NOT NULL CONSTRAINT DF_u_manutil_tecno DEFAULT (0),
         ousrinis        varchar(30)  NOT NULL CONSTRAINT DF_u_manutil_ousrinis DEFAULT (''),
         ousrdata        datetime     NOT NULL CONSTRAINT DF_u_manutil_ousrdata DEFAULT ('19000101'),
         ousrhora        varchar(8)   NOT NULL CONSTRAINT DF_u_manutil_ousrhora DEFAULT (''),
@@ -29,6 +30,12 @@ BEGIN
     CREATE UNIQUE INDEX UX_u_manutil_utilizador ON dbo.u_manutil (utilizador);
     CREATE UNIQUE INDEX UX_u_manutil_pinhash    ON dbo.u_manutil (pinhash);
 END
+GO
+
+-- Para a tabela que já existe sem o campo: número de utilizador do PHC (us.userno), a identidade da pessoa nas fichas.
+-- 0 = ainda sem número. O número é indicado pelo supervisor na app (Equipa).
+IF COL_LENGTH('dbo.u_manutil', 'tecno') IS NULL
+    ALTER TABLE dbo.u_manutil ADD tecno numeric(5,0) NOT NULL CONSTRAINT DF_u_manutil_tecno DEFAULT (0);
 GO
 
 -- Login SQL próprio da API, só com o necessário (substituir o nome do utilizador SQL; a password define-se à parte).

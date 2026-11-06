@@ -18,6 +18,10 @@
     {
         <p class="estado-lista" role="status">Esta parte ainda não está disponível.</p>
     }
+    else if (_semNumero)
+    {
+        <p class="estado-lista" role="status">Ainda não tem o número de técnico. Peça ao supervisor para o indicar.</p>
+    }
     else if (_erro)
     {
         <div class="estado-lista" role="alert">
@@ -63,7 +67,7 @@
 
 @code {
     private IReadOnlyList<GrupoIntervencoes> _grupos = [];
-    private bool _a_carregar = true, _erro, _indisponivel;
+    private bool _a_carregar = true, _erro, _indisponivel, _semNumero;
     private DateOnly _hoje;
     private const int PorPagina = 10;
     private readonly Dictionary<string, int> _limites = [];
@@ -75,13 +79,14 @@
 
     private async Task CarregarAsync()
     {
-        _a_carregar = true; _erro = false; _indisponivel = false;
+        _a_carregar = true; _erro = false; _indisponivel = false; _semNumero = false;
         _hoje = DateOnly.FromDateTime(DateTime.Today);
         try
         {
             _grupos = AgrupadorIntervencoes.Agrupar(await Intervencoes.ListarMinhasAsync(), _hoje);
         }
         catch (NotSupportedException) { _indisponivel = true; }
+        catch (SemNumeroTecnicoException) { _semNumero = true; }
         catch (Exception) { _erro = true; }
         finally { _a_carregar = false; }
     }

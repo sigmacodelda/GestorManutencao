@@ -1,0 +1,177 @@
+@page "/planeadas"
+@inject SessaoService Sessao
+@inject IIntervencoesService Intervencoes
+@inject IEquipaService ServicoEquipa
+
+<PageTitle>Planeadas · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Planeadas</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_indisponivel)
+    {
+        <p class="estado-lista" role="status">Esta parte ainda não está disponível.</p>
+    }
+    else if (_falhou)
+    {
+        <div class="estado-lista" role="alert">
+            <p>Não foi possível carregar as planeadas.</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="GerarAsync">
+            <Icone Nome="calendar" /><span>Gerar planeadas</span>
+        </button>
+        @if (_aviso is not null)
+        {
+            <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p>
+        }
+        @if (_erro is not null)
+        {
+            <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>@_erro</span></p>
+        }
+        @if (_fichas.Count == 0)
+        {
+            <p class="estado-lista" role="status">Não há intervenções planeadas.</p>
+        }
+        @foreach (var zona in Zonas())
+        {
+            <section aria-labelledby="@IdZona(zona.Nome)">
+                <h2 id="@IdZona(zona.Nome)" class="titulo-grupo">@zona.Nome <span class="contagem">@zona.Itens.Count</span></h2>
+                <ul class="lista-intervencoes">
+                    @foreach (var f in zona.Itens.Take(Limite(zona.Nome)))
+                    {
+                        var atrasada = f.EstaAtrasada(_hoje);
+                        <li class="intervencao @(atrasada ? "atrasada" : "")">
+                            <span class="intervencao-titulo">@f.Equipamento</span>
+                            <span class="intervencao-desc">@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")@(f.Estado == EstadoIntervencao.EmCurso ? " · Em curso" : "") · @(f.Tecno == 0 ? "Sem técnico" : f.Tecnico ?? "PHC " + f.Tecno)</span>
+                            <span class="intervencao-data">@TextoData(f.DataPlaneada)</span>
+                            <div class="campo ficha-texto">
+                                <label for="tec-@f.Id">Técnico</label>
+                                <select id="tec-@f.Id" disabled="@_ocupado" value="@f.Tecno" @onchange="e => AtribuirAsync(f, e.Value?.ToString())">
+                                    <option value="0">Sem técnico</option>
+                                    @if (f.Tecno > 0 && !_tecnicos.Any(t => t.Tecno == f.Tecno))
+                                    {
+                                        <option value="@f.Tecno" disabled>@(f.Tecnico ?? "PHC " + f.Tecno)</option>
+                                    }
+                                    @foreach (var t in _tecnicos)
+                                    {
+                                        <option value="@t.Tecno">@t.Nome</option>
+                                    }
+                                </select>
+                            </div>
+                        </li>
+                    }
+                </ul>
+                @if (zona.Itens.Count > Limite(zona.Nome))
+                {
+                    <button type="button" class="btn btn-secundario" @onclick="() => _limites[zona.Nome] = Limite(zona.Nome) + PorPagina">
+                        Ver mais (@(zona.Itens.Count - Limite(zona.Nome)))
+                    </button>
+                }
+            </section>
+        }
+    }
+</section>
+
+@code {
+    private sealed record GrupoZona(string Nome, IReadOnlyList<Intervencao> Itens);
+
+    private List<Intervencao> _fichas = [];
+    private IReadOnlyList<MembroEquipa> _tecnicos = [];
+    private bool _a_carregar = true, _falhou, _indisponivel, _ocupado;
+    private string? _aviso, _erro;
+    private DateOnly _hoje;
+    private const int PorPagina = 10;
+    private readonly Dictionary<string, int> _limites = [];
+
+    private int Limite(string zona) => _limites.GetValueOrDefault(zona, PorPagina);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sessao.PodeSerSupervisor) await CarregarAsync();
+        else _a_carregar = false;
+    }
+
+    private async Task CarregarAsync()
+    {
+        _a_carregar = true; _falhou = false; _indisponivel = false;
+        _hoje = DateOnly.FromDateTime(DateTime.Today);
+        try
+        {
+            _fichas = (await Intervencoes.ListarPlaneadasAsync()).ToList();
+            // Só quem tem número do PHC pode ter fichas.
+            _tecnicos = (await ServicoEquipa.ListarAsync(Sessao.Utilizador?.Token)).Where(m => m.Ativo && m.Tecno > 0).OrderBy(m => m.Nome).ToList();
+        }
+        catch (NotSupportedException) { _indisponivel = true; }
+        catch (Exception) { _falhou = true; }
+        finally { _a_carregar = false; }
+    }
+
+    private IEnumerable<GrupoZona> Zonas() => _fichas
+        .GroupBy(f => string.IsNullOrWhiteSpace(f.Zona) ? "Sem zona" : f.Zona)
+        .OrderBy(g => g.Key == "Sem zona" ? 1 : 0).ThenBy(g => g.Key)
+        .Select(g => new GrupoZona(g.Key, g.OrderBy(f => f.DataPlaneada).ToList()));
+
+    private static string IdZona(string zona) => "zona-" + new string(zona.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+
+    private async Task AtribuirAsync(Intervencao f, string? valor)
+    {
+        if (!int.TryParse(valor, out var tecno) || tecno == f.Tecno) return;
+        _ocupado = true; _aviso = _erro = null;
+        try
+        {
+            var nova = await Intervencoes.AtribuirAsync(f.Id, tecno);
+            var pos = _fichas.FindIndex(x => x.Id == f.Id);
+            if (pos >= 0) _fichas[pos] = nova;
+            _aviso = tecno == 0 ? $"{f.Equipamento}: sem técnico." : $"{f.Equipamento}: atribuída a {nova.Tecnico}.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            await CarregarAsync();
+            _erro = ex.Message;
+        }
+        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _ocupado = false; }
+    }
+
+    private async Task GerarAsync()
+    {
+        _ocupado = true; _aviso = _erro = null;
+        try
+        {
+            var r = await Intervencoes.GerarPlaneadasAsync();
+            _aviso = r.Criadas == 0 ? "Está tudo gerado: não há planeadas novas." : $"Criadas {r.Criadas} planeadas novas.";
+            if (r.Erros > 0) _erro = $"{r.Erros} não foram geradas. Tente outra vez.";
+            await CarregarAsync();
+        }
+        catch (Exception) { _erro = "Não foi possível gerar as planeadas. Tente outra vez."; }
+        finally { _ocupado = false; }
+    }
+
+    private string TextoData(DateOnly d)
+    {
+        var dias = d.DayNumber - _hoje.DayNumber;
+        return dias switch
+        {
+            0 => "Hoje",
+            1 => "Amanhã",
+            -1 => "Ontem",
+            < 0 => $"Há {-dias} dias",
+            _ => $"Dia {d:dd/MM}"
+        };
+    }
+}
