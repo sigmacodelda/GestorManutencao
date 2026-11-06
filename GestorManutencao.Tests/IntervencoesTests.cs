@@ -99,7 +99,7 @@ public class RegistoTests
     public async Task Avaria_nasce_em_curso_e_aparece_na_lista()
     {
         var s = new DevIntervencoesService();
-        var nova = await s.RegistarAvariaAsync("Balança 03", "Não liga");
+        var nova = await s.RegistarAvariaAsync("E5", "Não liga");
 
         Assert.Equal(EstadoIntervencao.EmCurso, nova.Estado);
         Assert.Equal(TipoIntervencao.Curativa, nova.Tipo);

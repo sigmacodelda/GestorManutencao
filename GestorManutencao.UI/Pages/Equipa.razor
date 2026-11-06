@@ -119,7 +119,7 @@
         switch (r.Resultado)
         {
             case ResultadoEquipa.Ok: _pinNovo = r.Pin; _pinDe = nome; return true;
-            case ResultadoEquipa.JaExiste: _erro = "Já existe alguém com esse código."; break;
+            case ResultadoEquipa.JaExiste: _erro = "Já existe alguém com esse código ou com esse nome."; break;
             case ResultadoEquipa.SemPermissao: _erro = "Não tem permissão para isto."; break;
             default: _erro = "Não foi possível ligar ao servidor. Tente outra vez."; break;
         }

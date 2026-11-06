@@ -33,7 +33,7 @@
 
         <div class="campo">
             <label for="anomalia">Qual é o problema?</label>
-            <textarea id="anomalia" rows="4" @bind="_anomalia" @bind:event="oninput"></textarea>
+            <textarea id="anomalia" rows="4" maxlength="200" @bind="_anomalia" @bind:event="oninput"></textarea>
         </div>
 
         <p id="erro-avaria" class="campo-erro" role="alert">@_erro</p>
@@ -68,7 +68,7 @@
         _a_guardar = true;
         try
         {
-            await Intervencoes.RegistarAvariaAsync(_escolhido!.Nome, _anomalia);
+            await Intervencoes.RegistarAvariaAsync(_escolhido!.Id, _anomalia);
             Nav.NavigateTo("intervencoes");
         }
         catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }

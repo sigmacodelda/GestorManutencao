@@ -35,7 +35,7 @@
             <form class="formulario" @onsubmit="ConcluirAsync" novalidate>
                 <div class="campo">
                     <label for="feito">O que fez?</label>
-                    <textarea id="feito" rows="4" @bind="_feito" @bind:event="oninput"></textarea>
+                    <textarea id="feito" rows="4" maxlength="254" @bind="_feito" @bind:event="oninput"></textarea>
                 </div>
                 <div class="horas">
                     <div class="campo">

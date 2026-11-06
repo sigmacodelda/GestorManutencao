@@ -1,7 +1,11 @@
+using System.Text.Json.Serialization;
+
 namespace GestorManutencao.UI.Modelos;
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum EstadoIntervencao { Planeada, EmCurso, Concluida, Validada, Cancelada }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TipoIntervencao { Preventiva, Curativa }
 
 public sealed record Intervencao(
@@ -22,18 +26,23 @@ public sealed record Intervencao(
     public bool EstaAtrasada(DateOnly hoje) => PorFazer && DataPlaneada < hoje;
 }
 
-public sealed record Equipamento(string Nome, string Zona);
+public sealed record Equipamento(string Id, string Nome, string Zona);
 
 // Regras de preenchimento: devolvem a mensagem para o técnico, ou null se estiver tudo certo.
 public static class RegrasIntervencao
 {
+    // Limites das colunas da ficha de intervenção no PHC.
+    public const int MaxAnomalia = 200, MaxFeito = 254;
+
     public static string? ValidarAvaria(string? equipamento, string? anomalia) =>
         string.IsNullOrWhiteSpace(equipamento) ? "Escolha o equipamento."
         : string.IsNullOrWhiteSpace(anomalia) ? "Descreva o problema."
+        : anomalia.Trim().Length > MaxAnomalia ? $"Escreva menos: no máximo {MaxAnomalia} letras."
         : null;
 
     public static string? ValidarConclusao(string? feito, TimeOnly? inicio, TimeOnly? fim) =>
         string.IsNullOrWhiteSpace(feito) ? "Escreva o que foi feito."
+        : feito.Trim().Length > MaxFeito ? $"Escreva menos: no máximo {MaxFeito} letras."
         : inicio is null || fim is null ? "Indique a hora de início e a de fim."
         : fim < inicio ? "A hora de fim não pode ser antes da de início."
         : null;

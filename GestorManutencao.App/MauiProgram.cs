@@ -32,10 +32,9 @@ public static class MauiProgram
 			var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(15) };
 			builder.Services.AddSingleton<IAutenticacaoService>(new AutenticacaoApiService(http));
 			builder.Services.AddSingleton<IEquipaService>(new EquipaApiService(http));
-			// Ligação das intervenções ao PHC por fazer (tabelas por confirmar).
-			builder.Services.AddSingleton<IntervencoesIndisponiveis>();
-			builder.Services.AddSingleton<IIntervencoesService>(sp => sp.GetRequiredService<IntervencoesIndisponiveis>());
-			builder.Services.AddSingleton<IEquipamentosService>(sp => sp.GetRequiredService<IntervencoesIndisponiveis>());
+			builder.Services.AddScoped<IntervencoesApiService>(sp => new IntervencoesApiService(http, sp.GetRequiredService<SessaoService>()));
+			builder.Services.AddScoped<IIntervencoesService>(sp => sp.GetRequiredService<IntervencoesApiService>());
+			builder.Services.AddScoped<IEquipamentosService>(sp => sp.GetRequiredService<IntervencoesApiService>());
 		}
 		else
 		{

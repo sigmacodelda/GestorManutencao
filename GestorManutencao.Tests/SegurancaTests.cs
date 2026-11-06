@@ -11,6 +11,9 @@ public class SegurancaTests
 {
     private static PinHasher Hasher(string pepper) => new(Options.Create(new PinOpcoes { Pepper = pepper }));
 
+    // Pasta vazia: os testes de arranque não leem o appsettings.Production.json local que haja nesta máquina.
+    private static string PastaVazia() => Directory.CreateTempSubdirectory("gm-teste").FullName;
+
     [Fact]
     public void Hash_do_pin_nao_contem_o_pin_e_depende_do_segredo_do_servidor()
     {
@@ -53,7 +56,7 @@ public class SegurancaTests
     [Fact]
     public void Producao_sem_chave_jwt_nao_arranca()
     {
-        using var fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        using var fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Production").UseContentRoot(PastaVazia()));
 
         Assert.ThrowsAny<Exception>(() => fabrica.CreateClient());
     }
@@ -62,7 +65,7 @@ public class SegurancaTests
     public void Producao_com_chave_curta_nao_arranca()
     {
         using var fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
-            .UseEnvironment("Production")
+            .UseEnvironment("Production").UseContentRoot(PastaVazia())
             .UseSetting("Jwt:Chave", "curta"));
 
         Assert.ThrowsAny<Exception>(() => fabrica.CreateClient());
@@ -72,7 +75,7 @@ public class SegurancaTests
     public void Producao_sem_segredo_do_pin_nao_arranca()
     {
         using var fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
-            .UseEnvironment("Production")
+            .UseEnvironment("Production").UseContentRoot(PastaVazia())
             .UseSetting("Jwt:Chave", new string('j', 40))
             .UseSetting("ConnectionStrings:PHCConn", "Server=x;Database=y"));
 
@@ -83,11 +86,9 @@ public class SegurancaTests
     public void Producao_sem_ligacao_a_base_nao_arranca()
     {
         using var fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
-            .UseEnvironment("Production")
+            .UseEnvironment("Production").UseContentRoot(PastaVazia())
             .UseSetting("Jwt:Chave", new string('j', 40))
-            .UseSetting("Pin:Pepper", new string('p', 40))
-            // Pasta vazia: não lê o appsettings.Production.json local (com a ligação) que haja nesta máquina.
-            .UseContentRoot(Directory.CreateTempSubdirectory("gm-teste").FullName));
+            .UseSetting("Pin:Pepper", new string('p', 40)));
 
         var erro = Assert.ThrowsAny<Exception>(() => fabrica.CreateClient());
         Assert.Contains("PHCConn", erro.ToString());
@@ -97,7 +98,7 @@ public class SegurancaTests
     public void Producao_com_pepper_igual_a_chave_jwt_nao_arranca()
     {
         using var fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
-            .UseEnvironment("Production")
+            .UseEnvironment("Production").UseContentRoot(PastaVazia())
             .UseSetting("Jwt:Chave", new string('x', 40))
             .UseSetting("Pin:Pepper", new string('x', 40))
             .UseSetting("ConnectionStrings:PHCConn", "Server=x;Database=y"));

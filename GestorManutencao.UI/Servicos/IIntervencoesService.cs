@@ -9,7 +9,7 @@ public interface IIntervencoesService
     Task<IReadOnlyList<Intervencao>> ListarMinhasAsync(CancellationToken ct = default);
     Task<Intervencao?> ObterAsync(string id, CancellationToken ct = default);
     // A avaria nasce logo em curso, com a hora de início de agora.
-    Task<Intervencao> RegistarAvariaAsync(string equipamento, string anomalia, CancellationToken ct = default);
+    Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default);
     Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default);
     Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default);
 }
@@ -26,8 +26,8 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     private readonly List<Intervencao> _lista;
     private static readonly Equipamento[] Equipamentos =
     [
-        new("Compressor de ar 02", "Produção"), new("Empilhador 05", "Armazém"), new("Câmara de frio 01", "Frio"),
-        new("Linha de embalagem", "Produção"), new("Balança 03", "Expedição"), new("Porta seccionada 07", "Armazém")
+        new("E1", "Compressor de ar 02", "Produção"), new("E2", "Empilhador 05", "Armazém"), new("E3", "Câmara de frio 01", "Frio"),
+        new("E4", "Linha de embalagem", "Produção"), new("E5", "Balança 03", "Expedição"), new("E6", "Porta seccionada 07", "Armazém")
     ];
 
     public DevIntervencoesService()
@@ -54,13 +54,13 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         lock (_trinco) return Task.FromResult(_lista.FirstOrDefault(i => i.Id == id));
     }
 
-    public Task<Intervencao> RegistarAvariaAsync(string equipamento, string anomalia, CancellationToken ct = default)
+    public Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default)
     {
-        if (RegrasIntervencao.ValidarAvaria(equipamento, anomalia) is not null) throw new InvalidOperationException();
+        if (RegrasIntervencao.ValidarAvaria(equipamentoId, anomalia) is not null) throw new InvalidOperationException();
         lock (_trinco)
         {
-            var zona = Equipamentos.FirstOrDefault(e => e.Nome == equipamento)?.Zona ?? "";
-            var nova = new Intervencao(Guid.NewGuid().ToString("N"), equipamento, zona, TipoIntervencao.Curativa,
+            var eq = Equipamentos.FirstOrDefault(e => e.Id == equipamentoId) ?? throw new InvalidOperationException();
+            var nova = new Intervencao(Guid.NewGuid().ToString("N"), eq.Nome, eq.Zona, TipoIntervencao.Curativa,
                 DateOnly.FromDateTime(DateTime.Today), EstadoIntervencao.EmCurso, anomalia.Trim(), null, TimeOnly.FromDateTime(DateTime.Now));
             _lista.Add(nova);
             return Task.FromResult(nova);
@@ -101,7 +101,7 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
 {
     public Task<IReadOnlyList<Intervencao>> ListarMinhasAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao?> ObterAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Intervencao> RegistarAvariaAsync(string equipamento, string anomalia, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Equipamento>> PesquisarAsync(string texto, CancellationToken ct = default) => throw new NotSupportedException();

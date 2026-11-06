@@ -58,10 +58,12 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn
         (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false), sp.GetRequiredService<PinHasher>().Hash("482913")),
         (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false), sp.GetRequiredService<PinHasher>().Hash("795316"))
     ]));
+    builder.Services.AddSingleton<IRepositorioIntervencoes, RepositorioIntervencoesMemoria>();
 }
 else
 {
     builder.Services.AddSingleton<IRepositorioUtilizadores, SqlRepositorioUtilizadores>();
+    builder.Services.AddSingleton<IRepositorioIntervencoes, SqlRepositorioIntervencoes>();
 }
 
 builder.Services
@@ -172,6 +174,8 @@ static IResult RegistarPinEmUso(ILogger log, HttpContext http)
     return Erro(409, "pin_em_uso");
 }
 
+app.MapIntervencoes();
+
 app.MapGet("/saude", () => Results.Ok(new { estado = "ok" }));
 
 app.MapPost("/auth/login", async (PedidoLogin pedido, IRepositorioUtilizadores repo, PinHasher hasher, EmissorToken emissor,
@@ -258,6 +262,11 @@ equipa.MapPost("/", async (PedidoNovoUtilizador pedido, ClaimsPrincipal eu, IRep
     try
     {
         if (await SupervisorAtual(eu, repo, ct) is not { } supervisor) return Results.Forbid();
+
+        // As fichas identificam o técnico pelo nome (45 letras): dois nomes iguais veriam as fichas um do outro.
+        var nomeFicha = EndpointsIntervencoes.Truncar(pedido.Nome!.Trim());
+        if ((await repo.ListarAsync(ct)).Any(u => string.Equals(EndpointsIntervencoes.Truncar(u.Nome), nomeFicha, StringComparison.OrdinalIgnoreCase)))
+            return Erro(409, "nome_repetido");
 
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {
