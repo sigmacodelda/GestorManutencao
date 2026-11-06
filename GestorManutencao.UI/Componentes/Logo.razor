@@ -1,0 +1,28 @@
+@inject Tema Tema
+
+@* Sempre sobre superfícies de marca (escuras). Sem logótipo no tema: marca SigmaCode provisória (trocar pelo SVG oficial). *@
+<span class="logo">
+    @if (Tema.Logo is not null)
+    {
+        <img class="logo-img" src="@Tema.Logo" alt="@Tema.Nome" />
+    }
+    else
+    {
+        <svg class="logo-marca" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <defs>
+                <linearGradient id="@_id" x1="1" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#5BB572" />
+                    <stop offset="0.5" stop-color="#3466AF" />
+                    <stop offset="1" stop-color="#604696" />
+                </linearGradient>
+            </defs>
+            <rect width="48" height="48" rx="12" fill="url(#@_id)" />
+            <path d="M33 14H15l10 10-10 10h18" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <span class="logo-texto">@Tema.Nome</span>
+    }
+</span>
+
+@code {
+    private readonly string _id = "grad-" + Guid.NewGuid().ToString("N")[..6];
+}

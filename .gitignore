@@ -399,3 +399,8 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+bin/
+obj/
+.vs/
+*.user
+.playwright-mcp/

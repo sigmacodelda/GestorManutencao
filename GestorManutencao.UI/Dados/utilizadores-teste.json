@@ -1,0 +1,4 @@
+[
+  { "utilizador": "operador", "password": "teste-operador", "nome": "Operador de Teste", "perfil": "Operador" },
+  { "utilizador": "supervisor", "password": "teste-supervisor", "nome": "Supervisor de Teste", "perfil": "Supervisor" }
+]

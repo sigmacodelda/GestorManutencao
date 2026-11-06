@@ -1,0 +1,147 @@
+@page "/login"
+@layout Layout.LoginLayout
+@inject SessaoService Sessao
+@inject NavigationManager Nav
+
+<PageTitle>Entrar · Gestor de Manutenção</PageTitle>
+
+<div class="login">
+    <aside class="login-marca">
+        <Logo />
+        <div class="login-marca-texto">
+            <p class="sobretitulo">Gestor de Manutenção</p>
+            <p class="login-marca-frase">As intervenções do seu turno, num só sítio.</p>
+        </div>
+    </aside>
+
+    <section class="login-painel" aria-labelledby="titulo-login">
+        <form class="login-form" @onsubmit="Entrar" novalidate>
+            <h1 id="titulo-login">Entrar</h1>
+            <p class="login-sub">Use o seu utilizador e a sua password.</p>
+
+            @if (_erro is not null)
+            {
+                <div class="alerta" role="alert" tabindex="-1" @ref="_alerta">
+                    <Icone Nome="triangle-alert" />
+                    <span>@_erro</span>
+                </div>
+            }
+
+            <div class="campo">
+                <label for="utilizador">Utilizador</label>
+                <div class="entrada">
+                    <Icone Nome="user" Classe="entrada-icone" />
+                    <input id="utilizador" name="utilizador" type="text" autocomplete="username" autocapitalize="none"
+                           spellcheck="false" enterkeyhint="next" required
+                           aria-invalid="@(_semUtilizador ? "true" : null)" aria-describedby="@(_semUtilizador ? "erro-utilizador" : null)"
+                           @bind="_utilizador" @bind:event="oninput" />
+                </div>
+                @if (_semUtilizador)
+                {
+                    <p class="campo-erro" id="erro-utilizador">Indique o utilizador.</p>
+                }
+            </div>
+
+            <div class="campo">
+                <label for="password">Password</label>
+                <div class="entrada">
+                    <Icone Nome="lock" Classe="entrada-icone" />
+                    <input id="password" name="password" type="@(_mostrar ? "text" : "password")" autocomplete="current-password"
+                           enterkeyhint="go" required
+                           aria-invalid="@(_semPassword ? "true" : null)" aria-describedby="@(_semPassword ? "erro-password" : null)"
+                           @bind="_password" @bind:event="oninput" />
+                    <button type="button" class="entrada-acao" aria-pressed="@_mostrar.ToString().ToLowerInvariant()"
+                            aria-label="@(_mostrar ? "Esconder password" : "Mostrar password")" @onclick="AlternarMostrar">
+                        <Icone Nome="@(_mostrar ? "eye-off" : "eye")" />
+                    </button>
+                </div>
+                @if (_semPassword)
+                {
+                    <p class="campo-erro" id="erro-password">Indique a password.</p>
+                }
+            </div>
+
+            <button type="submit" class="btn btn-primario" disabled="@_aEntrar" aria-busy="@_aEntrar.ToString().ToLowerInvariant()">
+                @if (_aEntrar)
+                {
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>A entrar…</span>
+                }
+                else
+                {
+                    <Icone Nome="log-in" />
+                    <span>Entrar</span>
+                }
+            </button>
+
+            <p class="login-rodape">Sem acesso ou esqueceu a password? Fale com o seu supervisor.</p>
+            <p class="login-credito">Desenvolvido por SigmaCode</p>
+        </form>
+    </section>
+</div>
+
+@code {
+    private string _utilizador = "";
+    private string _password = "";
+    private bool _mostrar;
+    private bool _aEntrar;
+    private bool _semUtilizador;
+    private bool _semPassword;
+    private string? _erro;
+    private ElementReference _alerta;
+    private bool _focarAlerta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Sessao.RestaurarAsync();
+        if (Sessao.TemSessao) Nav.NavigateTo("", replace: true);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focarAlerta && _erro is not null)
+        {
+            _focarAlerta = false;
+            await _alerta.FocusAsync();
+        }
+    }
+
+    private void AlternarMostrar() => _mostrar = !_mostrar;
+
+    private async Task Entrar()
+    {
+        if (_aEntrar) return;
+
+        _semUtilizador = string.IsNullOrWhiteSpace(_utilizador);
+        _semPassword = string.IsNullOrEmpty(_password);
+        _erro = null;
+        if (_semUtilizador || _semPassword) return;
+
+        _aEntrar = true;
+        try
+        {
+            var resultado = await Sessao.EntrarAsync(_utilizador, _password);
+            if (resultado.Sucesso)
+            {
+                _password = "";
+                Nav.NavigateTo("", replace: true);
+                return;
+            }
+            _erro = resultado.Erro switch
+            {
+                ErroLogin.Rede => "Não foi possível ligar ao servidor. Verifique a ligação e tente outra vez.",
+                ErroLogin.DemasiadasTentativas => "Demasiadas tentativas. Aguarde um minuto e tente outra vez.",
+                _ => "Utilizador ou password incorretos."
+            };
+        }
+        catch (Exception)
+        {
+            _erro = "Não foi possível entrar. Tente outra vez.";
+        }
+        finally
+        {
+            _aEntrar = false;
+            _focarAlerta = _erro is not null;
+        }
+    }
+}

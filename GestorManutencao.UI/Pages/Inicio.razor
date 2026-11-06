@@ -1,0 +1,55 @@
+@page "/"
+@inject SessaoService Sessao
+
+<PageTitle>Início · Gestor de Manutenção</PageTitle>
+
+@if (Sessao.TemSessao)
+{
+    var supervisor = Sessao.Modo == ModoTrabalho.Supervisor;
+    <section class="conteudo">
+        <div class="boas-vindas">
+            <p class="sobretitulo">@(supervisor ? "Modo supervisor" : "Modo operador")</p>
+            <h1>@Saudacao(), @PrimeiroNome</h1>
+        </div>
+
+        @if (Sessao.PodeSerSupervisor)
+        {
+            <div class="segmentos" role="group" aria-label="Modo de trabalho">
+                <button type="button" class="segmento" aria-pressed="@((!supervisor).ToString().ToLowerInvariant())"
+                        @onclick="() => Sessao.MudarModo(ModoTrabalho.Operador)">
+                    <Icone Nome="wrench" /><span>Operador</span>
+                </button>
+                <button type="button" class="segmento" aria-pressed="@supervisor.ToString().ToLowerInvariant()"
+                        @onclick="() => Sessao.MudarModo(ModoTrabalho.Supervisor)">
+                    <Icone Nome="users" /><span>Supervisor</span>
+                </button>
+            </div>
+        }
+
+        <ul class="mosaicos">
+            @if (supervisor)
+            {
+                <Mosaico Icone="calendar" Titulo="Planeadas" Descricao="Intervenções por atribuir e em atraso" />
+                <Mosaico Icone="shield-check" Titulo="Validação" Descricao="Fichas concluídas a validar" />
+                <Mosaico Icone="users" Titulo="Equipa" Descricao="Quem está a fazer o quê" />
+            }
+            else
+            {
+                <Mosaico Icone="clipboard-list" Titulo="As minhas intervenções" Href="intervencoes" Descricao="O que tenho para fazer hoje" />
+                <Mosaico Icone="triangle-alert" Titulo="Registar avaria" Descricao="Avisar de um problema no equipamento" />
+                <Mosaico Icone="package" Titulo="Pedir peça" Descricao="Pedido ao armazém" />
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    private string PrimeiroNome => Sessao.Utilizador!.Nome.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+
+    private static string Saudacao() => DateTime.Now.Hour switch
+    {
+        < 12 => "Bom dia",
+        < 20 => "Boa tarde",
+        _ => "Boa noite"
+    };
+}

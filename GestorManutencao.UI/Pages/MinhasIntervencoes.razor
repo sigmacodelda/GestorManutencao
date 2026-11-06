@@ -1,0 +1,88 @@
+@page "/intervencoes"
+@inject SessaoService Sessao
+@inject IIntervencoesService Intervencoes
+
+<PageTitle>As minhas intervenções · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">As minhas intervenções</h1>
+    </div>
+
+    @if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_indisponivel)
+    {
+        <p class="estado-lista" role="status">Esta parte ainda não está disponível.</p>
+    }
+    else if (_erro)
+    {
+        <div class="estado-lista" role="alert">
+            <p>Não foi possível carregar as intervenções.</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else if (_grupos.Count == 0)
+    {
+        <p class="estado-lista" role="status">Não tem intervenções por fazer. Bom trabalho!</p>
+    }
+    else
+    {
+        @foreach (var grupo in _grupos)
+        {
+            <section aria-labelledby="@IdGrupo(grupo)">
+                <h2 id="@IdGrupo(grupo)" class="titulo-grupo">@grupo.Titulo <span class="contagem">@grupo.Itens.Count</span></h2>
+                <ul class="lista-intervencoes">
+                    @foreach (var i in grupo.Itens)
+                    {
+                        var atrasada = i.EstaAtrasada(_hoje);
+                        <li class="intervencao @(atrasada ? "atrasada" : "")">
+                            <span class="intervencao-titulo">@i.Equipamento</span>
+                            <span class="intervencao-desc">@i.Zona · @(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                            <span class="intervencao-data">@TextoData(i.DataPlaneada)</span>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    }
+</section>
+
+@code {
+    private IReadOnlyList<GrupoIntervencoes> _grupos = [];
+    private bool _a_carregar = true, _erro, _indisponivel;
+    private DateOnly _hoje;
+
+    protected override async Task OnInitializedAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        _a_carregar = true; _erro = false; _indisponivel = false;
+        _hoje = DateOnly.FromDateTime(DateTime.Today);
+        try
+        {
+            _grupos = AgrupadorIntervencoes.Agrupar(await Intervencoes.ListarMinhasAsync(), _hoje);
+        }
+        catch (NotSupportedException) { _indisponivel = true; }
+        catch (Exception) { _erro = true; }
+        finally { _a_carregar = false; }
+    }
+
+    private static string IdGrupo(GrupoIntervencoes g) => "grupo-" + g.Titulo.Replace(' ', '-').ToLowerInvariant();
+
+    private string TextoData(DateOnly d)
+    {
+        var dias = d.DayNumber - _hoje.DayNumber;
+        return dias switch
+        {
+            0 => "Hoje",
+            1 => "Amanhã",
+            -1 => "Ontem",
+            < 0 => $"Há {-dias} dias",
+            _ => $"Dia {d:dd/MM}"
+        };
+    }
+}
