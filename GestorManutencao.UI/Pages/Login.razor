@@ -17,7 +17,7 @@
     <section class="login-painel" aria-labelledby="titulo-login">
         <form class="login-form" @onsubmit="Entrar" novalidate>
             <h1 id="titulo-login">Entrar</h1>
-            <p class="login-sub">Use o seu utilizador e a sua password.</p>
+            <p class="login-sub">Escreva o seu PIN de 6 números.</p>
 
             @if (_erro is not null)
             {
@@ -28,36 +28,21 @@
             }
 
             <div class="campo">
-                <label for="utilizador">Utilizador</label>
-                <div class="entrada">
-                    <Icone Nome="user" Classe="entrada-icone" />
-                    <input id="utilizador" name="utilizador" type="text" autocomplete="username" autocapitalize="none"
-                           spellcheck="false" enterkeyhint="next" required
-                           aria-invalid="@(_semUtilizador ? "true" : null)" aria-describedby="@(_semUtilizador ? "erro-utilizador" : null)"
-                           @bind="_utilizador" @bind:event="oninput" />
-                </div>
-                @if (_semUtilizador)
-                {
-                    <p class="campo-erro" id="erro-utilizador">Indique o utilizador.</p>
-                }
-            </div>
-
-            <div class="campo">
-                <label for="password">Password</label>
+                <label for="pin">PIN</label>
                 <div class="entrada">
                     <Icone Nome="lock" Classe="entrada-icone" />
-                    <input id="password" name="password" type="@(_mostrar ? "text" : "password")" autocomplete="current-password"
-                           enterkeyhint="go" required
-                           aria-invalid="@(_semPassword ? "true" : null)" aria-describedby="@(_semPassword ? "erro-password" : null)"
-                           @bind="_password" @bind:event="oninput" />
+                    <input id="pin" name="pin" class="campo-pin" type="@(_mostrar ? "text" : "password")" inputmode="numeric" pattern="[0-9]*"
+                           maxlength="6" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go" required
+                           aria-invalid="@(_semPin ? "true" : null)" aria-describedby="@(_semPin ? "erro-pin" : null)"
+                           value="@_pin" @oninput="AoEscrever" />
                     <button type="button" class="entrada-acao" aria-pressed="@_mostrar.ToString().ToLowerInvariant()"
-                            aria-label="@(_mostrar ? "Esconder password" : "Mostrar password")" @onclick="AlternarMostrar">
+                            aria-label="@(_mostrar ? "Esconder PIN" : "Mostrar PIN")" @onclick="AlternarMostrar">
                         <Icone Nome="@(_mostrar ? "eye-off" : "eye")" />
                     </button>
                 </div>
-                @if (_semPassword)
+                @if (_semPin)
                 {
-                    <p class="campo-erro" id="erro-password">Indique a password.</p>
+                    <p class="campo-erro" id="erro-pin">O PIN tem 6 números.</p>
                 }
             </div>
 
@@ -74,19 +59,17 @@
                 }
             </button>
 
-            <p class="login-rodape">Sem acesso ou esqueceu a password? Fale com o seu supervisor.</p>
+            <p class="login-rodape">Sem acesso ou esqueceu o PIN? Fale com o seu supervisor.</p>
             <p class="login-credito">Desenvolvido por SigmaCode</p>
         </form>
     </section>
 </div>
 
 @code {
-    private string _utilizador = "";
-    private string _password = "";
+    private string _pin = "";
     private bool _mostrar;
     private bool _aEntrar;
-    private bool _semUtilizador;
-    private bool _semPassword;
+    private bool _semPin;
     private string? _erro;
     private ElementReference _alerta;
     private bool _focarAlerta;
@@ -108,22 +91,29 @@
 
     private void AlternarMostrar() => _mostrar = !_mostrar;
 
+    // Só números; ao chegar aos 6 entra sozinho.
+    private async Task AoEscrever(ChangeEventArgs e)
+    {
+        _pin = new string((e.Value?.ToString() ?? "").Where(char.IsAsciiDigit).Take(RegrasPin.Tamanho).ToArray());
+        _semPin = false;
+        if (_pin.Length == RegrasPin.Tamanho) await Entrar();
+    }
+
     private async Task Entrar()
     {
         if (_aEntrar) return;
 
-        _semUtilizador = string.IsNullOrWhiteSpace(_utilizador);
-        _semPassword = string.IsNullOrEmpty(_password);
+        _semPin = !RegrasPin.FormatoValido(_pin);
         _erro = null;
-        if (_semUtilizador || _semPassword) return;
+        if (_semPin) return;
 
         _aEntrar = true;
         try
         {
-            var resultado = await Sessao.EntrarAsync(_utilizador, _password);
+            var resultado = await Sessao.EntrarAsync(_pin);
+            _pin = "";
             if (resultado.Sucesso)
             {
-                _password = "";
                 Nav.NavigateTo("", replace: true);
                 return;
             }
@@ -131,11 +121,12 @@
             {
                 ErroLogin.Rede => "Não foi possível ligar ao servidor. Verifique a ligação e tente outra vez.",
                 ErroLogin.DemasiadasTentativas => "Demasiadas tentativas. Aguarde um minuto e tente outra vez.",
-                _ => "Utilizador ou password incorretos."
+                _ => "PIN incorreto."
             };
         }
         catch (Exception)
         {
+            _pin = "";
             _erro = "Não foi possível entrar. Tente outra vez.";
         }
         finally

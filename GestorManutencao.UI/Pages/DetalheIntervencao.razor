@@ -1,0 +1,105 @@
+@page "/intervencoes/{Id}"
+@inject IIntervencoesService Intervencoes
+
+<PageTitle>Intervenção · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="intervencoes"><Icone Nome="arrow-left" /><span>As minhas intervenções</span></a>
+        <h1 tabindex="-1">@(_i?.Equipamento ?? "Intervenção")</h1>
+    </div>
+
+    @if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_i is null)
+    {
+        <p class="estado-lista" role="status">@(_indisponivel ? "Esta parte ainda não está disponível." : "Intervenção não encontrada.")</p>
+    }
+    else
+    {
+        <dl class="ficha">
+            <dt>Zona</dt><dd>@_i.Zona</dd>
+            <dt>Tipo</dt><dd>@(_i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</dd>
+            <dt>Data prevista</dt><dd>@_i.DataPlaneada.ToString("dd/MM/yyyy")</dd>
+            @if (!string.IsNullOrWhiteSpace(_i.Anomalia)) { <dt>Problema</dt><dd>@_i.Anomalia</dd> }
+        </dl>
+
+        @if (_i.Estado == EstadoIntervencao.Planeada)
+        {
+            <button type="button" class="btn btn-primario" disabled="@_a_gravar" @onclick="IniciarAsync">Começar</button>
+        }
+        else if (_i.Estado == EstadoIntervencao.EmCurso)
+        {
+            <form class="formulario" @onsubmit="ConcluirAsync" novalidate>
+                <div class="campo">
+                    <label for="feito">O que foi feito?</label>
+                    <textarea id="feito" rows="4" @bind="_feito" @bind:event="oninput"></textarea>
+                </div>
+                <div class="horas">
+                    <div class="campo">
+                        <label for="inicio">Hora de início</label>
+                        <input id="inicio" type="time" @bind="_inicio" />
+                    </div>
+                    <div class="campo">
+                        <label for="fim">Hora de fim</label>
+                        <input id="fim" type="time" @bind="_fim" />
+                        <button type="button" class="btn-texto" @onclick="() => _fim = TimeOnly.FromDateTime(DateTime.Now)">Agora</button>
+                    </div>
+                </div>
+                <p class="campo-erro" role="alert">@_erro</p>
+                <button type="submit" class="btn btn-primario" disabled="@_a_gravar">@(_a_gravar ? "A guardar…" : "Concluir")</button>
+            </form>
+        }
+        else
+        {
+            <p class="estado-lista" role="status">
+                @(_i.Estado == EstadoIntervencao.Concluida ? "Concluída. Segue para o supervisor validar." : "Esta intervenção já está fechada.")
+            </p>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private Intervencao? _i;
+    private string _feito = "", _erro = "";
+    private TimeOnly? _inicio, _fim;
+    private bool _a_carregar = true, _a_gravar, _indisponivel;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _a_carregar = true;
+        try { Usar(await Intervencoes.ObterAsync(Id)); }
+        catch (NotSupportedException) { _indisponivel = true; }
+        catch (Exception) { _erro = "Não foi possível carregar."; }
+        finally { _a_carregar = false; }
+    }
+
+    private void Usar(Intervencao? i)
+    {
+        _i = i;
+        _inicio = i?.HoraInicio;
+        _fim = i?.HoraFim ?? TimeOnly.FromDateTime(DateTime.Now);
+    }
+
+    private async Task IniciarAsync() => await Gravar(() => Intervencoes.IniciarAsync(Id));
+
+    private async Task ConcluirAsync()
+    {
+        _erro = RegrasIntervencao.ValidarConclusao(_feito, _inicio, _fim) ?? "";
+        if (_erro.Length > 0) return;
+        await Gravar(() => Intervencoes.ConcluirAsync(Id, _feito, _inicio!.Value, _fim!.Value));
+    }
+
+    private async Task Gravar(Func<Task<Intervencao>> operacao)
+    {
+        _a_gravar = true; _erro = "";
+        try { Usar(await operacao()); }
+        catch (InvalidOperationException) { _erro = "Esta intervenção já mudou. Volte à lista e abra-a outra vez."; }
+        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _a_gravar = false; }
+    }
+}

@@ -10,12 +10,33 @@ public sealed record Intervencao(
     string Zona,
     TipoIntervencao Tipo,
     DateOnly DataPlaneada,
-    EstadoIntervencao Estado)
+    EstadoIntervencao Estado,
+    string? Anomalia = null,
+    string? Feito = null,
+    TimeOnly? HoraInicio = null,
+    TimeOnly? HoraFim = null)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
     // Derivado, nunca gravado: o estado "atrasada" depende só da data de hoje.
     public bool EstaAtrasada(DateOnly hoje) => PorFazer && DataPlaneada < hoje;
+}
+
+public sealed record Equipamento(string Nome, string Zona);
+
+// Regras de preenchimento: devolvem a mensagem para o técnico, ou null se estiver tudo certo.
+public static class RegrasIntervencao
+{
+    public static string? ValidarAvaria(string? equipamento, string? anomalia) =>
+        string.IsNullOrWhiteSpace(equipamento) ? "Escolha o equipamento."
+        : string.IsNullOrWhiteSpace(anomalia) ? "Descreva o problema."
+        : null;
+
+    public static string? ValidarConclusao(string? feito, TimeOnly? inicio, TimeOnly? fim) =>
+        string.IsNullOrWhiteSpace(feito) ? "Escreva o que foi feito."
+        : inicio is null || fim is null ? "Indique a hora de início e a de fim."
+        : fim < inicio ? "A hora de fim não pode ser antes da de início."
+        : null;
 }
 
 public sealed record GrupoIntervencoes(string Titulo, IReadOnlyList<Intervencao> Itens);

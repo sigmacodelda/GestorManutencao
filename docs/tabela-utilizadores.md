@@ -1,0 +1,52 @@
+# Tabela de utilizadores da app (a criar no PHC por quem administra)
+
+Quem cria a tabela é o utilizador ou a Landeiro; o Claude Code não cria tabelas nem campos no PHC. A API (`SqlRepositorioUtilizadores`) já está escrita para esta estrutura, mas ainda não foi testada contra uma base real.
+
+## Tabela `u_manutil`
+
+| Campo | Tipo | Obrigatório | Para quê |
+|---|---|---|---|
+| `u_manutilstamp` | char(25) | sim (chave) | Identificador do registo (padrão PHC) |
+| `utilizador` | varchar(30) | sim, único | Código curto da pessoa, em minúsculas (ex.: `jsilva`) |
+| `nome` | varchar(60) | sim | Nome mostrado na app |
+| `perfil` | varchar(12) | sim | `OPERADOR` ou `SUPERVISOR` |
+| `ativo` | bit | sim, por defeito 1 | Desativar em vez de apagar |
+| `pinhash` | varchar(64) | sim, **único** | PIN cifrado (HMAC-SHA256 em maiúsculas hexadecimais). Nunca o PIN em claro |
+| `pinmudar` | bit | sim, por defeito 1 | 1 = PIN provisório, a pessoa tem de escolher outro ao entrar |
+| `pinalteradopor` | varchar(30) | não | Quem definiu o último PIN |
+| `pinalteradoem` | datetime | não | Quando |
+| `ousrinis` varchar(30), `ousrdata` datetime, `ousrhora` varchar(8), `usrinis` varchar(30), `usrdata` datetime, `usrhora` varchar(8) | padrão PHC | sim | Campos de auditoria habituais |
+
+Índices únicos: `utilizador` e `pinhash`. O segundo é o que impede dois utilizadores de terem o mesmo PIN (necessário porque se entra só com o PIN).
+
+Os supervisores criam-se diretamente na tabela por quem administra (`perfil = 'SUPERVISOR'`, `pinmudar = 1`). A app só cria operadores. Para gerar o PIN provisório e o `pinhash` do primeiro supervisor, com o `Pin:Pepper` já configurado:
+
+`dotnet run --project GestorManutencao.Api -- gerar-pin`
+
+Imprime o PIN (para entregar à pessoa) e o `pinhash` (para gravar na tabela). O PIN nunca é guardado.
+
+## Regras
+
+- Entra-se só com o PIN: 6 números, sem sequências óbvias (000000, 123456, 654321...).
+- O supervisor cria o operador e a app mostra-lhe o PIN provisório uma única vez. O mesmo ao repor um PIN.
+- Com PIN provisório a pessoa só consegue escolher o PIN definitivo.
+- O supervisor não repõe o PIN de outro supervisor.
+- A API usa um login SQL próprio, só com `SELECT`, `INSERT` e `UPDATE` em `u_manutil`.
+
+## Configuração da API (a preencher por quem instala)
+
+- `ConnectionStrings:PHCConn`: ligação com o login próprio da API.
+- `Jwt:Chave`: mínimo 32 caracteres.
+- `Pin:Pepper`: mínimo 32 caracteres e diferente da chave do token. Segredo do servidor com que o PIN é cifrado; **se se perder, todos os PINs ficam inválidos**, e se mudar, é preciso repô-los a todos. Guardar uma cópia segura, fora da base de dados e da pasta partilhada com o PHC (variáveis de ambiente ou cifrado com `tools/segredos/sc-segredos.ps1`).
+
+- `Proxy:IpsConfiaveis`: se a API está atrás de proxy ou balanceador, listar os seus IPs. Sem isto o limite de tentativas vê todos os técnicos como um só endereço.
+- `Limites:LoginPorMinuto` (por endereço, por defeito 10) e `Limites:LoginGlobalPorMinuto` (teto total, por defeito 600): ajustar ao número de técnicos e ao NAT da fábrica.
+
+## Sessões
+
+- O token dura 10 horas, mas deixa de valer logo que o PIN da pessoa muda ou que ela é desativada.
+- Os registos da API guardam o endereço IP das tentativas falhadas (para detetar ataques), nunca o PIN. Informar o cliente (RGPD).
+
+## Limite conhecido
+
+Com entrada só por PIN não é possível bloquear uma pessoa em concreto. A proteção é por limites de tentativas por endereço e no total (valores acima). Um atacante com muitos endereços pode, a longo prazo, acertar num PIN válido; por isso os PINs têm 6 números e os óbvios são recusados.

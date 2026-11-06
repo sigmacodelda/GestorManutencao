@@ -1,0 +1,128 @@
+@page "/equipa"
+@inject SessaoService Sessao
+@inject IEquipaService ServicoEquipa
+
+<PageTitle>Equipa · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Equipa</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else
+    {
+        @if (_pinNovo is not null)
+        {
+            <div class="alerta alerta-pin" role="status">
+                <Icone Nome="lock" />
+                <div>
+                    <p>PIN provisório de <strong>@_pinDe</strong>:</p>
+                    <p class="pin-grande">@_pinNovo</p>
+                    <p>Mostre-o só a essa pessoa. Não volta a aparecer. Ela vai escolher o PIN definitivo ao entrar.</p>
+                    <button type="button" class="btn-texto" @onclick="() => _pinNovo = null">Já anotei, fechar</button>
+                </div>
+            </div>
+        }
+
+        <form class="formulario" @onsubmit="CriarAsync" novalidate>
+            <h2 class="titulo-grupo">Novo operador</h2>
+            <div class="campo">
+                <label for="nome">Nome</label>
+                <input id="nome" type="text" autocomplete="off" @bind="_nome" @bind:event="oninput" />
+            </div>
+            <div class="campo">
+                <label for="codigo">Código curto (sem espaços)</label>
+                <input id="codigo" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" @bind="_codigo" @bind:event="oninput" />
+            </div>
+            <button type="submit" class="btn btn-secundario" disabled="@_ocupado">Criar e dar PIN</button>
+        </form>
+
+        <p class="campo-erro" role="alert">@_erro</p>
+
+        @if (_a_carregar)
+        {
+            <p class="estado-lista" role="status">A carregar…</p>
+        }
+        else
+        {
+            <ul class="lista-intervencoes">
+                @foreach (var m in _membros)
+                {
+                    <li class="intervencao">
+                        <span class="intervencao-titulo">@m.Nome</span>
+                        <span class="intervencao-desc">@(m.Perfil == Perfil.Supervisor ? "Supervisor" : "Operador")@(m.PinProvisorio ? " · PIN por escolher" : "")@(m.Ativo ? "" : " · Inativo")</span>
+                        @if (m.Perfil == Perfil.Operador && m.Ativo)
+                        {
+                            <button type="button" class="btn-texto intervencao-data" disabled="@_ocupado" @onclick="() => NovoPinAsync(m)">Novo PIN</button>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    }
+</section>
+
+@code {
+    private IReadOnlyList<MembroEquipa> _membros = [];
+    private string _nome = "", _codigo = "", _erro = "", _pinDe = "";
+    private string? _pinNovo;
+    private bool _a_carregar = true, _ocupado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sessao.PodeSerSupervisor) await CarregarAsync();
+        else _a_carregar = false;
+    }
+
+    private async Task CarregarAsync()
+    {
+        try { _membros = await ServicoEquipa.ListarAsync(Sessao.Utilizador?.Token); }
+        catch (Exception) { _erro = "Não foi possível carregar a equipa."; }
+        finally { _a_carregar = false; }
+    }
+
+    private async Task CriarAsync()
+    {
+        _erro = "";
+        var codigo = _codigo.Trim().ToLowerInvariant();
+        if (_nome.Trim().Length < 2) { _erro = "Escreva o nome."; return; }
+        if (!System.Text.RegularExpressions.Regex.IsMatch(codigo, "^[a-z0-9._-]{2,30}$"))
+        { _erro = "O código só pode ter letras, números, ponto, hífen ou sublinhado (2 a 30)."; return; }
+
+        _ocupado = true;
+        try
+        {
+            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim());
+            if (Tratar(r, _nome.Trim())) { _nome = _codigo = ""; await CarregarAsync(); }
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task NovoPinAsync(MembroEquipa m)
+    {
+        _erro = "";
+        _ocupado = true;
+        try
+        {
+            if (Tratar(await ServicoEquipa.NovoPinAsync(Sessao.Utilizador?.Token, m.Codigo), m.Nome)) await CarregarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private bool Tratar(RespostaEquipa r, string nome)
+    {
+        switch (r.Resultado)
+        {
+            case ResultadoEquipa.Ok: _pinNovo = r.Pin; _pinDe = nome; return true;
+            case ResultadoEquipa.JaExiste: _erro = "Já existe alguém com esse código."; break;
+            case ResultadoEquipa.SemPermissao: _erro = "Não tem permissão para isto."; break;
+            default: _erro = "Não foi possível ligar ao servidor. Tente outra vez."; break;
+        }
+        return false;
+    }
+}

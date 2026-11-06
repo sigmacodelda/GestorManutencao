@@ -7,21 +7,33 @@ namespace GestorManutencao.UI.Servicos;
 // Só para desenvolvimento e testes: lê utilizadores fictícios de um recurso embebido.
 public sealed class DevAutenticacaoService : IAutenticacaoService
 {
-    private sealed record UtilizadorTeste(string Utilizador, string Password, string Nome, Perfil Perfil);
+    private sealed record UtilizadorTeste(string Pin, string Nome, Perfil Perfil, bool PinProvisorio = false);
 
-    private static readonly Lazy<IReadOnlyList<UtilizadorTeste>> Utilizadores = new(Carregar);
+    private readonly List<UtilizadorTeste> _utilizadores = Carregar();
 
-    public async Task<ResultadoLogin> EntrarAsync(string utilizador, string password, CancellationToken ct = default)
+    public async Task<ResultadoLogin> EntrarAsync(string pin, CancellationToken ct = default)
     {
-        await Task.Delay(500, ct);
-        var encontrado = Utilizadores.Value.FirstOrDefault(u =>
-            string.Equals(u.Utilizador, utilizador.Trim(), StringComparison.OrdinalIgnoreCase) && u.Password == password);
-        return encontrado is null
+        await Task.Delay(300, ct);
+        var u = _utilizadores.FirstOrDefault(x => x.Pin == pin);
+        return u is null
             ? ResultadoLogin.Falha(ErroLogin.Credenciais)
-            : ResultadoLogin.Ok(new Utilizador(encontrado.Nome, encontrado.Perfil));
+            : ResultadoLogin.Ok(new Utilizador(u.Nome, u.Perfil, PinProvisorio: u.PinProvisorio));
     }
 
-    private static IReadOnlyList<UtilizadorTeste> Carregar()
+    public async Task<ResultadoLogin> MudarPinAsync(string? token, string pinAtual, string pinNovo, CancellationToken ct = default)
+    {
+        await Task.Delay(300, ct);
+        var pos = _utilizadores.FindIndex(x => x.Pin == pinAtual);
+        if (pos < 0) return ResultadoLogin.Falha(ErroLogin.Credenciais);
+        if (!RegrasPin.Aceitavel(pinNovo) || pinNovo == pinAtual) return ResultadoLogin.Falha(ErroLogin.PinFraco);
+        if (_utilizadores.Any(x => x.Pin == pinNovo)) return ResultadoLogin.Falha(ErroLogin.PinEmUso);
+
+        var u = _utilizadores[pos] with { Pin = pinNovo, PinProvisorio = false };
+        _utilizadores[pos] = u;
+        return ResultadoLogin.Ok(new Utilizador(u.Nome, u.Perfil));
+    }
+
+    private static List<UtilizadorTeste> Carregar()
     {
         var assembly = Assembly.GetExecutingAssembly();
         var nome = assembly.GetManifestResourceNames().Single(n => n.EndsWith("utilizadores-teste.json"));

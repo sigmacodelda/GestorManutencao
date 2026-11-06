@@ -5,9 +5,9 @@ public enum Perfil { Operador, Supervisor }
 
 public enum ModoTrabalho { Operador, Supervisor }
 
-public enum ErroLogin { Credenciais, Rede, DemasiadasTentativas }
+public enum ErroLogin { Credenciais, Rede, DemasiadasTentativas, PinFraco, PinEmUso }
 
-public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null, DateTimeOffset? ExpiraEm = null)
+public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null, DateTimeOffset? ExpiraEm = null, bool PinProvisorio = false)
 {
     // Nunca imprimir o token (o ToString automático do record iria para logs e páginas de erro).
     private bool PrintMembers(System.Text.StringBuilder sb)
@@ -31,6 +31,27 @@ public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null
             };
         }
     }
+}
+
+// Mesmas regras do servidor, só para avisar logo no ecrã (o servidor volta a validar).
+public static class RegrasPin
+{
+    public const int Tamanho = 6;
+
+    public static bool FormatoValido(string? pin) => pin is { Length: Tamanho } && pin.All(c => c is >= '0' and <= '9');
+
+    public static bool Aceitavel(string? pin)
+    {
+        if (!FormatoValido(pin)) return false;
+        var passos = pin!.Zip(pin.Skip(1), (a, b) => b - a).ToList();
+        return !passos.All(p => p == 0) && !passos.All(p => p == 1) && !passos.All(p => p == -1);
+    }
+
+    public static string? ValidarNovo(string? pin, string? repetido) =>
+        !FormatoValido(pin) ? "O PIN tem de ter 6 números."
+        : !Aceitavel(pin) ? "Esse PIN é fácil de adivinhar. Escolha outro."
+        : pin != repetido ? "Os dois PINs não são iguais."
+        : null;
 }
 
 public sealed record ResultadoLogin(Utilizador? Utilizador, ErroLogin? Erro)

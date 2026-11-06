@@ -1,0 +1,78 @@
+@page "/avaria"
+@inject IIntervencoesService Intervencoes
+@inject IEquipamentosService Equipamentos
+@inject NavigationManager Nav
+
+<PageTitle>Registar avaria · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Registar avaria</h1>
+    </div>
+
+    <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+        <div class="campo">
+            <label for="equipamento">Equipamento</label>
+            <input id="equipamento" type="search" autocomplete="off" placeholder="Escreva o nome" value="@_texto"
+                   @oninput="PesquisarAsync" aria-describedby="erro-avaria" />
+            @if (_escolhido is not null)
+            {
+                <p class="escolhido"><Icone Nome="check" /><span>@_escolhido.Nome · @_escolhido.Zona</span></p>
+            }
+            else if (_opcoes.Count > 0)
+            {
+                <ul class="opcoes" aria-label="Equipamentos encontrados">
+                    @foreach (var e in _opcoes)
+                    {
+                        <li><button type="button" class="opcao" @onclick="() => Escolher(e)">@e.Nome <span class="opcao-zona">@e.Zona</span></button></li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div class="campo">
+            <label for="anomalia">Qual é o problema?</label>
+            <textarea id="anomalia" rows="4" @bind="_anomalia" @bind:event="oninput"></textarea>
+        </div>
+
+        <p id="erro-avaria" class="campo-erro" role="alert">@_erro</p>
+
+        <button type="submit" class="btn btn-primario" disabled="@_a_guardar">@(_a_guardar ? "A guardar…" : "Guardar avaria")</button>
+    </form>
+</section>
+
+@code {
+    private string _texto = "", _anomalia = "", _erro = "";
+    private IReadOnlyList<Equipamento> _opcoes = [];
+    private Equipamento? _escolhido;
+    private bool _a_guardar;
+
+    private async Task PesquisarAsync(ChangeEventArgs e)
+    {
+        _texto = e.Value?.ToString() ?? "";
+        _escolhido = null;
+        _erro = "";
+        try { _opcoes = _texto.Length == 0 ? [] : await Equipamentos.PesquisarAsync(_texto); }
+        catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
+        catch (Exception) { _erro = "Não foi possível pesquisar. Tente outra vez."; }
+    }
+
+    private void Escolher(Equipamento e) { _escolhido = e; _texto = e.Nome; _opcoes = []; _erro = ""; }
+
+    private async Task GuardarAsync()
+    {
+        _erro = RegrasIntervencao.ValidarAvaria(_escolhido?.Nome, _anomalia) ?? "";
+        if (_erro.Length > 0) return;
+
+        _a_guardar = true;
+        try
+        {
+            await Intervencoes.RegistarAvariaAsync(_escolhido!.Nome, _anomalia);
+            Nav.NavigateTo("intervencoes");
+        }
+        catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
+        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _a_guardar = false; }
+    }
+}

@@ -1,7 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Data.SqlClient;
+using System.Text.RegularExpressions;
 using Microsoft.IdentityModel.Tokens;
 
 namespace GestorManutencao.Api;
@@ -9,15 +10,30 @@ namespace GestorManutencao.Api;
 [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
 public enum Perfil { Operador, Supervisor }
 
-public enum FalhaValidacao { Credenciais, Indisponivel }
+// Versao muda sempre que o PIN muda; vai no token e permite revogar os tokens antigos.
+public sealed record UtilizadorApp(string Codigo, string Nome, Perfil Perfil, bool Ativo, bool PinProvisorio, long Versao = 0);
 
-public sealed record UtilizadorValidado(string Codigo, string Nome, IReadOnlyList<string> Perfis);
+public sealed record PedidoLogin(string? Pin)
+{
+    private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
+}
 
-public sealed record ResultadoValidacao(UtilizadorValidado? Utilizador, FalhaValidacao? Falha);
+public sealed record PedidoMudarPin(string? PinAtual, string? PinNovo)
+{
+    private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
+}
 
-public sealed record PedidoLogin(string? Utilizador, string? Password);
+public sealed record PedidoNovoUtilizador(string? Utilizador, string? Nome);
 
-public sealed record RespostaLogin(string Token, DateTimeOffset ExpiraEm, string Nome, Perfil Perfil);
+public sealed record RespostaLogin(string Token, DateTimeOffset ExpiraEm, string Nome, Perfil Perfil, bool PinProvisorio)
+{
+    private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
+}
+
+public sealed record RespostaPin(string Pin)
+{
+    private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
+}
 
 public sealed class JwtOpcoes
 {
@@ -27,111 +43,72 @@ public sealed class JwtOpcoes
     public int HorasValidade { get; set; } = 10;
 }
 
-public sealed class PerfisOpcoes
+public sealed class PinOpcoes
 {
-    // Perfil do PHC (pf.resumo) que dá o modo supervisor; quem o tiver passa a poder ver o modo supervisor.
-    public string Supervisor { get; set; } = "DES_MANUT_SUPERVISOR";
+    // Segredo do servidor com que se calcula o hash dos PINs; nunca fica na base de dados.
+    public string Pepper { get; set; } = "";
 }
 
-// Valida as credenciais contra o SQL Server do PHC.
-public interface IValidadorCredenciais
+public static partial class RegrasPin
 {
-    Task<ResultadoValidacao> ValidarAsync(string utilizador, string password, CancellationToken ct);
-}
+    public const int Tamanho = 6;
 
-// Mesmo critério do LandeiroMaui: abre-se uma ligação com o próprio login SQL do utilizador.
-// A API não guarda credenciais de SQL nenhumas; a cadeia de ligação base (servidor e base) vem do appsettings.
-public sealed class SqlValidadorCredenciais(IConfiguration configuracao, ILogger<SqlValidadorCredenciais> log) : IValidadorCredenciais
-{
-    // 18456 login falhado, 18486 conta bloqueada, 18487 password expirada, 18488 password tem de mudar.
-    private static readonly HashSet<int> ErrosDeCredenciais = [18456, 18486, 18487, 18488];
+    [GeneratedRegex(@"^\d{6}$")]
+    private static partial Regex SeisDigitos();
 
-    private const string SqlUtilizador =
-        "select username as nome from us with (nolock) where usercode = @utilizador";
+    public static bool FormatoValido(string? pin) => pin is not null && SeisDigitos().IsMatch(pin);
 
-    private const string SqlPerfis =
-        """
-        select pf.resumo
-        from pf (nolock)
-        inner join pfu (nolock) on pfu.pfstamp = pf.pfstamp
-        where pf.resumo is not null and left(pf.resumo, 4) = 'DES_'
-          and pfu.userno = (select userno from us with (nolock) where usercode = @utilizador)
-        """;
-
-    // O builder escapa os valores (um ';' não injeta opções). Pooling desligado: uma ligação em pool com a
-    // mesma password não reautentica, e um login desativado no SQL continuaria a entrar.
-    public static string ConstruirLigacao(string baseLigacao, string utilizador, string password) =>
-        new SqlConnectionStringBuilder(baseLigacao)
-        {
-            UserID = utilizador,
-            Password = password,
-            Pooling = false,
-            IntegratedSecurity = false
-        }.ConnectionString;
-
-    public async Task<ResultadoValidacao> ValidarAsync(string utilizador, string password, CancellationToken ct)
+    // Recusa os PINs que qualquer pessoa tentaria primeiro: 000000, 123456, 654321...
+    public static bool Aceitavel(string? pin)
     {
-        var baseLigacao = configuracao.GetConnectionString("PHCConn");
-        if (string.IsNullOrWhiteSpace(baseLigacao))
-        {
-            log.LogError("ConnectionStrings:PHCConn não está configurada.");
-            return new ResultadoValidacao(null, FalhaValidacao.Indisponivel);
-        }
+        if (!FormatoValido(pin)) return false;
+        var passos = pin!.Zip(pin.Skip(1), (a, b) => b - a).ToList();
+        return !passos.All(p => p == 0) && !passos.All(p => p == 1) && !passos.All(p => p == -1);
+    }
 
-        try
+    public static string Gerar()
+    {
+        while (true)
         {
-            await using var conn = new SqlConnection(ConstruirLigacao(baseLigacao, utilizador, password));
-            await conn.OpenAsync(ct);
-
-            string? nome;
-            await using (var cmd = new SqlCommand(SqlUtilizador, conn))
-            {
-                cmd.Parameters.Add("@utilizador", System.Data.SqlDbType.VarChar, 128).Value = utilizador;
-                nome = await cmd.ExecuteScalarAsync(ct) as string;
-            }
-
-            // Login SQL válido mas sem utilizador PHC (conta de serviço, sa...): não entra na app.
-            if (nome is null) return new ResultadoValidacao(null, FalhaValidacao.Credenciais);
-
-            var perfis = new List<string>();
-            await using (var cmd = new SqlCommand(SqlPerfis, conn))
-            {
-                cmd.Parameters.Add("@utilizador", System.Data.SqlDbType.VarChar, 128).Value = utilizador;
-                await using var leitor = await cmd.ExecuteReaderAsync(ct);
-                while (await leitor.ReadAsync(ct))
-                    if (!leitor.IsDBNull(0)) perfis.Add(leitor.GetString(0).Trim());
-            }
-
-            return new ResultadoValidacao(new UtilizadorValidado(utilizador, nome.Trim() is { Length: > 0 } n ? n : utilizador, perfis), null);
-        }
-        catch (SqlException ex) when (ErrosDeCredenciais.Contains(ex.Number))
-        {
-            return new ResultadoValidacao(null, FalhaValidacao.Credenciais);
-        }
-        catch (SqlException ex)
-        {
-            // Só o número do erro (4060 = sem acesso à base, etc.), nunca a mensagem.
-            log.LogError("Falha SQL durante o login (erro {Numero}).", ex.Number);
-            return new ResultadoValidacao(null, FalhaValidacao.Indisponivel);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // Sem a password nem o utilizador no registo.
-            log.LogError(ex, "Falha a ligar ao SQL Server durante o login.");
-            return new ResultadoValidacao(null, FalhaValidacao.Indisponivel);
+            var pin = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+            if (Aceitavel(pin)) return pin;
         }
     }
 }
 
-public sealed class EmissorToken(Microsoft.Extensions.Options.IOptions<JwtOpcoes> jwt, Microsoft.Extensions.Options.IOptions<PerfisOpcoes> perfis, TimeProvider relogio)
+// O PIN identifica a pessoa, por isso o hash tem de ser reproduzível: HMAC com um segredo do servidor.
+// Uma fuga da tabela sozinha não chega para recuperar os PINs.
+public sealed class PinHasher(Microsoft.Extensions.Options.IOptions<PinOpcoes> opcoes)
 {
-    public Perfil CalcularPerfil(UtilizadorValidado u) =>
-        u.Perfis.Contains(perfis.Value.Supervisor, StringComparer.OrdinalIgnoreCase) ? Perfil.Supervisor : Perfil.Operador;
+    public string Hash(string pin) =>
+        Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(opcoes.Value.Pepper), Encoding.UTF8.GetBytes(pin)));
+}
 
-    public RespostaLogin Emitir(UtilizadorValidado u)
+public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste }
+
+public sealed class RepositorioIndisponivelException(Exception? interna = null)
+    : Exception("A base de dados dos utilizadores não está disponível.", interna);
+
+public interface IRepositorioUtilizadores
+{
+    // Só devolve utilizadores ativos.
+    Task<UtilizadorApp?> ObterPorPinAsync(string pinHash, CancellationToken ct);
+    Task<UtilizadorApp?> ObterAsync(string codigo, CancellationToken ct);
+    Task<IReadOnlyList<UtilizadorApp>> ListarAsync(CancellationToken ct);
+    // Cria sempre um operador, já com o seu PIN provisório.
+    Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, string pinHash, string porQuem, CancellationToken ct);
+    // Com pinHashAtual só muda se o PIN ainda for esse (evita que duas alterações em simultâneo se atropelem).
+    Task<ResultadoPin> DefinirPinAsync(string codigo, string pinHash, bool provisorio, string porQuem, CancellationToken ct, string? pinHashAtual = null);
+}
+
+public sealed class EmissorToken(Microsoft.Extensions.Options.IOptions<JwtOpcoes> jwt, TimeProvider relogio)
+{
+    public const string ClaimPinProvisorio = "pinprov";
+    public const string ClaimVersao = "pv";
+
+    public RespostaLogin Emitir(UtilizadorApp u)
     {
         var opcoes = jwt.Value;
-        var perfil = CalcularPerfil(u);
         var agora = relogio.GetUtcNow();
         var expira = agora.AddHours(opcoes.HorasValidade);
 
@@ -139,16 +116,28 @@ public sealed class EmissorToken(Microsoft.Extensions.Options.IOptions<JwtOpcoes
         {
             new(JwtRegisteredClaimNames.Sub, u.Codigo),
             new(ClaimTypes.Name, u.Nome),
-            new(ClaimTypes.Role, perfil.ToString())
+            new(ClaimTypes.Role, u.Perfil.ToString())
         };
+        // Com o PIN provisório o token só serve para escolher o PIN definitivo.
+        if (u.PinProvisorio) claims.Add(new Claim(ClaimPinProvisorio, "1"));
+        claims.Add(new Claim(ClaimVersao, u.Versao.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
         var token = new JwtSecurityToken(
             opcoes.Emissor, opcoes.Audiencia, claims,
             notBefore: agora.UtcDateTime, expires: expira.UtcDateTime,
             signingCredentials: new SigningCredentials(ChaveDe(opcoes.Chave), SecurityAlgorithms.HmacSha256));
 
-        return new RespostaLogin(new JwtSecurityTokenHandler().WriteToken(token), expira, u.Nome, perfil);
+        return new RespostaLogin(new JwtSecurityTokenHandler().WriteToken(token), expira, u.Nome, u.Perfil, u.PinProvisorio);
     }
 
     public static SymmetricSecurityKey ChaveDe(string chave) => new(Encoding.UTF8.GetBytes(chave));
+}
+
+public static partial class RegrasUtilizador
+{
+    [GeneratedRegex(@"^[a-z0-9._-]{2,30}$")]
+    private static partial Regex CodigoValido();
+
+    public static bool CodigoOk(string? codigo) => codigo is not null && CodigoValido().IsMatch(codigo);
+    public static bool NomeOk(string? nome) => nome is { } n && n.Trim().Length is >= 2 and <= 60;
 }

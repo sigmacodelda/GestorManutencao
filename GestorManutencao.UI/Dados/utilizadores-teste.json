@@ -1,4 +1,5 @@
 [
-  { "utilizador": "operador", "password": "teste-operador", "nome": "Operador de Teste", "perfil": "Operador" },
-  { "utilizador": "supervisor", "password": "teste-supervisor", "nome": "Supervisor de Teste", "perfil": "Supervisor" }
+  { "pin": "482913", "nome": "Operador de Teste", "perfil": "Operador" },
+  { "pin": "795316", "nome": "Supervisor de Teste", "perfil": "Supervisor" },
+  { "pin": "357159", "nome": "Novo Operador de Teste", "perfil": "Operador", "pinProvisorio": true }
 ]

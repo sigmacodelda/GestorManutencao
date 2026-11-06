@@ -28,9 +28,15 @@ public sealed class SessaoService(IAutenticacaoService autenticacao, IArmazemSes
         Alterada?.Invoke();
     }
 
-    public async Task<ResultadoLogin> EntrarAsync(string utilizador, string password, CancellationToken ct = default)
+    public Task<ResultadoLogin> EntrarAsync(string pin, CancellationToken ct = default) =>
+        Estabelecer(autenticacao.EntrarAsync(pin, ct));
+
+    public Task<ResultadoLogin> MudarPinAsync(string pinAtual, string pinNovo, CancellationToken ct = default) =>
+        Estabelecer(autenticacao.MudarPinAsync(Utilizador?.Token, pinAtual, pinNovo, ct));
+
+    private async Task<ResultadoLogin> Estabelecer(Task<ResultadoLogin> operacao)
     {
-        var resultado = await autenticacao.EntrarAsync(utilizador, password, ct);
+        var resultado = await operacao;
         if (resultado.Sucesso)
         {
             Utilizador = resultado.Utilizador;

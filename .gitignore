@@ -404,3 +404,5 @@ obj/
 .vs/
 *.user
 .playwright-mcp/
+appsettings.Production.json
+**/appsettings.*.local.json

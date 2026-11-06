@@ -39,6 +39,13 @@
         Nav.NavigateTo("login", replace: true);
     }
 
+    // Com o PIN provisório só se pode escolher o PIN definitivo.
+    protected override void OnParametersSet()
+    {
+        if (_pronto && Sessao.Utilizador is { PinProvisorio: true } && Nav.ToBaseRelativePath(Nav.Uri) != "pin")
+            Nav.NavigateTo("pin", replace: true);
+    }
+
     private void Atualizar() => InvokeAsync(StateHasChanged);
 
     public void Dispose() => Sessao.Alterada -= Atualizar;

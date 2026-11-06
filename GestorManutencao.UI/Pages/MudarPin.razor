@@ -1,0 +1,61 @@
+@page "/pin"
+@inject SessaoService Sessao
+@inject NavigationManager Nav
+
+<PageTitle>Escolher PIN · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <h1 tabindex="-1">Escolha o seu PIN</h1>
+        <p class="login-sub">O PIN que recebeu é provisório. Escolha um só seu, com 6 números, que mais ninguém conheça.</p>
+    </div>
+
+    <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+        <div class="campo">
+            <label for="pin-atual">PIN que recebeu</label>
+            <input id="pin-atual" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" @bind="_atual" @bind:event="oninput" />
+        </div>
+        <div class="campo">
+            <label for="pin-novo">PIN novo</label>
+            <input id="pin-novo" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" @bind="_novo" @bind:event="oninput" />
+        </div>
+        <div class="campo">
+            <label for="pin-repetir">Repita o PIN novo</label>
+            <input id="pin-repetir" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" @bind="_repetir" @bind:event="oninput" />
+        </div>
+
+        <p class="campo-erro" role="alert">@_erro</p>
+
+        <button type="submit" class="btn btn-primario" disabled="@_a_guardar">@(_a_guardar ? "A guardar…" : "Guardar PIN")</button>
+    </form>
+</section>
+
+@code {
+    private string _atual = "", _novo = "", _repetir = "", _erro = "";
+    private bool _a_guardar;
+
+    private async Task GuardarAsync()
+    {
+        _erro = !RegrasPin.FormatoValido(_atual) ? "Escreva o PIN que recebeu (6 números)."
+              : RegrasPin.ValidarNovo(_novo, _repetir)
+              ?? (_novo == _atual ? "O PIN novo tem de ser diferente do que recebeu." : "");
+        if (_erro.Length > 0) return;
+
+        _a_guardar = true;
+        try
+        {
+            var r = await Sessao.MudarPinAsync(_atual, _novo);
+            if (r.Sucesso) { Nav.NavigateTo("", replace: true); return; }
+            _erro = r.Erro switch
+            {
+                ErroLogin.Credenciais => "O PIN que recebeu não está certo.",
+                ErroLogin.PinEmUso => "Esse PIN não está disponível. Escolha outro.",
+                ErroLogin.PinFraco => "Esse PIN é fácil de adivinhar. Escolha outro.",
+                ErroLogin.DemasiadasTentativas => "Demasiadas tentativas. Aguarde um minuto.",
+                _ => "Não foi possível ligar ao servidor. Tente outra vez."
+            };
+        }
+        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _a_guardar = false; _atual = _novo = _repetir = ""; }
+    }
+}

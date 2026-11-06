@@ -39,10 +39,12 @@
                     @foreach (var i in grupo.Itens)
                     {
                         var atrasada = i.EstaAtrasada(_hoje);
-                        <li class="intervencao @(atrasada ? "atrasada" : "")">
-                            <span class="intervencao-titulo">@i.Equipamento</span>
-                            <span class="intervencao-desc">@i.Zona · @(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
-                            <span class="intervencao-data">@TextoData(i.DataPlaneada)</span>
+                        <li>
+                            <a class="intervencao @(atrasada ? "atrasada" : "")" href="intervencoes/@i.Id">
+                                <span class="intervencao-titulo">@i.Equipamento</span>
+                                <span class="intervencao-desc">@i.Zona · @(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                                <span class="intervencao-data">@TextoData(i.DataPlaneada)</span>
+                            </a>
                         </li>
                     }
                 </ul>
@@ -50,6 +52,8 @@
         }
     }
 </section>
+
+<a class="fab" href="avaria" aria-label="Registar avaria"><Icone Nome="plus" /></a>
 
 @code {
     private IReadOnlyList<GrupoIntervencoes> _grupos = [];

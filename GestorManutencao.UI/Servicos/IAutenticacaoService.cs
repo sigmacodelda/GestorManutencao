@@ -2,13 +2,15 @@ using GestorManutencao.UI.Modelos;
 
 namespace GestorManutencao.UI.Servicos;
 
-// Contrato do login. A implementação real fica pendente da decisão D-10 (API fina ou conta mínima).
 public interface IAutenticacaoService
 {
-    Task<ResultadoLogin> EntrarAsync(string utilizador, string password, CancellationToken ct = default);
+    Task<ResultadoLogin> EntrarAsync(string pin, CancellationToken ct = default);
+
+    // Devolve o utilizador com um token novo, já sem PIN provisório.
+    Task<ResultadoLogin> MudarPinAsync(string? token, string pinAtual, string pinNovo, CancellationToken ct = default);
 }
 
-// Onde a sessão sobrevive ao fecho da app (SecureStorage no MAUI, memória no anfitrião web).
+// Onde a sessão sobrevive ao fecho da app (SecureStorage no MAUI, memória nos testes).
 public interface IArmazemSessao
 {
     Task<Utilizador?> LerAsync();
