@@ -1,5 +1,7 @@
 # Resumo da reunião com a Informática Landeiro (04/11/2026)
 
+> Nota (2026-11-06): este resumo regista o que foi dito em 04/11/2026 e não se reescreve. Desde então o planeamento segue a base da LandeiroMaui (`../base-landeiromaui.md`), que prevalece: o circuito de manutenção (estados, validação, configuração, material usado em `u_matinterv`) já existe no PHC; o armazém, o stock e as etiquetas da secção 3 são o que é NOVO face a essa base.
+
 Fonte: gravação "Chamada com Informática Landeiro" (24 min, 14:53), transcrição automática (`transcricao-bruta.txt`) e frames do ecrã partilhado (`../fontes/video-frames/`).
 Participantes visíveis: equipa da Informática Landeiro (sala) e Osvaldo Amaral (SigmaCode). Os nomes citados na conversa (Luís, Rui, Vinâncio, Mário) vêm de áudio difícil: **Suposição:** Luís e Rui são da Landeiro (Word do plano e circuito PHC, como está no quadro); Vinâncio faz as compras.
 

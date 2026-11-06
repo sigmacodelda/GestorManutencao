@@ -21,6 +21,15 @@ public class IntervencoesTests
     }
 
     [Fact]
+    public void Fora_de_prazo_quando_a_data_prevista_ja_passou_mesmo_com_planeada_para_hoje()
+    {
+        Assert.True(Nova("a", 0, EstadoIntervencao.Planeada) with { DataPrevista = Hoje.AddDays(-3) } is var f && f.ForaDePrazo(Hoje));
+        Assert.False((Nova("b", 0, EstadoIntervencao.Planeada) with { DataPrevista = Hoje }).ForaDePrazo(Hoje));
+        Assert.False(Nova("c", 0, EstadoIntervencao.Planeada).ForaDePrazo(Hoje));
+        Assert.False((Nova("d", 0, EstadoIntervencao.Concluida) with { DataPrevista = Hoje.AddDays(-3) }).ForaDePrazo(Hoje));
+    }
+
+    [Fact]
     public void Agrupa_em_curso_depois_atrasadas_depois_as_restantes_por_data()
     {
         var grupos = AgrupadorIntervencoes.Agrupar(

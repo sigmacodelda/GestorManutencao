@@ -40,9 +40,28 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
         where f.u_fichaintstamp = @id and f.obsoleto = 0
         """;
 
-    private const string SqlPlaneadas = Selecao +
+    // Como a LandeiroMaui: última feita da tarefa (ou, nas fichas antigas, do equipamento com a mesma periodicidade), última cancelada e periodicidade.
+    private const string SqlPlaneadas =
         """
-
+        select f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
+               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno,
+               coalesce(c.feita, lg.ultima), c.cancelada, isnull(pp.unidade, ''), isnull(pp.intervalo, 0)
+        from u_fichaint f
+        left join u_equip e on e.u_equipstamp = f.u_equipstamp
+        left join u_itmanutli l on l.u_itmanutlistamp = f.uitmanutlistamp
+        outer apply (select top 1 ltrim(rtrim(p.unidade)) as unidade, p.intervalo
+                     from u_periocid p
+                     where left(ltrim(rtrim(cast(p.periodo as varchar(254)))), 20) = ltrim(rtrim(isnull(l.periodo, f.periodo)))
+                     order by p.intervalo desc) pp
+        outer apply (select max(case when x.estado in ('Concluida', 'Validada') then x.data end) as feita,
+                            max(case when x.estado = 'Cancelada' then x.data end) as cancelada
+                     from u_fichaint x
+                     where f.uitmanutlistamp <> '' and x.uitmanutlistamp = f.uitmanutlistamp
+                       and x.estado in ('Concluida', 'Validada', 'Cancelada')) c
+        outer apply (select max(x.data) as ultima
+                     from u_fichaint x
+                     where x.u_equipstamp = f.u_equipstamp and x.estado = '' and x.obsoleto = 0 and x.data <= getdate()
+                       and ltrim(rtrim(x.periodo)) = ltrim(rtrim(f.periodo)) and ltrim(rtrim(f.periodo)) <> '') lg
         where f.estado in ('Planeada', 'EmCurso') and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
         order by f.data, f.ordem, f.no
         """;
@@ -289,6 +308,23 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
             Vazio(r.GetString(10)), (int)r.GetDecimal(11), podeValidar);
     }
 
+    // Data prevista = a mais recente entre a última feita e a última cancelada (cancelar salta uma ocorrência) + periodicidade.
+    private static IntervencaoDto LerPlaneada(SqlDataReader r)
+    {
+        var feita = r.IsDBNull(12) ? (DateTime?)null : r.GetDateTime(12);
+        var cancelada = r.IsDBNull(13) ? (DateTime?)null : r.GetDateTime(13);
+        var baseData = cancelada.HasValue && (!feita.HasValue || cancelada > feita) ? cancelada : feita;
+        var prevista = baseData.HasValue
+            ? RegrasManutencao.ProximaDepoisDaUltima(baseData.Value, RegrasManutencao.LerUnidade(r.GetString(14)), (int)r.GetDecimal(15))
+            : null;
+        return Ler(r) with
+        {
+            UltimaIntervencao = feita.HasValue ? DateOnly.FromDateTime(feita.Value) : null,
+            UltimaCancelada = cancelada.HasValue ? DateOnly.FromDateTime(cancelada.Value) : null,
+            DataPrevista = prevista.HasValue ? DateOnly.FromDateTime(prevista.Value) : null
+        };
+    }
+
     private static string? Vazio(string valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
 
     private static async Task<Atual?> LerAtualAsync(SqlConnection conn, string id, CancellationToken ct, SqlTransaction? tx = null)
@@ -479,7 +515,7 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
         Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<IntervencaoDto>();
-        while (lista.Count < 500 && await r.ReadAsync(ct)) lista.Add(Ler(r));
+        while (lista.Count < 500 && await r.ReadAsync(ct)) lista.Add(LerPlaneada(r));
         return lista;
     });
 

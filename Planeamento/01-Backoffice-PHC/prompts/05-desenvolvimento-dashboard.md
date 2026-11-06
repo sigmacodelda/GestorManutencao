@@ -11,7 +11,7 @@ Entradas: `C:\_SigmaRepos\GestorManutencao\docs\desenho.md`, `docs\contratos.md`
 Saídas: `Components/Pages/Manutencao/Dashboard/`, `Services/Manutencao/DashboardManutencaoService.cs`, `Interfaces/Manutencao/`, estilos em `wwwroot/css/manutencao.css`, testes em `LandeiroMaui.Testes`
 Critérios de conclusão:
 1. Cada KPI do dashboard (planeadas, realizadas, atrasadas, % cumprimento por mês, preventivas vs curativas, por equipamento e zona, custo de mão de obra e de peças, equipamentos com mais avarias) bate com uma consulta manual na base de testes, diferença zero, em pelo menos 3 períodos.
-2. Filtros (período, departamento, zona, equipamento, plano, tipo) combinam-se e reduzem todos os KPIs de forma coerente; alertas (atrasadas, a vencer na janela de antecedência, por validar, planos sem próxima data, equipamentos sem plano) navegam para o ecrã certo.
+2. Filtros (período, departamento, zona, equipamento, tarefa, tipo) combinam-se e reduzem todos os KPIs de forma coerente; alertas (atrasadas, a vencer na janela de antecedência, por validar, tarefas sem próxima data, equipamentos sem tarefa) navegam para o ecrã certo.
 3. Estrutura como os dashboards do LandeiroMaui (separadores por role, `PainelBase`, modo Visualizar com recarga a 30 s sem custos), cores D-09, abertura em menos de 3 s com 12 meses de dados (medido) e mosaico "peças em rutura" que mostra "indisponível" sem a Parte 3 e nunca dá erro.
 4. Compilação sem avisos, `verificar-segredos.ps1` limpo e revisão `sc-revisor` sem pendências críticas.
 Gate: manual
@@ -24,8 +24,8 @@ Agentes: `sc-leitor` (padrão dos dashboards), `sc-dev` (código), `sc-leitor-bd
 <context>
 - Projeto: Gestor de Manutenção da Carnes Landeiro. O dashboard dá à supervisão e à administração a visão do que está planeado, feito, atrasado e quanto custa, mais os alertas.
 - Dashboards existentes do LandeiroMaui (lê com `sc-leitor`, excertos): separadores por role `DES_DASHBOARD_*`, `PainelBase` (com `Visualizar`), `PainelResumo` (só números grandes), modo Visualizar em ecrã inteiro (`.db-tv`, recarrega a cada 30 s com `Versao++`, relógio `DbRelogio`), `TemDashboard`. Repete o padrão em `Components/Pages/Manutencao/Dashboard/`, com roles `MAN_*` (matriz do desenho) e **cores segundo D-09**: paleta SigmaCode (`--man-*` em `manutencao.css`), salvo a frase `[PREENCHER: vazio = SigmaCode; ou "Cliente: Landeiro, usar cores do cliente"]`.
-- Definições (copiadas do desenho; não as alteres sem registar): **Planeadas** = fichas com origem plano e `u_dataplan` no período, sem Cancelada. **Realizadas** = dessas, Concluida ou Validada. **Atrasadas** = Planeada ou EmCurso com `u_dataplan` < hoje (instantâneo a hoje, não por período). **A vencer** = Planeada com `u_dataplan` entre hoje e hoje + antecedência efetiva. **% cumprimento do mês** = realizadas ÷ planeadas com `u_dataplan` no mês (sem canceladas); mês sem planeadas = "n/a", nunca 0 %. **Preventivas vs curativas** = contagem de fichas por Tipo Intervenção por mês (não Canceladas). **Por equipamento e zona** = a zona é a localização da infraestrutura. **Custo** = soma de Mão de Obra e de Materiais/Peças das fichas Concluida e Validada, por mês e por equipamento (nomes de campos reais do levantamento). **Mais avarias** = top 10 de curativas por equipamento no período. **Peças em rutura** = só quando a Parte 3 existir (ver abaixo). Fichas legado (`u_estado` vazio) entram nas curativas e custos pelos campos existentes mas nunca em planeadas.
-- Alertas: atrasadas; a vencer na janela; Concluidas por validar; planos ativos sem próxima data; equipamentos ativos sem plano (útil na carga inicial).
+- Definições (alinhadas com a base da LandeiroMaui; não as alteres sem registar). Todas partem de `u_fichaint.estado` (texto: Planeada, EmCurso, Concluida, Validada, Cancelada) e da data da ficha; nada disto é gravado, tudo é derivado. **Planeadas** = fichas com `estado` Planeada, EmCurso, Concluida ou Validada e data no período, sem Cancelada. **Realizadas** = dessas, Concluida ou Validada. **Atrasadas** = Planeada ou EmCurso com data < hoje (instantâneo a hoje, não por período). **A vencer** = Planeada com data entre hoje e hoje + `u_configman.antecedencia`. **Fora de prazo** (novo 05/11/2026) = tarefa cuja data prevista (a mais recente entre a última feita e a última cancelada + periodicidade `u_periocid`) já passou; o dashboard usa-a tal como o ecrã Planeadas. **% cumprimento do mês** = realizadas ÷ planeadas com data no mês (sem canceladas); mês sem planeadas = "n/a", nunca 0 %. **Preventivas vs curativas** = contagem de fichas por tipo de intervenção por mês (não Canceladas). **Por equipamento e zona** = a zona é `u_equip.local`. **Custo** = mão de obra (tempos em `u_tempinterv`, por confirmar o custo/hora) e material usado (`u_matinterv.custo`) das fichas Concluida e Validada, por mês e por equipamento (nomes de campos reais do levantamento). **Mais avarias** = top 10 de curativas por equipamento no período. **Peças em rutura** = NOVO: só quando a Parte 3 existir (ver abaixo); a base não tem stock. Fichas legado (`estado` vazio) entram nas curativas e custos pelos campos existentes mas nunca em planeadas.
+- Alertas: atrasadas; a vencer na janela; Concluidas por validar; tarefas ativas sem planeada nem próxima data; equipamentos ativos sem tarefa (útil na carga inicial).
 - Peças em rutura: a Parte 3 regista (DI opcional, `GetService`) uma `IAlertaRuturaProvider` com `ListarAsync()`; sem ela o mosaico mostra "indisponível".
 - Anexos: entradas acima.
 Nota: sem credenciais, tokens nem connection strings.
@@ -57,8 +57,8 @@ Solução escolhida e porquê: consultas diretas de leitura com `NOLOCK` (padrã
 
 <decisions>
 - D-09: cores SigmaCode por defeito. Alternativa rejeitada: cores do cliente por defeito. A estrutura segue os dashboards do LandeiroMaui.
-- D-05: planeadas = fichas Planeada; por isso planeadas, atrasadas e a vencer saem todas da Ficha.
-- O custo vem dos totais da Ficha (Mão de Obra, Materiais/Peças), conforme o levantamento (Suposição: confirma que os Movimentos somam para esses totais).
+- D-05: planeadas = fichas com `estado` Planeada; por isso planeadas, atrasadas e a vencer saem todas da ficha (`u_fichaint`).
+- O custo de material vem de `u_matinterv` (material usado; confirmado na base) e o de mão de obra dos tempos da intervenção (`u_tempinterv`); Suposição: confirma que somam para os totais da ficha.
 </decisions>
 
 <open-points>
@@ -92,7 +92,7 @@ Solução escolhida e porquê: consultas diretas de leitura com `NOLOCK` (padrã
 <tests>
 1. Reconciliação: tabela KPI × período (3 períodos) com valor do ecrã, valor da consulta manual e diferença; tudo zero.
 2. Filtros: zona + tipo + equipamento reduzem todos os KPIs; limpar os filtros devolve os valores originais.
-3. Mês sem planeadas mostra "n/a"; planeada Cancelada não conta; ficha legado nunca entra em planeadas.
+3. Mês sem planeadas mostra "n/a"; planeada Cancelada não conta; ficha legado (`estado` vazio) nunca entra em planeadas; Atrasada e A vencer calculam-se sem gravar nada.
 4. Peças em rutura: sem `IAlertaRuturaProvider` mostra "indisponível" e a consola não tem erros; com um fornecedor simulado mostra a lista.
 5. Perfis: operador não vê o dashboard; supervisor vê custos; o modo Visualizar não mostra custos.
 6. Desempenho: abertura em menos de 3 s com 12 meses de dados (mediana de 3 execuções); recarga do modo Visualizar sem piscar.

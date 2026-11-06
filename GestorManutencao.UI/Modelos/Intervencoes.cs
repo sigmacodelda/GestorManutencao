@@ -21,12 +21,18 @@ public sealed record Intervencao(
     TimeOnly? HoraFim = null,
     string? Tecnico = null,
     int Tecno = 0,
-    bool PodeValidar = true)
+    bool PodeValidar = true,
+    DateOnly? UltimaIntervencao = null,
+    DateOnly? UltimaCancelada = null,
+    DateOnly? DataPrevista = null)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
     // Derivado, nunca gravado: o estado "atrasada" depende só da data de hoje.
     public bool EstaAtrasada(DateOnly hoje) => PorFazer && DataPlaneada < hoje;
+
+    // A data em que devia ter sido feita (última + periodicidade) já passou, mesmo que a planeada esteja para hoje.
+    public bool ForaDePrazo(DateOnly hoje) => PorFazer && DataPrevista is { } p && p < hoje;
 }
 
 public sealed record Equipamento(string Id, string Nome, string Zona);

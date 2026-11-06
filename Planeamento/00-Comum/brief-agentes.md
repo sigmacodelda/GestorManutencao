@@ -2,9 +2,12 @@
 
 Papel: **só escreves documentos** (Markdown e HTML de mockup) na pasta da tua parte. Não escreves código da aplicação, não tocas na base de dados, não fazes git, não alteras nada fora da tua pasta (`C:\_SigmaRepos\GestorManutencao\Planeamento\<tua parte>\`). Escreves em português de Portugal. Sem credenciais, connection strings, IPs nem dados pessoais reais.
 
+BASE LANDEIROMAUI (2026-11-06, prevalece sobre o resto deste brief): o planeamento SEGUE a base da LandeiroMaui, onde o circuito de manutenção já está implementado no PHC. A fonte da verdade é `base-landeiromaui.md` (nesta pasta); se outro ficheiro a contradiz, prevalece ela. Os agentes que escrevem partes mapeiam a base e só propõem o que lhe falta, sempre marcado NOVO.
+
 ## Ler primeiro (por esta ordem; excertos, não ficheiros enormes)
 
 Pasta `C:\_SigmaRepos\GestorManutencao\Planeamento\00-Comum\`:
+0. `base-landeiromaui.md` (estados em `u_fichaint.estado`, regras por ação, `u_configman`, tabelas existentes, técnico PHC, o que não existe na base; lê-o inteiro)
 1. `requisitos-gerais.md` (os teus requisitos e a rastreabilidade)
 2. `arquitetura-e-modelo-de-dados.md` (reaproveitamento do LandeiroMaui, modelo candidato, contratos)
 3. `00-global.md` (as tasks da tua parte, decisões, pendências, riscos)
@@ -33,8 +36,8 @@ Tamanho: prompts compactos mas completos (um prompt ≈ 80 a 150 linhas); sem re
 
 - Marca SigmaCode nos documentos formatados e mockups: #5BB572 verde, #3466AF azul, #604696 roxo, #1A1731 azul-escuro, #CAC9C9 cinzento; tipografia Exo 2 (principal) e Open Sans (secundária). Mockups HTML: ficheiro único, sem bibliotecas externas além de Google Fonts, funciona em desktop e em largura de telemóvel.
 - Marca decisões que não estão no `00-global.md` como "Suposição:" e lista-as no fim do teu `README.md` na secção "Pressupostos novos". Não alteres o `00-global.md` nem os ficheiros de `00-Comum`; se encontrares contradição, escreve-a no teu README em "Contradições encontradas" e segue a norma.
-- Tabelas e campos novos no PHC: nunca os crias; especificam-se para o utilizador criar (formato `<phc-tables>` do modelo de prompt). SPs `sc_<Entidade><Acao>`, nunca `sp_`.
+- Tabelas e campos novos no PHC: só o que a base não tem (pedido de peças ao armazém, stock, etiquetas, receção, inventário, o campo `tecno` em `u_manutil`, etc.); nunca os crias, especificam-se para o utilizador criar (formato `<phc-tables>` do modelo de prompt) e marcam-se como NOVO. O que a base já tem (estado em `u_fichaint.estado`, `u_configman`, `u_itmanutli`, `u_periocid`, `u_matinterv`) não se redesenha. SPs `sc_<Entidade><Acao>`, nunca `sp_`.
 - Regras do projeto LandeiroMaui a respeitar nos prompts de desenvolvimento: ver `blocos-comuns-prompt.md`.
-- Não inventes nomes reais de tabelas ou campos do PHC existente: diz que se confirmam no levantamento P1-T01.
+- Usa os nomes de tabelas e campos que constam de `base-landeiromaui.md`; não inventes outros nomes do PHC existente: o que não está lá diz que se confirma por leitura (`sc-leitor-bd`) ou no levantamento P1-T01. Atrasada e A vencer são estados derivados, nunca gravados.
 - Não escrevas estimativas de tokens inventadas sem pressupostos: na FASE 0 do prompt-mestre, a tabela de orçamentação é pedida ao agente que executa (com intervalos e pressupostos), não preenchida por ti; tu só indicas as tasks, o âmbito e os pressupostos de partida.
 - No fim devolve ao principal: lista dos ficheiros criados (caminhos relativos), contradições, pressupostos novos, perguntas que bloqueiam e uma linha `MELHORIA: <...>` (ou `nenhuma`). Máximo 20 linhas, sem repetir o conteúdo dos ficheiros.

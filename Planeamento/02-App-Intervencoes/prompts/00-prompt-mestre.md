@@ -21,9 +21,9 @@ Agentes: `sc-leitor`, `sc-dev`, `sc-doc`, `sc-revisor`
 
 Papel: engenheiro de software sénior (.NET 9 MAUI Blazor Hybrid em Android, SQLite, Dapper, SQL Server, PHC) a orquestrar subagentes. Escreves em português de Portugal.
 
-Objetivo: entregar a app de telemóvel (Parte 2) com: login por PIN ou utilizador e password (base do login do LandeiroMaui), **trabalho obrigatório offline** (cache SQLite, fila de saída, sincronização sem duplicados), alerta de intervenções planeadas com a antecedência definida no backoffice, lista com botão "+", ecrã simples para criar a intervenção (equipamento, preventiva ou curativa, tempos, técnico, descrição, foto), avançar ordem conforme a configuração do backoffice e ligação às peças (Parte 3, 2.ª fase).
+Objetivo: completar a app de telemóvel GestorManutencao (Parte 2, já construída com login só por PIN contra `u_manutil`, perfis operador e supervisor) com: As minhas intervenções (iniciar, concluir, estado em `u_fichaint.estado`), Registar avaria, Planeadas e Material usado na ficha (`u_matinterv`; em construção), técnico = utilizador PHC (`tecno`/`tecnome`), **trabalho obrigatório offline** (NOVO: o LandeiroMaui não o tem) (cache SQLite, fila de saída, sincronização sem duplicados), alerta de intervenções planeadas com a antecedência definida no backoffice, lista com botão "+", ecrã simples para criar a intervenção (equipamento, preventiva ou curativa, tempos, técnico, descrição, foto), avançar ordem conforme `u_configman.avancaordem` (só a 1.ª planeada da zona por data, ordem e nº) e, na 2.ª fase, ligação às peças (Parte 3, NOVA: o que a base tem é só o material usado).
 
-Fluxo ponta a ponta: backoffice gera as planeadas (Parte 1) → app sincroniza e avisa → técnico inicia ou cria curativa → regista, fotografa → fila de saída offline → sincroniza → supervisão valida no backoffice (Parte 1) → ficha Fechada.
+Fluxo ponta a ponta: as planeadas são geradas uma de cada vez por tarefa (Parte 1; última feita + periodicidade) → app sincroniza e avisa → técnico inicia (EmCurso) ou regista uma avaria (estado inicial da curativa: por confirmar) → conclui (Concluida), regista material usado e foto → fila de saída offline → sincroniza → supervisão valida no backoffice (Validada, `fechada` = 1) ou devolve com motivo → ficha Fechada. Atrasada, A vencer e Fora de prazo são derivados, nunca gravados.
 
 Marca: SigmaCode por defeito em documentos e protótipo (verde #5BB572, azul #3466AF, roxo #604696, azul-escuro #1A1731, cinzento #CAC9C9; Exo 2 e Open Sans). A app só usa as cores do LandeiroMaui se este pedido disser "Cliente: Landeiro, usar cores do cliente".
 
@@ -31,11 +31,11 @@ Dependências de outras partes (diz-las no orçamento): P2-T02 precisa dos contr
 
 <context>
 - Repositórios: `C:\_SigmaRepos\Landeiro-Desmancha` (código; LandeiroMaui é a base, só se editam ficheiros nele quando a task o permitir) e `C:\_SigmaRepos\GestorManutencao` (planeamento); branch `dev-landeiro-manutencao-p2`; documentos em `docs/manutencao/p2/`.
-- LandeiroMaui: só compila para Windows, postos táteis 1024x768, alvo Android retirado. O plano offline do LandeiroMaui é só desenho (nada implementado). O login é o login SQL do próprio utilizador e guarda perfis `DES_*` em `SecureStorage`.
+- LandeiroMaui: só compila para Windows, postos táteis 1024x768, alvo Android retirado; é a base do circuito de manutenção (regras em `base-landeiromaui.md`), não do login da app. O plano offline do LandeiroMaui é só desenho (nada implementado). O login do LandeiroMaui (login SQL do próprio utilizador, perfis `DES_*`) NÃO é o da app: a GestorManutencao usa só PIN contra `u_manutil`.
 - Decisões: D-01 partes em paralelo; D-02 (atualizada 2026-11-06): a app é a GestorManutencao, já construída, que segue a base da LandeiroMaui (sem projeto novo `ManutencaoMobile`); D-03 (atualizada): acesso a dados como a LandeiroMaui (Dapper direto ao SQL Server); login da app GestorManutencao só por PIN contra a tabela PHC `u_manutil` (não login SQL por utilizador); D-05 planeadas são fichas com estado Planeada; D-06 (atualizada): o PIN vive no PHC em `u_manutil` (pinhash, pinprov, versao, ativo; campo novo `tecno` = nº PHC do técnico, por defeito 0, NOVO: campo a criar por pessoa no PHC); D-09 marca SigmaCode por defeito.
 - Prazos: protótipo clicável a 11/11/2026; 17/11/2026 (Suposição) primeiras intervenções nos equipamentos novos.
 - Risco R-01: o prazo de 17/11/2026 é irrealista para uma app offline completa. Marcos propostos (Suposição): M0 protótipo a 11/11; M1 login e lista online; M2 offline; M3 alertas e fotos. Até lá regista-se no ecrã PHC atual com o plano exportado do Word.
-- Risco R-03: o telemóvel liga ao SQL Server com a cadeia da app (que ficaria no APK) e login SQL por utilizador. Mitigação: só rede interna ou VPN, conta de mínimo privilégio, acesso remoto atrás de interface, e sem API (decisão D-10 do utilizador: login igual ao do LandeiroMaui; a password fica cifrada no cofre do Android e o PIN, só na app, desbloqueia-a).
+- Risco R-03: o acesso do telemóvel ao SQL Server. A app GestorManutencao já tem uma API (`GestorManutencao.Api`) e o login só por PIN contra `u_manutil`, pelo que a cadeia de ligação não vai no telemóvel (por confirmar contra a arquitetura em vigor). A decisão D-10 antiga (login SQL por utilizador, password no cofre do Android, PIN local) deixou de valer.
 Nota: sem credenciais, tokens nem connection strings.
 </context>
 
@@ -50,27 +50,27 @@ Nota: sem credenciais, tokens nem connection strings.
 
 Executa só esta fase e termina com `ORÇAMENTO:`. Não leias nem escrevas nada além do que for preciso para orçar.
 
-1. **Levantamento único** (numa só mensagem): o que falta para executar sem perguntas a meio. Acessos (base de testes, telemóvel e emulador, ligação), decisões (D-02, D-10, filtro das planeadas, perfis), dependências das Partes 1 e 3, riscos, pendências 5, 6 e 10.
+1. **Levantamento único** (numa só mensagem): o que falta para executar sem perguntas a meio. Acessos (base de testes, telemóvel e emulador, ligação), decisões (D-02 já atualizada, filtro das planeadas, perfis operador e supervisor), dependências das Partes 1 e 3, riscos, pendências 5, 6 e 10.
 2. **Cronometragem real** do que for medível (por exemplo, quanto demora um build Android neste computador, se o SDK e o emulador existem) ou "não mensurável".
-3. **Tabela de orçamentação por task** (P2-T01 a P2-T06, mais a própria Fase 0) com: tokens de entrada, tokens de saída, total, intervalo mínimo, provável e máximo, tempo estimado, e os pressupostos de cada linha. Âmbito de partida (os números são teus, com os pressupostos escritos): T01 leitura e escrita de um documento; T02 desenho com esquema, regras e um protótipo HTML; T03 projeto novo, spike de ligação, PIN, ecrãs e testes; T04 base local, cache incremental, fila, conflitos, UI de estado e testes; T05 lista, criar, câmara, notificações, regras puras e testes; T06 testes de aparelho, medições e documentação. Cada task de código inclui uma revisão do `sc-revisor`.
+3. **Tabela de orçamentação por task** (P2-T01 a P2-T06, mais a própria Fase 0) com: tokens de entrada, tokens de saída, total, intervalo mínimo, provável e máximo, tempo estimado, e os pressupostos de cada linha. Âmbito de partida (os números são teus, com os pressupostos escritos): T01 leitura e escrita de um documento; T02 desenho com esquema, regras e um protótipo HTML; T03 confirmação da app existente (login por PIN, sessão, `tecno`) e testes, sem projeto novo; T04 base local, cache incremental, fila, conflitos, UI de estado e testes; T05 lista, criar, câmara, notificações, regras puras e testes; T06 testes de aparelho, medições e documentação. Cada task de código inclui uma revisão do `sc-revisor`.
 4. **Reserva de contingência** de pelo menos 15%; **margem de segurança** de 5% a 15% sobre o máximo; o **teto** (máximo mais margem) mostrado à parte. O teto é limite duro.
 5. **Ponto de corte** e, se o total passar o limite que eu indicar, duas variantes: Completa (M0 a M3) e MVP (M1 e M2, com alertas e fotos fora).
 6. Termina com `ORÇAMENTO:` e pára. Espera `APROVADO`.
 
 ## FASE 1: levantamento (P2-T01), só após APROVADO
 
-Subagente `sc-leitor`. Resumo: o que do LandeiroMaui se reaproveita (login, sessão, armazenamento seguro, plano offline) e o que não serve (só Windows, teclado virtual, posto tátil); D-02; permissões Android e dependências candidatas; R-03 e a credencial; lista única de perguntas. Saída: `docs/manutencao/p2/levantamento.md`.
+Subagente `sc-leitor`. Resumo: o que do LandeiroMaui se reaproveita (regras do circuito de manutenção, tabelas, `IntervencaoService`; o plano offline é só desenho) e o que não serve (só Windows, teclado virtual, posto tátil; o login não se reaproveita: a app já tem o seu, só por PIN); D-02; permissões Android e dependências candidatas; R-03 e a credencial; lista única de perguntas. Saída: `docs/manutencao/p2/levantamento.md`.
 Critério de conclusão: os 5 critérios do prompt 01 com evidência. Passo seguinte: GATE; depois FASE 2.
 
 ## FASE 2: desenho e protótipo (P2-T02)
 
-Precisa de P2-T01 e dos contratos de P1-T02. Resumo: fluxo e wireframes (login PIN e utilizador, lista, criar, pendentes), esquema SQLite, sincronização e conflitos, PIN e sessão, notificações locais, contrato com a Parte 1, protótipo clicável para 11/11. Saídas: `docs/manutencao/p2/desenho.md` e `prototipo/index.html`. Revisão do desenho de segurança pelo `sc-revisor`.
+Precisa de P2-T01 e dos contratos de P1-T02. Resumo: fluxo e wireframes (login por PIN, lista, criar, pendentes, Planeadas, Material usado), esquema SQLite, sincronização e conflitos, PIN (`u_manutil`) e sessão, notificações locais, contrato com a Parte 1, protótipo clicável para 11/11. Saídas: `docs/manutencao/p2/desenho.md` e `prototipo/index.html`. Revisão do desenho de segurança pelo `sc-revisor`.
 Critério: os 5 critérios do prompt 02. Passo seguinte: GATE; depois FASE 3. Se P1-T02 não tiver fechado, `PARAGEM COM PROPOSTAS` (ver abaixo).
 
-## FASE 3: alvo Android, login, PIN, sessão (P2-T03)
+## FASE 3: app existente, login por PIN e sessão (P2-T03)
 
-Subagente `sc-dev`, revisão `sc-revisor`. Spike S0 (ligação ao SQL Server a partir do Android), projeto `ManutencaoMobile`, sessão adaptada do LandeiroMaui, PIN com hash, bloqueio, sessão longa.
-Critério: os 5 critérios do prompt 03, incluindo que o build Windows do LandeiroMaui não foi afetado. Passo seguinte: GATE; depois FASE 4.
+Subagente `sc-dev`, revisão `sc-revisor`. A app GestorManutencao já existe: esta fase confirma-a em vez de criar projeto novo (sem `ManutencaoMobile`). Confirma o login por PIN (`u_manutil`, campo novo `tecno`), bloqueio e sessão; o spike S0 (ligação do Android ao serviço de dados) só se a arquitetura em vigor o exigir.
+Critério: os 5 critérios do prompt 03, incluindo que o build Windows do LandeiroMaui não foi afetado, se este for tocado (por defeito não é). Passo seguinte: GATE; depois FASE 4.
 
 ## FASE 4: offline (P2-T04)
 
@@ -78,7 +78,7 @@ Precisa dos serviços de P1-T03. `LocalDb`, estado de ligação, cache increment
 
 ## FASE 5: intervenções (P2-T05)
 
-Lista, criar, foto, alertas locais, avançar ordem, ponto de ligação às peças. Critério: os 6 critérios do prompt 05. Passo seguinte: GATE; depois FASE 6 (e avisar a Parte 3 de que o ponto de ligação existe).
+Lista, criar, foto, alertas locais, avançar ordem (`avancaordem`), material usado na ficha (`u_matinterv`, substitui "Pedir peça"), ponto de ligação à Parte 3 (NOVO: pedido ao armazém, stock). Critério: os 6 critérios do prompt 05. Passo seguinte: GATE; depois FASE 6 (e avisar a Parte 3 de que o ponto de ligação existe).
 
 ## FASE 6: testes e documentação (P2-T06)
 
@@ -86,7 +86,7 @@ Matriz de rastreabilidade, roteiro manual no telemóvel, medições, documentaç
 
 ### Formato de cada entrega e regras comuns às fases
 
-Cada entrega segue ANÁLISE, PLANO, IMPLEMENTAÇÃO, REVISÃO, TESTES, RISCOS e, no fim, ESTADO DA TASK e AUTOCRÍTICA. Regras: segue os padrões do repositório e as regras do `CLAUDE.md` do LandeiroMaui; sem dependências novas sem registo em `docs/DEPENDENCIES.md` e documentação oficial atual; Dapper cru com `WITH (NOLOCK)` e SQL nível 100; erros nunca em silêncio (`CrashLogService.Registar` e aviso); PIN só como hash com sal no armazenamento seguro; nada de segredos em lado nenhum (corre `verificar-segredos.ps1` antes de entregar); testes xUnit para a lógica e roteiro manual, declarado não corrido quando não houver aparelho; resultados verdadeiros; comentários mínimos em português; branch próprio, sem commit nem push sem confirmação (no LandeiroMaui nunca).
+Cada entrega segue ANÁLISE, PLANO, IMPLEMENTAÇÃO, REVISÃO, TESTES, RISCOS e, no fim, ESTADO DA TASK e AUTOCRÍTICA. Regras: segue os padrões do repositório e as regras do `CLAUDE.md` do LandeiroMaui; sem dependências novas sem registo em `docs/DEPENDENCIES.md` e documentação oficial atual; Dapper cru com `WITH (NOLOCK)` e SQL nível 100; erros nunca em silêncio (`CrashLogService.Registar` e aviso); PIN só como hash em `u_manutil` (pinhash, pinprov, versao, ativo), nunca em claro; nada de segredos em lado nenhum (corre `verificar-segredos.ps1` antes de entregar); testes xUnit para a lógica e roteiro manual, declarado não corrido quando não houver aparelho; resultados verdadeiros; comentários mínimos em português; branch próprio, sem commit nem push sem confirmação (no LandeiroMaui nunca).
 
 ### Bloco de cada subagente (brief)
 
@@ -102,5 +102,5 @@ Qualquer coisa que trave o trabalho (teto, credencial em falta, decisão de neg�
 
 ## ENTREGÁVEIS E RECONCILIAÇÃO
 
-Lista fechada: `docs/manutencao/p2/` (`levantamento.md`, `desenho.md`, `prototipo/index.html`, `plano-de-testes.md`, `roteiro-manual.md`, `documentacao-tecnica.md`, `manual-do-utilizador.md`); projeto `ManutencaoMobile` com testes; `docs/DEPENDENCIES.md`; `docs/tasks/00-global.md` atualizado (estados, decisões, pendências, riscos, registo).
+Lista fechada: `docs/manutencao/p2/` (`levantamento.md`, `desenho.md`, `prototipo/index.html`, `plano-de-testes.md`, `roteiro-manual.md`, `documentacao-tecnica.md`, `manual-do-utilizador.md`); a app GestorManutencao com testes; `docs/DEPENDENCIES.md`; `docs/tasks/00-global.md` atualizado (estados, decisões, pendências, riscos, registo).
 No fim: riscos e impactos abertos (R-01, R-03 em particular), quadro orçamento aprovado contra real (por agente e total) e lições para orçar melhor, e `MELHORIA: <...>` (ou `nenhuma`).

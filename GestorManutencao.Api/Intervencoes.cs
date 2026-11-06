@@ -9,11 +9,12 @@ public enum EstadoIntervencao { Planeada, EmCurso, Concluida, Validada, Cancelad
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TipoIntervencao { Preventiva, Curativa }
 
-// Tecno é o número de utilizador do PHC de quem tem a ficha (0 = sem dono). PodeValidar só conta na lista de validação.
+// Última, Cancelada e DataPrevista só vêm nas planeadas. Tecno é o número de utilizador do PHC de quem tem a ficha (0 = sem dono). PodeValidar só conta na lista de validação.
 public sealed record IntervencaoDto(
     string Id, string Equipamento, string Zona, TipoIntervencao Tipo, DateOnly DataPlaneada, EstadoIntervencao Estado,
     string? Anomalia = null, string? Feito = null, TimeOnly? HoraInicio = null, TimeOnly? HoraFim = null,
-    string? Tecnico = null, int Tecno = 0, bool PodeValidar = true);
+    string? Tecnico = null, int Tecno = 0, bool PodeValidar = true,
+    DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null);
 
 public sealed record EquipamentoDto(string Id, string Nome, string Zona);
 

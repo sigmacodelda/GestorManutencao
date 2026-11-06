@@ -54,11 +54,21 @@
                 <ul class="lista-intervencoes">
                     @foreach (var f in zona.Itens.Take(Limite(zona.Nome)))
                     {
-                        var atrasada = f.EstaAtrasada(_hoje);
+                        var foraDePrazo = f.ForaDePrazo(_hoje);
+                        var atrasada = f.EstaAtrasada(_hoje) || foraDePrazo;
                         <li class="intervencao @(atrasada ? "atrasada" : "")">
                             <span class="intervencao-titulo">@f.Equipamento</span>
                             <span class="intervencao-desc">@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")@(f.Estado == EstadoIntervencao.EmCurso ? " · Em curso" : "") · @(f.Tecno == 0 ? "Sem técnico" : f.Tecnico ?? "PHC " + f.Tecno)</span>
                             <span class="intervencao-data">@TextoData(f.DataPlaneada)</span>
+                            <p class="ficha-texto">
+                                @if (f.UltimaIntervencao is { } ultima) { <span>Última intervenção: @ultima.ToString("dd/MM/yyyy")</span> }
+                                else { <span>Última intervenção: sem registo</span> }
+                                @if (f.UltimaCancelada is { } cancelada && (f.UltimaIntervencao is null || cancelada > f.UltimaIntervencao)) { <span> · Cancelada a @cancelada.ToString("dd/MM/yyyy")</span> }
+                            </p>
+                            @if (foraDePrazo)
+                            {
+                                <p class="ficha-texto"><strong>Fora de prazo desde @f.DataPrevista!.Value.ToString("dd/MM/yyyy")</strong></p>
+                            }
                             <div class="campo ficha-texto">
                                 <label for="tec-@f.Id">Técnico</label>
                                 <select id="tec-@f.Id" disabled="@_ocupado" value="@f.Tecno" @onchange="e => AtribuirAsync(f, e.Value?.ToString())">
