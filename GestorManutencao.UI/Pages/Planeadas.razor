@@ -58,7 +58,13 @@
                         var atrasada = f.EstaAtrasada(_hoje) || foraDePrazo;
                         <li class="intervencao @(atrasada ? "atrasada" : "")">
                             <span class="intervencao-titulo">@f.Equipamento</span>
-                            <span class="intervencao-desc">@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")@(f.Estado == EstadoIntervencao.EmCurso ? " · Em curso" : "") · @(f.Tecno == 0 ? "Sem técnico" : f.Tecnico ?? "PHC " + f.Tecno)</span>
+                            <span class="intervencao-desc">@(f.Tecno == 0 ? "Sem técnico" : f.Tecnico ?? "PHC " + f.Tecno)</span>
+                            <span class="chips">
+                                @if (foraDePrazo) { <span class="chip chip-erro">Fora de prazo</span> }
+                                else if (atrasada) { <span class="chip chip-erro">Atrasada</span> }
+                                @if (f.Estado == EstadoIntervencao.EmCurso) { <span class="chip chip-curso">Em curso</span> }
+                                <span class="chip @(f.Tipo == TipoIntervencao.Curativa ? "chip-aviso" : "")">@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                            </span>
                             <span class="intervencao-data">@TextoData(f.DataPlaneada)</span>
                             <p class="ficha-texto">
                                 @if (f.UltimaIntervencao is { } ultima) { <span>Última intervenção: @ultima.ToString("dd/MM/yyyy")</span> }

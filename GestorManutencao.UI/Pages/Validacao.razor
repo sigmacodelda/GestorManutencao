@@ -51,7 +51,11 @@
                 {
                     <li class="intervencao ficha-validar">
                         <span class="intervencao-titulo">@f.Equipamento</span>
-                        <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(f.Zona) ? "" : f.Zona + " · ")@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")@(f.Tecnico is null ? "" : " · " + f.Tecnico)</span>
+                        <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(f.Zona) ? "Sem zona" : f.Zona)@(f.Tecnico is null ? "" : " · " + f.Tecnico)</span>
+                        <span class="chips">
+                            <span class="chip chip-ok">Concluída</span>
+                            <span class="chip @(f.Tipo == TipoIntervencao.Curativa ? "chip-aviso" : "")">@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                        </span>
                         <span class="intervencao-data">@f.DataPlaneada.ToString("dd/MM")</span>
                         @if (!string.IsNullOrWhiteSpace(f.Anomalia))
                         {

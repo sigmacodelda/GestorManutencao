@@ -46,7 +46,12 @@
                         <li>
                             <a class="intervencao @(atrasada ? "atrasada" : "")" href="intervencoes/@i.Id">
                                 <span class="intervencao-titulo">@i.Equipamento</span>
-                                <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(i.Zona) ? "" : i.Zona + " · ")@(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                                <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(i.Zona) ? "Sem zona" : i.Zona)</span>
+                                <span class="chips">
+                                    @if (atrasada) { <span class="chip chip-erro">Atrasada</span> }
+                                    @if (i.Estado == EstadoIntervencao.EmCurso) { <span class="chip chip-curso">Em curso</span> }
+                                    <span class="chip @(i.Tipo == TipoIntervencao.Curativa ? "chip-aviso" : "")">@(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                                </span>
                                 <span class="intervencao-data">@TextoData(i.DataPlaneada)</span>
                             </a>
                         </li>

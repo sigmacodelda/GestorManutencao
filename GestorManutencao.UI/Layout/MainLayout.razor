@@ -18,7 +18,27 @@
                 </button>
             </div>
         </header>
-        <div class="conteudo-wrap">@Body</div>
+        <div class="shell-corpo">
+            @if (Sessao.Utilizador is { PinProvisorio: false })
+            {
+                var supervisor = Sessao.Modo == ModoTrabalho.Supervisor;
+                <nav class="navegacao" aria-label="Navegação principal">
+                    <NavLink class="nav-item" href="" Match="NavLinkMatch.All"><span class="nav-icone"><Icone Nome="home" /></span><span class="nav-rotulo">Início</span></NavLink>
+                    @if (supervisor)
+                    {
+                        <NavLink class="nav-item" href="planeadas"><span class="nav-icone"><Icone Nome="calendar" /></span><span class="nav-rotulo">Planeadas</span></NavLink>
+                        <NavLink class="nav-item" href="validacao"><span class="nav-icone"><Icone Nome="shield-check" /></span><span class="nav-rotulo">Validação</span></NavLink>
+                        <NavLink class="nav-item" href="equipa"><span class="nav-icone"><Icone Nome="users" /></span><span class="nav-rotulo">Equipa</span></NavLink>
+                    }
+                    else
+                    {
+                        <NavLink class="nav-item" href="intervencoes" Match="NavLinkMatch.Prefix"><span class="nav-icone"><Icone Nome="clipboard-list" /></span><span class="nav-rotulo">Intervenções</span></NavLink>
+                        <NavLink class="nav-item" href="avaria"><span class="nav-icone"><Icone Nome="triangle-alert" /></span><span class="nav-rotulo">Avaria</span></NavLink>
+                    }
+                </nav>
+            }
+            <div class="conteudo-wrap">@Body</div>
+        </div>
     </div>
 }
 

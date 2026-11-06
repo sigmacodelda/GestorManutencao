@@ -1,0 +1,42 @@
+@* Engrenagem em 3D real: várias camadas do mesmo desenho empilhadas em profundidade. Só decoração. *@
+<div class="engrenagem @Classe" aria-hidden="true">
+    <div class="engr-sombra"></div>
+    <div class="engr-gira">
+        @for (var i = 0; i < Camadas; i++)
+        {
+            <svg class="engr-camada" viewBox="-50 -50 100 100" style="transform: translateZ(@(i * Passo)px); --k: @i">
+                <path d="@Desenho" fill-rule="evenodd" />
+            </svg>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Classe { get; set; }
+
+    private const int Camadas = 9, Passo = 3, Dentes = 12;
+
+    private static readonly string Desenho = Construir();
+
+    private static string Construir()
+    {
+        static string P(double r, double a) => FormattableString.Invariant($"{r * Math.Cos(a):0.##} {r * Math.Sin(a):0.##}");
+        var passo = 2 * Math.PI / Dentes;
+        var sb = new System.Text.StringBuilder();
+        for (var d = 0; d < Dentes; d++)
+        {
+            var a = d * passo;
+            sb.Append(d == 0 ? "M" : "L").Append(P(38, a)).Append('L').Append(P(48, a + .12 * passo))
+              .Append('L').Append(P(48, a + .38 * passo)).Append('L').Append(P(38, a + .5 * passo));
+        }
+        sb.Append('Z');
+        sb.Append("M-14 0a14 14 0 1 0 28 0a14 14 0 1 0 -28 0Z");
+        for (var f = 0; f < 6; f++)
+        {
+            var a = f * Math.PI / 3 + Math.PI / 6;
+            var cx = 26 * Math.Cos(a); var cy = 26 * Math.Sin(a);
+            sb.Append(FormattableString.Invariant($"M{cx - 5:0.##} {cy:0.##}a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z"));
+        }
+        return sb.ToString();
+    }
+}

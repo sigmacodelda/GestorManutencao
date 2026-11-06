@@ -1,5 +1,6 @@
 @page "/"
 @inject SessaoService Sessao
+@inject IIntervencoesService Intervencoes
 
 <PageTitle>Início · Gestor de Manutenção</PageTitle>
 
@@ -7,20 +8,40 @@
 {
     var supervisor = Sessao.Modo == ModoTrabalho.Supervisor;
     <section class="conteudo">
-        <div class="boas-vindas">
-            <p class="sobretitulo">@(supervisor ? "Modo supervisor" : "Modo operador")</p>
-            <h1>@Saudacao(), @PrimeiroNome</h1>
+        <div class="boas-vindas hero">
+            <Engrenagem Classe="engr-hero" />
+            <div class="hero-texto">
+                <p class="sobretitulo">@(supervisor ? "Supervisor" : "Operador")</p>
+                <h1>@Saudacao(), @PrimeiroNome</h1>
+                <p class="hero-data">@DataExtenso()</p>
+            </div>
         </div>
+
+        @if (_contadores is { Count: > 0 })
+        {
+            <ul class="contadores" aria-label="Resumo">
+                @foreach (var c in _contadores)
+                {
+                    <li>
+                        <a class="contador @(c.Alerta && c.Valor > 0 ? "alerta-led" : "")" href="@c.Href">
+                            <span class="led" aria-hidden="true"></span>
+                            <span class="contador-num">@c.Valor</span>
+                            <span class="contador-rot">@c.Rotulo</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
 
         @if (Sessao.PodeSerSupervisor)
         {
             <div class="segmentos" role="group" aria-label="Modo de trabalho">
                 <button type="button" class="segmento" aria-pressed="@((!supervisor).ToString().ToLowerInvariant())"
-                        @onclick="() => Sessao.MudarModo(ModoTrabalho.Operador)">
+                        @onclick="() => Mudar(ModoTrabalho.Operador)">
                     <Icone Nome="wrench" /><span>Operador</span>
                 </button>
                 <button type="button" class="segmento" aria-pressed="@supervisor.ToString().ToLowerInvariant()"
-                        @onclick="() => Sessao.MudarModo(ModoTrabalho.Supervisor)">
+                        @onclick="() => Mudar(ModoTrabalho.Supervisor)">
                     <Icone Nome="users" /><span>Supervisor</span>
                 </button>
             </div>
@@ -43,6 +64,49 @@
 }
 
 @code {
+    private sealed record Contador(string Rotulo, int Valor, string Href, bool Alerta = false);
+    private List<Contador>? _contadores;
+
+    protected override async Task OnInitializedAsync() { if (Sessao.TemSessao) await CarregarAsync(); }
+
+    private async Task Mudar(ModoTrabalho modo) { Sessao.MudarModo(modo); await CarregarAsync(); }
+
+    // Resumo do dia; se o serviço não responde, simplesmente não aparece.
+    private async Task CarregarAsync()
+    {
+        try
+        {
+            var hoje = DateOnly.FromDateTime(DateTime.Now);
+            if (Sessao.Modo == ModoTrabalho.Supervisor)
+            {
+                var porValidar = await Intervencoes.ListarPorValidarAsync();
+                var planeadas = await Intervencoes.ListarPlaneadasAsync();
+                _contadores =
+                [
+                    new("Por validar", porValidar.Count, "validacao"),
+                    new("Atrasadas", planeadas.Count(f => f.EstaAtrasada(hoje) || f.ForaDePrazo(hoje)), "planeadas", true),
+                    new("Por atribuir", planeadas.Count(f => f.Tecno == 0), "planeadas")
+                ];
+            }
+            else
+            {
+                var minhas = await Intervencoes.ListarMinhasAsync();
+                _contadores =
+                [
+                    new("Em curso", minhas.Count(i => i.Estado == EstadoIntervencao.EmCurso), "intervencoes"),
+                    new("Atrasadas", minhas.Count(i => i.EstaAtrasada(hoje)), "intervencoes", true),
+                    new("Para fazer", minhas.Count(i => i.PorFazer), "intervencoes")
+                ];
+            }
+        }
+        catch (Exception) { _contadores = null; }
+    }
+
+    private static string DataExtenso()
+    {
+        var s = DateTime.Now.ToString("dddd, d 'de' MMMM", new System.Globalization.CultureInfo("pt-PT"));
+        return char.ToUpperInvariant(s[0]) + s[1..];
+    }
     private string PrimeiroNome => Sessao.Utilizador!.Nome.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
 
     private static string Saudacao() => DateTime.Now.Hour switch
