@@ -28,13 +28,13 @@
 
         @if (_i.Estado == EstadoIntervencao.Planeada)
         {
-            <button type="button" class="btn btn-primario" disabled="@_a_gravar" @onclick="IniciarAsync">Começar</button>
+            <button type="button" class="btn btn-primario btn-grande" disabled="@_a_gravar" @onclick="IniciarAsync"><Icone Nome="play" /><span>Começar</span></button>
         }
         else if (_i.Estado == EstadoIntervencao.EmCurso)
         {
             <form class="formulario" @onsubmit="ConcluirAsync" novalidate>
                 <div class="campo">
-                    <label for="feito">O que foi feito?</label>
+                    <label for="feito">O que fez?</label>
                     <textarea id="feito" rows="4" @bind="_feito" @bind:event="oninput"></textarea>
                 </div>
                 <div class="horas">
@@ -49,14 +49,17 @@
                     </div>
                 </div>
                 <p class="campo-erro" role="alert">@_erro</p>
-                <button type="submit" class="btn btn-primario" disabled="@_a_gravar">@(_a_gravar ? "A guardar…" : "Concluir")</button>
+                <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_gravar"><Icone Nome="check" /><span>@(_a_gravar ? "A guardar…" : "Feito")</span></button>
             </form>
         }
         else
         {
-            <p class="estado-lista" role="status">
-                @(_i.Estado == EstadoIntervencao.Concluida ? "Concluída. Segue para o supervisor validar." : "Esta intervenção já está fechada.")
-            </p>
+            <div class="sucesso" role="status">
+                <span class="sucesso-icone"><Icone Nome="circle-check" /></span>
+                <p class="sucesso-titulo">@(_i.Estado == EstadoIntervencao.Concluida ? "Feito! Obrigado." : "Já está fechada.")</p>
+                @if (_i.Estado == EstadoIntervencao.Concluida) { <p class="sucesso-desc">O supervisor vai ver e confirmar.</p> }
+                <a class="btn btn-primario btn-grande" href="intervencoes"><span>Ver as minhas intervenções</span></a>
+            </div>
         }
     }
 </section>

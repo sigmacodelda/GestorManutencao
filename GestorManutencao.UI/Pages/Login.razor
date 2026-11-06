@@ -15,9 +15,9 @@
     </aside>
 
     <section class="login-painel" aria-labelledby="titulo-login">
-        <form class="login-form" @onsubmit="Entrar" novalidate>
-            <h1 id="titulo-login">Entrar</h1>
-            <p class="login-sub">Escreva o seu PIN de 6 números.</p>
+        <div class="login-form" tabindex="0" @ref="_raiz" @onkeydown="AoTecla" @onkeydown:preventDefault="_travarTeclas">
+            <h1 id="titulo-login">Olá! Escreva o seu PIN</h1>
+            <p class="login-sub">São 6 números.</p>
 
             @if (_erro is not null)
             {
@@ -27,51 +27,40 @@
                 </div>
             }
 
-            <div class="campo">
-                <label for="pin">PIN</label>
-                <div class="entrada">
-                    <Icone Nome="lock" Classe="entrada-icone" />
-                    <input id="pin" name="pin" class="campo-pin" type="@(_mostrar ? "text" : "password")" inputmode="numeric" pattern="[0-9]*"
-                           maxlength="6" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go" required
-                           aria-invalid="@(_semPin ? "true" : null)" aria-describedby="@(_semPin ? "erro-pin" : null)"
-                           value="@_pin" @oninput="AoEscrever" />
-                    <button type="button" class="entrada-acao" aria-pressed="@_mostrar.ToString().ToLowerInvariant()"
-                            aria-label="@(_mostrar ? "Esconder PIN" : "Mostrar PIN")" @onclick="AlternarMostrar">
-                        <Icone Nome="@(_mostrar ? "eye-off" : "eye")" />
-                    </button>
-                </div>
-                @if (_semPin)
+            <div class="pin-pontos @(_erro is not null ? "pin-pontos-erro" : "")" role="img" aria-label="@_pin.Length de @RegrasPin.Tamanho números escritos">
+                @for (var n = 0; n < RegrasPin.Tamanho; n++)
                 {
-                    <p class="campo-erro" id="erro-pin">O PIN tem 6 números.</p>
+                    <span class="pin-ponto @(n < _pin.Length ? "cheio" : "")"></span>
                 }
             </div>
 
-            <button type="submit" class="btn btn-primario" disabled="@_aEntrar" aria-busy="@_aEntrar.ToString().ToLowerInvariant()">
-                @if (_aEntrar)
+            <div class="teclado" role="group" aria-label="Teclado de números">
+                @foreach (var d in new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9" })
                 {
-                    <span class="spinner" aria-hidden="true"></span>
-                    <span>A entrar…</span>
+                    <button type="button" class="tecla" disabled="@_aEntrar" @onclick="() => AdicionarAsync(d)">@d</button>
                 }
-                else
-                {
-                    <Icone Nome="log-in" />
-                    <span>Entrar</span>
-                }
-            </button>
+                <span></span>
+                <button type="button" class="tecla" disabled="@_aEntrar" @onclick="@(() => AdicionarAsync("0"))">0</button>
+                <button type="button" class="tecla tecla-apagar" disabled="@_aEntrar" aria-label="Apagar" @onclick="Apagar"><Icone Nome="delete" /></button>
+            </div>
+
+            @if (_aEntrar)
+            {
+                <p class="login-sub" role="status"><span class="spinner" aria-hidden="true"></span> A entrar…</p>
+            }
 
             <p class="login-rodape">Sem acesso ou esqueceu o PIN? Fale com o seu supervisor.</p>
             <p class="login-credito">Desenvolvido por SigmaCode</p>
-        </form>
+        </div>
     </section>
 </div>
 
 @code {
     private string _pin = "";
-    private bool _mostrar;
     private bool _aEntrar;
-    private bool _semPin;
+    private bool _travarTeclas;
     private string? _erro;
-    private ElementReference _alerta;
+    private ElementReference _raiz, _alerta;
     private bool _focarAlerta;
 
     protected override async Task OnInitializedAsync()
@@ -82,6 +71,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender) await _raiz.FocusAsync();
         if (_focarAlerta && _erro is not null)
         {
             _focarAlerta = false;
@@ -89,23 +79,36 @@
         }
     }
 
-    private void AlternarMostrar() => _mostrar = !_mostrar;
-
-    // Só números; ao chegar aos 6 entra sozinho.
-    private async Task AoEscrever(ChangeEventArgs e)
+    // Teclado do ecrã ou do computador: só números; ao chegar aos 6 entra sozinho.
+    private async Task AoTecla(KeyboardEventArgs e)
     {
-        _pin = new string((e.Value?.ToString() ?? "").Where(char.IsAsciiDigit).Take(RegrasPin.Tamanho).ToArray());
-        _semPin = false;
+        var digito = e.Key.Length == 1 && char.IsAsciiDigit(e.Key[0]);
+        _travarTeclas = digito || e.Key == "Backspace";
+        if (digito) await AdicionarAsync(e.Key);
+        else if (e.Key == "Backspace") Apagar();
+    }
+
+    private async Task AdicionarAsync(string digito)
+    {
+        if (_aEntrar || _pin.Length >= RegrasPin.Tamanho) return;
+        _erro = null;
+        _pin += digito;
         if (_pin.Length == RegrasPin.Tamanho) await Entrar();
+    }
+
+    private void Apagar()
+    {
+        if (_aEntrar || _pin.Length == 0) return;
+        _pin = _pin[..^1];
+        _erro = null;
     }
 
     private async Task Entrar()
     {
         if (_aEntrar) return;
 
-        _semPin = !RegrasPin.FormatoValido(_pin);
+        if (!RegrasPin.FormatoValido(_pin)) return;
         _erro = null;
-        if (_semPin) return;
 
         _aEntrar = true;
         try
