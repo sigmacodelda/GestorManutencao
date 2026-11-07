@@ -1,6 +1,8 @@
 @page "/"
+@implements IDisposable
 @inject SessaoService Sessao
 @inject IIntervencoesService Intervencoes
+@inject NotificacaoService Notificacoes
 
 <PageTitle>Início · Gestor de Manutenção</PageTitle>
 
@@ -63,6 +65,8 @@
                 <Mosaico Icone="triangle-alert" Titulo="Registar avaria" Href="avaria" Descricao="Avisar de um problema no equipamento" />
                 <Mosaico Icone="factory" Titulo="Equipamentos" Href="equipamentos" Descricao="Consultar fichas e histórico" />
             }
+            <Mosaico Icone="bell" Titulo="Notificações" Href="notificacoes" Contagem="Notificacoes.NaoLidas"
+                     Descricao="@(Notificacoes.NaoLidas > 0 ? "Tem avisos novos" : "Sem avisos novos")" />
         </ul>
     </section>
 }
@@ -71,7 +75,15 @@
     private sealed record Contador(string Rotulo, int Valor, string Href, bool Alerta = false);
     private List<Contador>? _contadores;
 
-    protected override async Task OnInitializedAsync() { if (Sessao.TemSessao) await CarregarAsync(); }
+    protected override async Task OnInitializedAsync()
+    {
+        Notificacoes.Alterado += Atualizar;
+        if (Sessao.TemSessao) await CarregarAsync();
+    }
+
+    private void Atualizar() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Notificacoes.Alterado -= Atualizar;
 
     private async Task Mudar(ModoTrabalho modo) { Sessao.MudarModo(modo); await CarregarAsync(); }
 

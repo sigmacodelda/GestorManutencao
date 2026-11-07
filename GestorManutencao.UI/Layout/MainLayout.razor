@@ -2,10 +2,21 @@
 @implements IDisposable
 @inject SessaoService Sessao
 @inject NavigationManager Nav
+@inject NotificacaoService Notificacoes
 
 @if (_pronto && Sessao.TemSessao)
 {
     <div class="shell">
+        @if (_faixa is { } faixa)
+        {
+            <div class="faixa-aviso" role="status" aria-live="polite">
+                <a class="faixa-corpo" href="@faixa.Destino(Sessao.Utilizador!.Perfil)" @onclick="FecharFaixa">
+                    <Icone Nome="bell" />
+                    <span><strong>@faixa.Titulo</strong> @faixa.Texto</span>
+                </a>
+                <button type="button" class="faixa-fechar" aria-label="Fechar aviso" @onclick="FecharFaixa"><Icone Nome="x" /></button>
+            </div>
+        }
         <header class="topo">
             <Logo />
             <div class="topo-direita">
@@ -37,6 +48,22 @@
                         <NavLink class="nav-item" href="avaria"><span class="nav-icone"><Icone Nome="triangle-alert" /></span><span class="nav-rotulo">Avaria</span></NavLink>
                         <NavLink class="nav-item" href="equipamentos" Match="NavLinkMatch.Prefix" title="Equipamentos"><span class="nav-icone"><Icone Nome="factory" /></span><span class="nav-rotulo">Máquinas</span></NavLink>
                     }
+                    <NavLink class="nav-item" href="notificacoes">
+                        <span class="nav-icone">
+                            <Icone Nome="bell" />
+                            @if (Notificacoes.NaoLidas > 0)
+                            {
+                                <span class="nav-badge" aria-hidden="true">@(Notificacoes.NaoLidas > 9 ? "9+" : Notificacoes.NaoLidas.ToString())</span>
+                            }
+                        </span>
+                        <span class="nav-rotulo">
+                            Avisos
+                            @if (Notificacoes.NaoLidas > 0)
+                            {
+                                <span class="so-leitor"> (@Notificacoes.NaoLidas por ler)</span>
+                            }
+                        </span>
+                    </NavLink>
                 </nav>
             }
             <div class="conteudo-wrap">@Body</div>
@@ -46,13 +73,36 @@
 
 @code {
     private bool _pronto;
+    private Aviso? _faixa;
+    private CancellationTokenSource? _faixaCts;
 
     protected override async Task OnInitializedAsync()
     {
         Sessao.Alterada += Atualizar;
+        Notificacoes.Alterado += Atualizar;
+        Notificacoes.AvisoNaApp += MostrarFaixa;
         await Sessao.RestaurarAsync();
         _pronto = true;
         if (!Sessao.TemSessao) Nav.NavigateTo("login", replace: true);
+        else Notificacoes.Iniciar();
+    }
+
+    private void MostrarFaixa(Aviso aviso) => InvokeAsync(async () =>
+    {
+        _faixaCts?.Cancel();
+        var cts = _faixaCts = new CancellationTokenSource();
+        _faixa = aviso;
+        StateHasChanged();
+        try { await Task.Delay(TimeSpan.FromSeconds(8), cts.Token); }
+        catch (TaskCanceledException) { return; }
+        _faixa = null;
+        StateHasChanged();
+    });
+
+    private void FecharFaixa()
+    {
+        _faixaCts?.Cancel();
+        _faixa = null;
     }
 
     private async Task Sair()
@@ -70,5 +120,11 @@
 
     private void Atualizar() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Sessao.Alterada -= Atualizar;
+    public void Dispose()
+    {
+        Sessao.Alterada -= Atualizar;
+        Notificacoes.Alterado -= Atualizar;
+        Notificacoes.AvisoNaApp -= MostrarFaixa;
+        _faixaCts?.Cancel();
+    }
 }

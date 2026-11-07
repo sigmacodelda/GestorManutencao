@@ -19,6 +19,17 @@
     }
     else
     {
+        @if (_i.Estado == EstadoIntervencao.EmCurso && !string.IsNullOrWhiteSpace(_i.Motivo))
+        {
+            <div class="alerta alerta-devolvida" role="alert">
+                <Icone Nome="rotate-ccw" />
+                <div>
+                    <strong>Devolvida pelo supervisor</strong>
+                    <p>@_i.Motivo</p>
+                </div>
+            </div>
+        }
+
         <dl class="ficha">
             @if (!string.IsNullOrWhiteSpace(_i.Zona)) { <dt>Zona</dt><dd>@_i.Zona</dd> }
             <dt>Tipo</dt><dd>@(_i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</dd>

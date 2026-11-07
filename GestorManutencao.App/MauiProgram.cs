@@ -19,6 +19,12 @@ public static class MauiProgram
 		builder.Services.AddMauiBlazorWebView();
 		builder.Services.AddManutencaoUI(TemaCliente);
 		builder.Services.AddSingleton<IArmazemSessao, ArmazemSessaoSeguro>();
+		builder.Services.AddSingleton<IArmazemAvisos, ArmazemAvisosFicheiro>();
+#if ANDROID
+		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaAndroid>();
+#elif WINDOWS
+		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaWindows>();
+#endif
 
 #if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();

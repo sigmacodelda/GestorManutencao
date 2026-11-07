@@ -15,7 +15,7 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
     private const string Selecao =
         """
         select f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
-               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno
+               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno, isnull(f.valobs, '')
         from u_fichaint f left join u_equip e on e.u_equipstamp = f.u_equipstamp
         """;
 
@@ -44,7 +44,7 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
     private const string SqlPlaneadas =
         """
         select f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
-               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno,
+               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno, isnull(f.valobs, ''),
                coalesce(c.feita, lg.ultima), c.cancelada, isnull(pp.unidade, ''), isnull(pp.intervalo, 0)
         from u_fichaint f
         left join u_equip e on e.u_equipstamp = f.u_equipstamp
@@ -141,7 +141,7 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
 
     private const string CamposFicha =
         " f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''), f.tipointerv, f.data, " + EstadoEfetivo +
-        ", f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno from u_fichaint f left join u_equip e on e.u_equipstamp = f.u_equipstamp";
+        ", f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno, isnull(f.valobs, '') from u_fichaint f left join u_equip e on e.u_equipstamp = f.u_equipstamp";
 
     // Histórico do equipamento: as planeadas (ainda por fazer) ficam nas tarefas.
     private const string SqlHistoricoEquipamento = "select top 50" + CamposFicha +
@@ -390,17 +390,18 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
             r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim(), tipo, DateOnly.FromDateTime(r.GetDateTime(4)), estado,
             Vazio(r.GetString(6)), Vazio(r.GetString(7)),
             hini > SemData ? TimeOnly.FromDateTime(hini) : null, hfim > SemData ? TimeOnly.FromDateTime(hfim) : null,
-            Vazio(r.GetString(10)), (int)r.GetDecimal(11), podeValidar);
+            Vazio(r.GetString(10)), (int)r.GetDecimal(11), podeValidar,
+            Motivo: estado == EstadoIntervencao.EmCurso ? Vazio(r.GetString(12)) : null);
     }
 
     // Data prevista = a mais recente entre a última feita e a última cancelada (cancelar salta uma ocorrência) + periodicidade.
     private static IntervencaoDto LerPlaneada(SqlDataReader r)
     {
-        var feita = r.IsDBNull(12) ? (DateTime?)null : r.GetDateTime(12);
-        var cancelada = r.IsDBNull(13) ? (DateTime?)null : r.GetDateTime(13);
+        var feita = r.IsDBNull(13) ? (DateTime?)null : r.GetDateTime(13);
+        var cancelada = r.IsDBNull(14) ? (DateTime?)null : r.GetDateTime(14);
         var baseData = cancelada.HasValue && (!feita.HasValue || cancelada > feita) ? cancelada : feita;
         var prevista = baseData.HasValue
-            ? RegrasManutencao.ProximaDepoisDaUltima(baseData.Value, RegrasManutencao.LerUnidade(r.GetString(14)), (int)r.GetDecimal(15))
+            ? RegrasManutencao.ProximaDepoisDaUltima(baseData.Value, RegrasManutencao.LerUnidade(r.GetString(15)), (int)r.GetDecimal(16))
             : null;
         return Ler(r) with
         {

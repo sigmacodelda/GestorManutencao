@@ -25,7 +25,7 @@ public sealed record Intervencao(
     DateOnly? UltimaIntervencao = null,
     DateOnly? UltimaCancelada = null,
     DateOnly? DataPrevista = null,
-    bool PodeAbrir = false)
+    bool PodeAbrir = false, string? Motivo = null)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 

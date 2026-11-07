@@ -58,7 +58,12 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
             new() { D = Nova("H3", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje.AddDays(-60), EstadoIntervencao.Cancelada), Tarefa = "TAREFA3" }
         ];
 
-    private IntervencaoDto Ver(Ficha f, bool podeValidar = true) => f.D with { Tecno = f.Tecno, PodeValidar = podeValidar };
+    // O motivo da devolução só se vê enquanto a ficha está em curso, como no SQL.
+    private IntervencaoDto Ver(Ficha f, bool podeValidar = true) => f.D with
+    {
+        Tecno = f.Tecno, PodeValidar = podeValidar,
+        Motivo = f.D.Estado == EstadoIntervencao.EmCurso && f.Motivo.Length > 0 ? f.Motivo : null
+    };
 
     private static bool Minha(Ficha f, TecnicoAtual t) => f.Tecno == t.Tecno || f.Tecno == 0;
 
@@ -252,7 +257,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
             if (f.D.Estado != EstadoIntervencao.Concluida) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
             // A seguinte ainda por tocar sai: volta a gerar-se quando esta for concluída outra vez.
             if (f.Tarefa != "") _lista.RemoveAll(x => x != f && x.Tarefa == f.Tarefa && x.D.Estado == EstadoIntervencao.Planeada && x.Tecno == 0 && x.Materiais.Count == 0);
-            f.Motivo = motivo;
+            f.Motivo = motivo.Trim();
             f.D = f.D with { Estado = EstadoIntervencao.EmCurso, HoraFim = null };
             return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
         }

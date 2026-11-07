@@ -97,7 +97,9 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
             // Histórico já fechado, para a ficha do equipamento e para "Todas as fichas".
             new("H1", "Compressor de ar 02", "Produção", TipoIntervencao.Preventiva, hoje.AddDays(-35), EstadoIntervencao.Validada, null, "Óleo e filtros em bom estado", new TimeOnly(8, 0), new TimeOnly(9, 0), "Operador de Teste", 101),
             new("H2", "Empilhador 05", "Armazém", TipoIntervencao.Curativa, hoje.AddDays(-120), EstadoIntervencao.Validada, "Não arranca", "Substituída a bateria", new TimeOnly(14, 0), new TimeOnly(16, 30), "Chefe de Turno", 100),
-            new("H3", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje.AddDays(-60), EstadoIntervencao.Cancelada)
+            new("H3", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje.AddDays(-60), EstadoIntervencao.Cancelada),
+            new("T7", "Linha de embalagem", "Produção", TipoIntervencao.Preventiva, hoje.AddDays(-1), EstadoIntervencao.EmCurso, null, "Limpeza feita", new TimeOnly(7, 30), null, "Operador de Teste", 101,
+                Motivo: "Falta indicar o material usado.")
         ];
     }
 
@@ -133,7 +135,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         if (RegrasIntervencao.ValidarConclusao(feito, inicio, fim) is not null) throw new InvalidOperationException(MensagensIntervencao.Mudou);
         return Alterar(id, EstadoIntervencao.EmCurso, i => i with
         {
-            Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim
+            Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null
         });
     }
 
@@ -148,7 +150,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(motivo)) throw new InvalidOperationException(MensagensIntervencao.Mudou);
-        return Alterar(id, EstadoIntervencao.Concluida, i => i with { Estado = EstadoIntervencao.EmCurso, HoraFim = null });
+        return Alterar(id, EstadoIntervencao.Concluida, i => i with { Estado = EstadoIntervencao.EmCurso, HoraFim = null, Motivo = motivo.Trim() });
     }
 
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default)

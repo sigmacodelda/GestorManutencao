@@ -20,6 +20,12 @@ Com `ApiUrl` vazio em `GestorManutencao.App/MauiProgram.cs` a app corre em Debug
 
 Segue o circuito de manutenção da LandeiroMaui, na mesma tabela do PHC (`u_fichaint`): estados Planeada, EmCurso, Concluida, Validada e Cancelada. O técnico inicia, junta o material usado e conclui; o supervisor valida ou devolve com motivo, atribui técnicos nas Planeadas e gera as planeadas seguintes. As Planeadas mostram a última intervenção e "Fora de prazo desde" quando a data prevista já passou. Detalhe em `docs/ligacao-phc-intervencoes.md` e `docs/tabela-utilizadores.md`; o script do campo `tecno` está em `docs/criar-u_manutil.sql`.
 
+## Notificações
+
+Avisos locais (Android e Windows) mais um centro de notificações na app (`/notificacoes`, ícone "Avisos"). São derivados do estado das fichas que a app já consulta, de 60 em 60 segundos e ao voltar ao primeiro plano; nada é gravado no servidor nem há Firebase. A lista (máximo 50) e as chaves já vistas ficam no aparelho, por utilizador; a primeira vez que um utilizador entra serve de linha de base (entra no centro como lida, sem aviso do sistema). A ficha devolvida mostra o motivo (`Motivo`, vindo de `valobs`, só em fichas em curso).
+
+Limite: só avisa com a app aberta ou em segundo plano. Com a app fechada não há aviso (exigiria push). No Android 13 ou superior a permissão de notificações é pedida ao abrir; no Windows sem pacote, se o registo das notificações do sistema falhar, a app mostra uma faixa por dentro.
+
 ## API
 
 `GestorManutencao.Api` (.NET 10). Em Production precisa de `ConnectionStrings:PHCConn`, `Jwt` e `Pin:Pepper` no `appsettings` (nunca no código).

@@ -1,5 +1,6 @@
 using GestorManutencao.UI.Modelos;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GestorManutencao.UI.Servicos;
 
@@ -79,6 +80,13 @@ public sealed class ArmazemSessaoMemoria : IArmazemSessao
 public static class ServicosExtensions
 {
     // Registo comum; o anfitrião acrescenta a autenticação e o armazém da sessão.
-    public static IServiceCollection AddManutencaoUI(this IServiceCollection services, string? tema = null) =>
+    // O aviso do sistema e o armazém das notificações têm versão neutra por defeito; o anfitrião pode registar as suas.
+    public static IServiceCollection AddManutencaoUI(this IServiceCollection services, string? tema = null)
+    {
         services.AddSingleton(GestorManutencao.UI.Temas.Tema.Carregar(tema)).AddScoped<SessaoService>();
+        services.AddSingleton<CicloVidaApp>().AddScoped<NotificacaoService>();
+        services.TryAddSingleton<IAvisoSistema, AvisoSistemaNenhum>();
+        services.TryAddSingleton<IArmazemAvisos, ArmazemAvisosMemoria>();
+        return services;
+    }
 }

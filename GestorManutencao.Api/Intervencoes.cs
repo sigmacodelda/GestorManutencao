@@ -10,12 +10,13 @@ public enum EstadoIntervencao { Planeada, EmCurso, Concluida, Validada, Cancelad
 public enum TipoIntervencao { Preventiva, Curativa }
 
 // Última, Cancelada e DataPrevista só vêm nas planeadas. Tecno é o número de utilizador do PHC de quem tem a ficha (0 = sem dono). PodeValidar só conta na lista de validação.
+// Motivo só vem nas fichas devolvidas pelo supervisor (em curso com observação gravada).
 public sealed record IntervencaoDto(
     string Id, string Equipamento, string Zona, TipoIntervencao Tipo, DateOnly DataPlaneada, EstadoIntervencao Estado,
     string? Anomalia = null, string? Feito = null, TimeOnly? HoraInicio = null, TimeOnly? HoraFim = null,
     string? Tecnico = null, int Tecno = 0, bool PodeValidar = true,
     DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null,
-    bool PodeAbrir = false);
+    bool PodeAbrir = false, string? Motivo = null);
 
 // Id, Nome e Zona bastam à pesquisa da avaria; o resto serve à lista e à ficha de equipamentos.
 public sealed record EquipamentoDto(
@@ -278,7 +279,7 @@ public static class EndpointsIntervencoes
         {
             Historico = ficha.Historico.Select(h => tecno > 0 && h.Tecno == tecno
                 ? h
-                : h with { Anomalia = null, Feito = null, Tecnico = null, Tecno = 0, HoraInicio = null, HoraFim = null }).ToList()
+                : h with { Anomalia = null, Feito = null, Tecnico = null, Tecno = 0, HoraInicio = null, HoraFim = null, Motivo = null }).ToList()
         };
 
     // Na ficha, o nome do técnico cabe em 45 caracteres.
