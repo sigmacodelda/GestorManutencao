@@ -14,9 +14,25 @@ public sealed record IntervencaoDto(
     string Id, string Equipamento, string Zona, TipoIntervencao Tipo, DateOnly DataPlaneada, EstadoIntervencao Estado,
     string? Anomalia = null, string? Feito = null, TimeOnly? HoraInicio = null, TimeOnly? HoraFim = null,
     string? Tecnico = null, int Tecno = 0, bool PodeValidar = true,
-    DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null);
+    DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null,
+    bool PodeAbrir = false);
 
-public sealed record EquipamentoDto(string Id, string Nome, string Zona);
+// Id, Nome e Zona bastam à pesquisa da avaria; o resto serve à lista e à ficha de equipamentos.
+public sealed record EquipamentoDto(
+    string Id, string Nome, string Zona, string Ref = "", int NoInterno = 0, string Tipo = "", string Marca = "", string Modelo = "", string Serie = "",
+    DateOnly? UltimaIntervencao = null, int FichasAbertas = 0, bool ForaDeServico = false, bool Obsoleto = false);
+
+public sealed record TarefaPlaneadaDto(string Id, string Descricao, string Periodicidade, DateOnly? UltimaIntervencao, DateOnly? ProximaData);
+
+public sealed record FichaEquipamentoDto(EquipamentoDto Equipamento, IReadOnlyList<TarefaPlaneadaDto> Tarefas, IReadOnlyList<IntervencaoDto> Historico);
+
+public sealed record FiltroEquipamentos(string Texto, string Tipo, string Local, bool Obsoletos);
+
+public sealed record FiltroFichas(EstadoIntervencao? Estado, DateOnly? Desde, DateOnly? Ate, string Texto, int Tecno, int Pagina);
+
+public sealed record PaginaFichasDto(IReadOnlyList<IntervencaoDto> Itens, bool TemMais);
+
+public sealed record PedidoConfiguracao(int? Antecedencia, bool? GerarPlaneadas, bool? AvancaOrdem, bool? ValidarPropria, bool? ExtExigeDoc, bool? ComprasFichaInt);
 
 public sealed record MaterialDto(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo);
 
@@ -63,7 +79,11 @@ public interface IRepositorioIntervencoes
 {
     Task<IReadOnlyList<IntervencaoDto>> ListarAsync(TecnicoAtual tecnico, CancellationToken ct);
     Task<IntervencaoDto?> ObterAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
+    // Equipamentos (sem viaturas), só leitura: pesquisa da avaria e lista; a ficha traz tarefas planeadas e as últimas 50 intervenções.
+    // Pesquisa leve da avaria (20 no máximo, só id, nome e zona) e lista com agregados (devolve até MaxEquipamentos + 1 para a UI saber que foi cortada).
     Task<IReadOnlyList<EquipamentoDto>> PesquisarEquipamentosAsync(string texto, CancellationToken ct);
+    Task<IReadOnlyList<EquipamentoDto>> ListarEquipamentosAsync(FiltroEquipamentos filtro, CancellationToken ct);
+    Task<FichaEquipamentoDto?> ObterEquipamentoAsync(string id, int tecno, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> IniciarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirAsync(string id, TecnicoAtual tecnico, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct);
@@ -77,6 +97,11 @@ public interface IRepositorioIntervencoes
     Task<IReadOnlyList<IntervencaoDto>> ListarPlaneadasAsync(CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> AtribuirAsync(string id, int tecno, string nome, TecnicoAtual supervisor, CancellationToken ct);
     Task<RelatorioGeracao> GerarPlaneadasAsync(TecnicoAtual supervisor, CancellationToken ct);
+
+    // Supervisor: todas as fichas, filtradas e paginadas (PodeAbrir diz se o supervisor pode abrir a ficha no detalhe); configuração (u_configman).
+    Task<PaginaFichasDto> ListarTodasAsync(FiltroFichas filtro, TecnicoAtual supervisor, CancellationToken ct);
+    Task<ConfigManutencao> ObterConfiguracaoAsync(CancellationToken ct);
+    Task GuardarConfiguracaoAsync(ConfigManutencao configuracao, TecnicoAtual supervisor, CancellationToken ct);
 
     // Materiais usados (u_matinterv): só se vêem e mexem nas fichas do técnico; só se lançam com a ficha em curso.
     Task<IReadOnlyList<MaterialDto>?> ListarMateriaisAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
@@ -104,8 +129,65 @@ public static class EndpointsIntervencoes
         g.MapGet("/intervencoes/{id}", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             ComoTecnico(eu, utilizadores, ct, async t => await repo.ObterAsync(id, t, ct) is { } i ? Results.Ok(i) : Results.NotFound()));
 
-        g.MapGet("/equipamentos", async (string? q, IRepositorioIntervencoes repo, CancellationToken ct) =>
-            Results.Ok(string.IsNullOrWhiteSpace(q) || q.Trim().Length is < 2 or > 60 ? [] : await repo.PesquisarEquipamentosAsync(q.Trim(), ct)));
+        // leve=true é a pesquisa da avaria (2 letras, 20 resultados, sem agregados). Sem leve: com texto pedem-se 2 letras; sem texto lista-se tudo, com os filtros.
+        g.MapGet("/equipamentos", async Task<IResult> (string? q, string? tipo, string? local, bool? obsoletos, bool? leve,
+            ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        {
+            if (await Ativo(eu, utilizadores, ct) is null) return Results.Forbid();
+            var texto = (q ?? "").Trim();
+            tipo = (tipo ?? "").Trim();
+            local = (local ?? "").Trim();
+            if (texto.Length is 1 or > RegrasManutencao.MaxTextoPesquisa || tipo.Length > RegrasManutencao.TamanhoTipo || local.Length > RegrasManutencao.TamanhoLocal
+                || (leve == true && texto.Length == 0))
+                return Results.Ok(Array.Empty<EquipamentoDto>());
+            if (leve == true) return Results.Ok(await repo.PesquisarEquipamentosAsync(texto, ct));
+            return Results.Ok(await repo.ListarEquipamentosAsync(new FiltroEquipamentos(texto, tipo, local, obsoletos ?? false), ct));
+        });
+
+        g.MapGet("/equipamentos/{id}", async Task<IResult> (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        {
+            if (await Ativo(eu, utilizadores, ct) is not { } u) return Results.Forbid();
+            return await repo.ObterEquipamentoAsync(id, u.Tecno, ct) is { } ficha
+                ? Results.Ok(RestringirHistorico(ficha, u.Tecno, u.Perfil == Perfil.Supervisor))
+                : Results.NotFound();
+        });
+
+        // Todas as fichas (supervisor): estado, intervalo de datas, texto e técnico (número do PHC); 20 por página.
+        g.MapGet("/intervencoes/todas", async Task<IResult> (string? estado, DateOnly? desde, DateOnly? ate, string? q, int? tecno, int? pagina,
+            ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        {
+            EstadoIntervencao? estadoFiltro = null;
+            if (!string.IsNullOrWhiteSpace(estado))
+            {
+                if (!Enum.TryParse<EstadoIntervencao>(estado.Trim(), true, out var e) || !Enum.IsDefined(e)) return Results.BadRequest();
+                estadoFiltro = e;
+            }
+            var texto = (q ?? "").Trim();
+            if (texto.Length > RegrasManutencao.MaxTextoPesquisa || tecno is < 0 or > 99999 || pagina is < 1 or > 500 || (desde > ate)) return Results.BadRequest();
+            if (ForaDoIntervalo(desde) || ForaDoIntervalo(ate))
+                return Results.Json(new { erro = "pedido_invalido", mensagem = "As datas têm de estar entre 01/01/1900 e 31/12/2999." }, statusCode: StatusCodes.Status400BadRequest);
+
+            return await ComoSupervisor(eu, utilizadores, ct, async s =>
+                Results.Ok(await repo.ListarTodasAsync(new FiltroFichas(estadoFiltro, desde, ate, texto, tecno ?? 0, pagina ?? 1), s, ct)));
+        }).RequireAuthorization("Supervisor");
+
+        g.MapGet("/configuracao", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoSupervisor(eu, utilizadores, ct, async _ => Results.Ok(await repo.ObterConfiguracaoAsync(ct)))).RequireAuthorization("Supervisor");
+
+        g.MapPut("/configuracao", async Task<IResult> (PedidoConfiguracao p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, ILogger<Program> log, CancellationToken ct) =>
+        {
+            if (RegrasManutencao.ValidarConfiguracao(p) is { } mensagem)
+                return Results.Json(new { erro = "pedido_invalido", mensagem }, statusCode: StatusCodes.Status400BadRequest);
+
+            var nova = new ConfigManutencao(p.Antecedencia!.Value, p.GerarPlaneadas!.Value, p.AvancaOrdem!.Value, p.ValidarPropria!.Value, p.ExtExigeDoc!.Value, p.ComprasFichaInt!.Value);
+            return await ComoSupervisor(eu, utilizadores, ct, async s =>
+            {
+                await repo.GuardarConfiguracaoAsync(nova, s, ct);
+                log.LogInformation("Configuração da manutenção alterada por {Supervisor}: antecedência {Antecedencia}, gerar planeadas {Gerar}, avança ordem {Ordem}, validar própria {Propria}, externa exige documento {Doc}, compras na ficha {Compras}.",
+                    s.Codigo, nova.Antecedencia, nova.GerarPlaneadas, nova.AvancaOrdem, nova.ValidarPropria, nova.ExtExigeDoc, nova.ComprasFichaInt);
+                return Results.Ok(nova);
+            });
+        }).RequireAuthorization("Supervisor");
 
         g.MapPost("/intervencoes/avaria", (PedidoAvaria p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             RegrasIntervencao.ValidarAvaria(p.EquipamentoId, p.Anomalia) is not null
@@ -186,6 +268,18 @@ public static class EndpointsIntervencoes
         if (await Ativo(eu, utilizadores, ct) is not { Perfil: Perfil.Supervisor } u) return Results.Forbid();
         return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)));
     }
+
+    private static bool ForaDoIntervalo(DateOnly? data) => data is { } d && (d < new DateOnly(1900, 1, 1) || d > new DateOnly(2999, 12, 31));
+
+    // Pressuposto: o operador só vê o conteúdo (problema, o que foi feito, técnico, horas) das fichas suas; nas dos outros só data, tipo e estado.
+    // O supervisor vê tudo. PodeAbrir já vem calculado do repositório e o número do técnico sai, para não identificar ninguém.
+    internal static FichaEquipamentoDto RestringirHistorico(FichaEquipamentoDto ficha, int tecno, bool supervisor) =>
+        supervisor ? ficha : ficha with
+        {
+            Historico = ficha.Historico.Select(h => tecno > 0 && h.Tecno == tecno
+                ? h
+                : h with { Anomalia = null, Feito = null, Tecnico = null, Tecno = 0, HoraInicio = null, HoraFim = null }).ToList()
+        };
 
     // Na ficha, o nome do técnico cabe em 45 caracteres.
     internal static string Truncar(string nome) => nome.Length > 45 ? nome[..45] : nome;

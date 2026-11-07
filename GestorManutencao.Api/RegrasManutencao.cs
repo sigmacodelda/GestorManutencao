@@ -56,4 +56,31 @@ public static class RegrasManutencao
             : null;
 
     public static decimal CustoMaterial(decimal qtt, decimal precoUnitario) => Math.Round(qtt * precoUnitario, 3);
+
+    // Limites da pesquisa de equipamentos e fichas; tamanhos das colunas u_equip.tipo e u_equip.local.
+    public const int MaxTextoPesquisa = 60, TamanhoTipo = 30, TamanhoLocal = 65, FichasPorPagina = 20, FichasNoHistorico = 50, MaxEquipamentos = 500, MaxPesquisaAvaria = 20;
+
+    // Mesmo limite da LandeiroMaui; o valor por defeito do PIN (pinmaxtent) fica por conta do PHC e desta API não o usa.
+    public const int MaxAntecedencia = 90;
+
+    public static string? ValidarConfiguracao(PedidoConfiguracao p) =>
+        p.GerarPlaneadas is null || p.AvancaOrdem is null || p.ValidarPropria is null || p.ExtExigeDoc is null || p.ComprasFichaInt is null
+            ? "Faltam opções por indicar."
+        : p.Antecedencia is null or < 0 or > MaxAntecedencia ? $"A antecedência tem de ser um número inteiro de dias entre 0 e {MaxAntecedencia}."
+        : null;
+
+    // As fichas antigas do PHC não têm estado: fechadas contam como validadas, as que ficaram abertas como concluídas.
+    public static EstadoIntervencao EstadoDaFicha(string? estado, bool fechada) =>
+        Enum.TryParse<EstadoIntervencao>((estado ?? "").Trim(), out var e) && Enum.IsDefined(e) ? e
+        : fechada ? EstadoIntervencao.Validada : EstadoIntervencao.Concluida;
+
+    // Próxima data de uma tarefa = a mais recente entre a última feita (ou, nas fichas antigas, a do equipamento) e a última cancelada, mais a periodicidade;
+    // sem nada feito nem cancelado, vale a data da ficha aberta (se existir).
+    public static DateTime? ProximaDaTarefa(DateTime? feita, DateTime? cancelada, DateTime? feitaAntiga, UnidadePeriodo unidade, int intervalo, DateTime? dataAberta)
+    {
+        var ultima = feita ?? feitaAntiga;
+        var baseData = cancelada.HasValue && (!ultima.HasValue || cancelada > ultima) ? cancelada : ultima;
+        var calculada = baseData.HasValue ? ProximaDepoisDaUltima(baseData.Value, unidade, intervalo) : null;
+        return calculada ?? dataAberta;
+    }
 }

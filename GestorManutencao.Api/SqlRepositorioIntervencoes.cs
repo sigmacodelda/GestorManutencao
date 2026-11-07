@@ -86,11 +86,96 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
         from u_configman order by ousrdata, ousrhora
         """;
 
-    private const string SqlEquipamentos =
+    // Como a LandeiroMaui: última feita = fichas antigas (sem estado), concluídas ou validadas; abertas = antigas por fechar, em curso e por validar (as planeadas não contam).
+    private const string SelecaoEquipamento =
         """
-        select top 20 u_equipstamp, design, isnull([local], '') from u_equip
-        where obsoleto = 0 and (design like @texto escape '\' or ref like @texto escape '\')
+        select top 501 e.u_equipstamp, isnull(e.design, ''), isnull(e.[local], ''), isnull(e.ref, ''), isnull(e.nointerno, 0), isnull(e.tipo, ''), isnull(e.marca, ''),
+               isnull(e.modelo, ''), isnull(e.serie, ''), isnull(e.status, ''), e.obsoleto, f.ultima, isnull(f.abertas, 0)
+        from u_equip e
+        left join (select u_equipstamp,
+                          max(case when estado in ('', 'Concluida', 'Validada') and data <= getdate() then data end) as ultima,
+                          sum(case when fechada = 0 and obsoleto = 0 and estado in ('', 'EmCurso', 'Concluida') then 1 else 0 end) as abertas
+                   from u_fichaint where u_equipstamp <> '' group by u_equipstamp) f on f.u_equipstamp = e.u_equipstamp
+        """;
+
+    private const string SqlEquipamentos = SelecaoEquipamento +
+        """
+
+        where isnull(e.tipo, '') <> @veiculos and (@obsoletos = 1 or e.obsoleto = 0)
+          and (@tipo = '' or e.tipo = @tipo) and (@local = '' or e.[local] = @local)
+          and (@texto = '' or e.design like @texto escape '\' or e.ref like @texto escape '\' or e.marca like @texto escape '\' or e.modelo like @texto escape '\')
+        order by e.design, e.nointerno
+        """;
+
+    private const string SqlEquipamento = SelecaoEquipamento +
+        """
+
+        where e.u_equipstamp = @id and isnull(e.tipo, '') <> @veiculos
+        """;
+
+    // Tarefas ativas das instruções de manutenção do equipamento, com a periodicidade e as datas necessárias à próxima.
+    private const string SqlTarefasEquipamento =
+        """
+        select l.u_itmanutlistamp, isnull(left(cast(l.descricao as varchar(max)), 400), ''), ltrim(rtrim(l.periodo)), isnull(p.unidade, ''), isnull(p.intervalo, 0),
+               c.feita, c.cancelada, lg.ultima, c.aberta
+        from u_itmanutli l
+        join u_itmanut i on i.u_itmanutstamp = l.u_itmanutstamp
+        outer apply (select top 1 ltrim(rtrim(pp.unidade)) as unidade, pp.intervalo
+                     from u_periocid pp
+                     where left(ltrim(rtrim(cast(pp.periodo as varchar(254)))), 20) = ltrim(rtrim(l.periodo))
+                     order by pp.intervalo desc) p
+        left join (select uitmanutlistamp,
+                          max(case when estado in ('Concluida', 'Validada') then data end) as feita,
+                          max(case when estado = 'Cancelada' then data end) as cancelada,
+                          min(case when estado in ('Planeada', 'EmCurso') then data end) as aberta
+                   from u_fichaint where uitmanutlistamp <> '' and u_equipstamp = @id group by uitmanutlistamp) c on c.uitmanutlistamp = l.u_itmanutlistamp
+        left join (select ltrim(rtrim(periodo)) as periodo, max(data) as ultima
+                   from u_fichaint where u_equipstamp = @id and estado = '' and obsoleto = 0 and data <= getdate() and ltrim(rtrim(periodo)) <> ''
+                   group by ltrim(rtrim(periodo))) lg on lg.periodo = ltrim(rtrim(l.periodo))
+        where i.u_equipstamp = @id and l.ativo = 1 and i.obsoleto = 0
+        order by ltrim(rtrim(l.periodo)), l.u_itmanutlistamp
+        """;
+
+    // As fichas antigas do PHC não têm estado: fechadas contam como validadas, as que ficaram abertas como concluídas.
+    private const string EstadoEfetivo = "case when rtrim(f.estado) <> '' then rtrim(f.estado) when f.fechada = 1 then 'Validada' else 'Concluida' end";
+
+    private const string CamposFicha =
+        " f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''), f.tipointerv, f.data, " + EstadoEfetivo +
+        ", f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno from u_fichaint f left join u_equip e on e.u_equipstamp = f.u_equipstamp";
+
+    // Histórico do equipamento: as planeadas (ainda por fazer) ficam nas tarefas.
+    private const string SqlHistoricoEquipamento = "select top 50" + CamposFicha +
+        " where f.u_equipstamp = @id and f.obsoleto = 0 and f.estado <> 'Planeada' order by f.data desc, f.no desc";
+
+    // Sem OFFSET (nível 100): lê-se até ao fim da página pedida mais uma ficha (para saber se há mais) e saltam-se as anteriores.
+    private const string SqlTodas = "select top (@topo)" + CamposFicha +
+        " where isnull(e.tipo, '') <> @veiculos and f.obsoleto = 0 and (@estado = '' or " + EstadoEfetivo + " = @estado)" +
+        " and f.data >= @desde and f.data < @ate and (@tecno = 0 or f.tecno = @tecno)" +
+        " and (@texto = '' or f.design like @texto escape '\\' or e.design like @texto escape '\\' or f.ref like @texto escape '\\'" +
+        " or f.problema like @texto escape '\\' or f.resolucao like @texto escape '\\' or f.tecnome like @texto escape '\\')" +
+        " order by f.data desc, f.no desc, f.u_fichaintstamp desc";
+
+    // Pesquisa leve da avaria: sem o agregado das fichas.
+    private const string SqlPesquisaAvaria =
+        """
+        select top 20 u_equipstamp, isnull(design, ''), isnull([local], '') from u_equip
+        where obsoleto = 0 and isnull(tipo, '') <> @veiculos and (design like @texto escape '\' or ref like @texto escape '\')
         order by design
+        """;
+
+    private const string SqlGuardarConfiguracao =
+        """
+        set xact_abort on;
+        begin transaction;
+        -- UPDLOCK + HOLDLOCK: duas gravações em simultâneo não criam duas linhas.
+        if exists (select 1 from u_configman with (updlock, holdlock))
+            update u_configman set antecedencia = @antecedencia, gerarplaneadas = @gerar, avancaordem = @avanca, validarpropria = @propria,
+                   extexigedoc = @ext, comprasfichaint = @compras, usrinis = @codigo, usrdata = @dia, usrhora = @hora;
+        else
+            insert into u_configman (u_configmanstamp, antecedencia, gerarplaneadas, avancaordem, validarpropria, extexigedoc, pinmaxtent, comprasfichaint,
+                                     ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
+            values (@stamp, @antecedencia, @gerar, @avanca, @propria, @ext, 5, @compras, @codigo, @dia, @hora, @codigo, @dia, @hora);
+        commit transaction;
         """;
 
     private const string SqlNumerosDoAno = "select no from u_fichaint where data >= @ini and data < @fim";
@@ -101,7 +186,7 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
                                 ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
         select @stamp, @no, left(e.ref, 20), left(e.design, 45), 'Curativa', 'Interna', @anomalia, @dia, 'EmCurso', e.u_equipstamp, @agora, @tecno, @tecnome,
                @codigo, @dia, @hora, @codigo, @dia, @hora
-        from u_equip e where e.u_equipstamp = @equipamento and e.obsoleto = 0
+        from u_equip e where e.u_equipstamp = @equipamento and e.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
         """;
 
     private const string SqlPrimeiraDaZona =
@@ -364,15 +449,129 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
 
     public Task<IntervencaoDto?> ObterAsync(string id, TecnicoAtual tecnico, CancellationToken ct) => Executar(conn => LerUmaAsync(conn, id, ct, tecnico));
 
+    // Os curingas do LIKE escapam-se para o texto do utilizador valer só como texto.
+    private static string Padrao(string texto) =>
+        texto.Length == 0 ? "" : "%" + texto.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[") + "%";
+
+    private static void Parametro(SqlCommand cmd, string nome, SqlDbType tipo, int tamanho, string valor) =>
+        cmd.Parameters.Add(nome, tipo, tamanho).Value = valor;
+
+    private static EquipamentoDto LerEquipamento(SqlDataReader r) => new(
+        r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim(), r.GetString(3).Trim(), Convert.ToInt32(r.GetValue(4), CultureInfo.InvariantCulture),
+        r.GetString(5).Trim(), r.GetString(6).Trim(), r.GetString(7).Trim(), r.GetString(8).Trim(),
+        r.IsDBNull(11) || r.GetDateTime(11) <= SemData ? null : DateOnly.FromDateTime(r.GetDateTime(11)), r.GetInt32(12),
+        string.Equals(r.GetString(9).Trim(), "Fora de Serviço", StringComparison.OrdinalIgnoreCase), r.GetBoolean(10));
+
     public Task<IReadOnlyList<EquipamentoDto>> PesquisarEquipamentosAsync(string texto, CancellationToken ct) => Executar<IReadOnlyList<EquipamentoDto>>(async conn =>
     {
-        await using var cmd = new SqlCommand(SqlEquipamentos, conn);
-        var escapado = texto.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[");
-        Texto(cmd, "@texto", 130, $"%{escapado}%");
+        await using var cmd = new SqlCommand(SqlPesquisaAvaria, conn);
+        Veiculos(cmd);
+        Texto(cmd, "@texto", 130, Padrao(texto));
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<EquipamentoDto>();
         while (await r.ReadAsync(ct)) lista.Add(new(r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim()));
         return lista;
+    });
+
+    public Task<IReadOnlyList<EquipamentoDto>> ListarEquipamentosAsync(FiltroEquipamentos filtro, CancellationToken ct) => Executar<IReadOnlyList<EquipamentoDto>>(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlEquipamentos, conn);
+        Veiculos(cmd);
+        cmd.Parameters.Add("@obsoletos", SqlDbType.Bit).Value = filtro.Obsoletos;
+        Parametro(cmd, "@tipo", SqlDbType.NVarChar, RegrasManutencao.TamanhoTipo, filtro.Tipo);
+        Parametro(cmd, "@local", SqlDbType.NVarChar, RegrasManutencao.TamanhoLocal, filtro.Local);
+        Texto(cmd, "@texto", 130, Padrao(filtro.Texto));
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        var lista = new List<EquipamentoDto>();
+        while (await r.ReadAsync(ct)) lista.Add(LerEquipamento(r));
+        return lista;
+    });
+
+    public Task<FichaEquipamentoDto?> ObterEquipamentoAsync(string id, int tecno, CancellationToken ct) => Executar<FichaEquipamentoDto?>(async conn =>
+    {
+        EquipamentoDto? equipamento;
+        await using (var cmd = new SqlCommand(SqlEquipamento, conn))
+        {
+            Texto(cmd, "@id", 25, id);
+            Veiculos(cmd);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            equipamento = await r.ReadAsync(ct) ? LerEquipamento(r) : null;
+        }
+        if (equipamento is null) return null;
+
+        var tarefas = new List<TarefaPlaneadaDto>();
+        await using (var cmd = new SqlCommand(SqlTarefasEquipamento, conn))
+        {
+            Texto(cmd, "@id", 25, id);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var feita = r.IsDBNull(5) ? (DateTime?)null : r.GetDateTime(5);
+                var cancelada = r.IsDBNull(6) ? (DateTime?)null : r.GetDateTime(6);
+                var antiga = r.IsDBNull(7) ? (DateTime?)null : r.GetDateTime(7);
+                var aberta = r.IsDBNull(8) ? (DateTime?)null : r.GetDateTime(8);
+                var ultima = feita ?? antiga;
+                var proxima = RegrasManutencao.ProximaDaTarefa(feita, cancelada, antiga, RegrasManutencao.LerUnidade(r.GetString(3)), (int)r.GetDecimal(4), aberta);
+                tarefas.Add(new TarefaPlaneadaDto(r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim(),
+                    ultima.HasValue && ultima.Value > SemData ? DateOnly.FromDateTime(ultima.Value) : null,
+                    proxima.HasValue ? DateOnly.FromDateTime(proxima.Value) : null));
+            }
+        }
+
+        var historico = new List<IntervencaoDto>();
+        await using (var cmd = new SqlCommand(SqlHistoricoEquipamento, conn))
+        {
+            Texto(cmd, "@id", 25, id);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct)) historico.Add(ComPermissao(Ler(r), tecno));
+        }
+        return new FichaEquipamentoDto(equipamento, tarefas, historico);
+    });
+
+    // Como no detalhe da ficha (SqlObter): só abre quem tem número de técnico e a ficha é sua ou ainda não tem dono.
+    private static IntervencaoDto ComPermissao(IntervencaoDto ficha, int tecno) =>
+        ficha with { PodeAbrir = tecno > 0 && (ficha.Tecno == tecno || ficha.Tecno == 0) };
+
+    public Task<PaginaFichasDto> ListarTodasAsync(FiltroFichas filtro, TecnicoAtual supervisor, CancellationToken ct) => Executar(async conn =>
+    {
+        var tamanho = RegrasManutencao.FichasPorPagina;
+        var saltar = (filtro.Pagina - 1) * tamanho;
+        await using var cmd = new SqlCommand(SqlTodas, conn);
+        cmd.Parameters.Add("@topo", SqlDbType.Int).Value = filtro.Pagina * tamanho + 1;
+        Veiculos(cmd);
+        Parametro(cmd, "@estado", SqlDbType.VarChar, 20, filtro.Estado?.ToString() ?? "");
+        Quando(cmd, "@desde", filtro.Desde?.ToDateTime(TimeOnly.MinValue) ?? SemData);
+        Quando(cmd, "@ate", filtro.Ate?.AddDays(1).ToDateTime(TimeOnly.MinValue) ?? new DateTime(2999, 12, 31));
+        Numero(cmd, "@tecno", filtro.Tecno, 5);
+        Texto(cmd, "@texto", 130, Padrao(filtro.Texto));
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        var itens = new List<IntervencaoDto>();
+        var lidas = 0;
+        while (await r.ReadAsync(ct))
+        {
+            if (lidas++ < saltar) continue;
+            itens.Add(ComPermissao(Ler(r), supervisor.Tecno));
+        }
+        // A ficha a mais lida (topo = página + 1) só serve para saber se há mais.
+        var temMais = itens.Count > tamanho;
+        return new PaginaFichasDto(temMais ? itens.Take(tamanho).ToList() : itens, temMais);
+    });
+
+    public Task<ConfigManutencao> ObterConfiguracaoAsync(CancellationToken ct) => Executar(conn => LerConfiguracaoAsync(conn, ct));
+
+    public Task GuardarConfiguracaoAsync(ConfigManutencao configuracao, TecnicoAtual supervisor, CancellationToken ct) => Executar(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlGuardarConfiguracao, conn);
+        Texto(cmd, "@stamp", 25, Guid.NewGuid().ToString("N")[..25].ToUpperInvariant());
+        Numero(cmd, "@antecedencia", configuracao.Antecedencia, 5);
+        cmd.Parameters.Add("@gerar", SqlDbType.Bit).Value = configuracao.GerarPlaneadas;
+        cmd.Parameters.Add("@avanca", SqlDbType.Bit).Value = configuracao.AvancaOrdem;
+        cmd.Parameters.Add("@propria", SqlDbType.Bit).Value = configuracao.ValidarPropria;
+        cmd.Parameters.Add("@ext", SqlDbType.Bit).Value = configuracao.ExtExigeDoc;
+        cmd.Parameters.Add("@compras", SqlDbType.Bit).Value = configuracao.ComprasFichaInt;
+        Auditoria(cmd, supervisor.Codigo, await AgoraAsync(conn, ct));
+        await cmd.ExecuteNonQueryAsync(ct);
+        return true;
     });
 
     private static async Task<decimal> ProximoNumeroAsync(SqlConnection conn, int ano, CancellationToken ct)
@@ -396,6 +595,7 @@ public sealed class SqlRepositorioIntervencoes(IConfiguration configuracao, Time
         Numero(cmd, "@no", no, 10);
         Texto(cmd, "@anomalia", 200, anomalia);
         Texto(cmd, "@equipamento", 25, equipamentoId);
+        Veiculos(cmd);
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
         Texto(cmd, "@tecnome", 45, tecnico.Nome);
         Auditoria(cmd, tecnico.Codigo, agora);

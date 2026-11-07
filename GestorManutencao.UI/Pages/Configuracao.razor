@@ -1,0 +1,122 @@
+@page "/configuracao"
+@inject SessaoService Sessao
+@inject IIntervencoesService Intervencoes
+
+<PageTitle>Configuração · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="mais"><Icone Nome="arrow-left" /><span>Mais</span></a>
+        <h1 tabindex="-1">Configuração</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_indisponivel)
+    {
+        <p class="estado-lista" role="status">Esta parte ainda não está disponível.</p>
+    }
+    else if (_falhou)
+    {
+        <div class="estado-lista" role="alert">
+            <p>Não foi possível carregar a configuração.</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+            <div class="campo">
+                <label for="cfg-antecedencia">Dias de antecedência</label>
+                <input id="cfg-antecedencia" type="text" inputmode="numeric" autocomplete="off" aria-describedby="cfg-ajuda cfg-erro"
+                       @bind="_antecedencia" @bind:event="oninput" />
+                <p id="cfg-ajuda" class="ficha-texto">Com quantos dias de avanço as planeadas sem técnico aparecem aos operadores (0 a @RegrasConfiguracao.MaxAntecedencia).</p>
+            </div>
+
+            <label class="interruptor">
+                <input type="checkbox" role="switch" @bind="_gerarPlaneadas" />
+                <span class="interruptor-trilho" aria-hidden="true"></span>
+                <span class="interruptor-texto">Gerar a planeada seguinte ao concluir uma ficha</span>
+            </label>
+            <label class="interruptor">
+                <input type="checkbox" role="switch" @bind="_avancaOrdem" />
+                <span class="interruptor-trilho" aria-hidden="true"></span>
+                <span class="interruptor-texto">Deixar começar fichas fora da ordem da zona</span>
+            </label>
+            <label class="interruptor">
+                <input type="checkbox" role="switch" @bind="_validarPropria" />
+                <span class="interruptor-trilho" aria-hidden="true"></span>
+                <span class="interruptor-texto">Deixar validar as fichas feitas pelo próprio supervisor</span>
+            </label>
+            <label class="interruptor">
+                <input type="checkbox" role="switch" @bind="_extExigeDoc" />
+                <span class="interruptor-trilho" aria-hidden="true"></span>
+                <span class="interruptor-texto">Manutenção externa só conclui com fornecedor e documento</span>
+            </label>
+            <label class="interruptor">
+                <input type="checkbox" role="switch" @bind="_comprasFichaInt" />
+                <span class="interruptor-trilho" aria-hidden="true"></span>
+                <span class="interruptor-texto">Contar as compras ligadas nos totais da ficha</span>
+            </label>
+
+            <p id="cfg-erro" class="campo-erro" role="alert">@_erro</p>
+            @if (_guardada)
+            {
+                <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>Configuração guardada.</span></p>
+            }
+            <button type="submit" class="btn btn-primario" disabled="@_a_guardar">@(_a_guardar ? "A guardar…" : "Guardar")</button>
+        </form>
+    }
+</section>
+
+@code {
+    private string _antecedencia = "", _erro = "";
+    private bool _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt;
+    private bool _a_carregar = true, _falhou, _indisponivel, _a_guardar, _guardada;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sessao.PodeSerSupervisor) await CarregarAsync();
+        else _a_carregar = false;
+    }
+
+    private async Task CarregarAsync()
+    {
+        _a_carregar = true; _falhou = false; _indisponivel = false;
+        try { Aplicar(await Intervencoes.ObterConfiguracaoAsync()); }
+        catch (NotSupportedException) { _indisponivel = true; }
+        catch (Exception) { _falhou = true; }
+        finally { _a_carregar = false; }
+    }
+
+    private void Aplicar(ConfiguracaoManutencao c)
+    {
+        _antecedencia = c.Antecedencia.ToString();
+        _gerarPlaneadas = c.GerarPlaneadas; _avancaOrdem = c.AvancaOrdem; _validarPropria = c.ValidarPropria;
+        _extExigeDoc = c.ExtExigeDoc; _comprasFichaInt = c.ComprasFichaInt;
+    }
+
+    private async Task GuardarAsync()
+    {
+        _erro = ""; _guardada = false;
+        int? dias = int.TryParse(_antecedencia.Trim(), out var n) ? n : null;
+        if (RegrasConfiguracao.Validar(dias) is { } mensagem) { _erro = mensagem; return; }
+
+        _a_guardar = true;
+        try
+        {
+            Aplicar(await Intervencoes.GuardarConfiguracaoAsync(new ConfiguracaoManutencao(dias!.Value, _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt)));
+            _guardada = true;
+        }
+        catch (InvalidOperationException ex) { _erro = ex.Message; }
+        catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
+        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _a_guardar = false; }
+    }
+}

@@ -48,17 +48,31 @@
     private Equipamento? _escolhido;
     private bool _a_guardar;
 
+    private CancellationTokenSource? _espera;
+
+    // Espera 300 ms depois da última tecla antes de ir ao servidor.
     private async Task PesquisarAsync(ChangeEventArgs e)
     {
         _texto = e.Value?.ToString() ?? "";
         _escolhido = null;
         _erro = "";
-        try { _opcoes = _texto.Length == 0 ? [] : await Equipamentos.PesquisarAsync(_texto); }
+        _espera?.Cancel();
+        _espera = new CancellationTokenSource();
+        var cancelamento = _espera.Token;
+        if (_texto.Length == 0) { _opcoes = []; return; }
+        try
+        {
+            await Task.Delay(300, cancelamento);
+            var texto = _texto;
+            var encontrados = await Equipamentos.PesquisarAsync(texto, cancelamento);
+            if (!cancelamento.IsCancellationRequested) _opcoes = encontrados;
+        }
+        catch (OperationCanceledException) { /* veio outra tecla */ }
         catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
         catch (Exception) { _erro = "Não foi possível pesquisar. Tente outra vez."; }
     }
 
-    private void Escolher(Equipamento e) { _escolhido = e; _texto = e.Nome; _opcoes = []; _erro = ""; }
+    private void Escolher(Equipamento e) { _espera?.Cancel(); _escolhido = e; _texto = e.Nome; _opcoes = []; _erro = ""; }
 
     private async Task GuardarAsync()
     {

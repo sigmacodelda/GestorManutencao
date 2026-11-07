@@ -85,9 +85,63 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
 
     public async Task<IReadOnlyList<Equipamento>> PesquisarAsync(string texto, CancellationToken ct = default)
     {
-        using var resposta = await EnviarAsync(HttpMethod.Get, $"equipamentos?q={Uri.EscapeDataString(texto)}", null, ct);
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"equipamentos?leve=true&q={Uri.EscapeDataString(texto)}", null, ct);
         resposta.EnsureSuccessStatusCode();
         return await resposta.Content.ReadFromJsonAsync<List<Equipamento>>(ct) ?? [];
+    }
+
+    public async Task<IReadOnlyList<Equipamento>> ListarAsync(FiltroEquipamentos filtro, CancellationToken ct = default)
+    {
+        var url = $"equipamentos?q={Uri.EscapeDataString(filtro.Texto ?? "")}&tipo={Uri.EscapeDataString(filtro.Tipo ?? "")}&local={Uri.EscapeDataString(filtro.Local ?? "")}&obsoletos={(filtro.Obsoletos ? "true" : "false")}";
+        using var resposta = await EnviarAsync(HttpMethod.Get, url, null, ct);
+        resposta.EnsureSuccessStatusCode();
+        return await resposta.Content.ReadFromJsonAsync<List<Equipamento>>(ct) ?? [];
+    }
+
+    public async Task<FichaEquipamento?> ObterFichaAsync(string id, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"equipamentos/{Uri.EscapeDataString(id)}", null, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return null;
+        resposta.EnsureSuccessStatusCode();
+        return await resposta.Content.ReadFromJsonAsync<FichaEquipamento>(ct);
+    }
+
+    public async Task<PaginaFichas> ListarTodasAsync(FiltroFichas filtro, int pagina, CancellationToken ct = default)
+    {
+        var partes = new List<string> { $"pagina={pagina}" };
+        if (filtro.Estado is { } estado) partes.Add($"estado={estado}");
+        if (filtro.Desde is { } desde) partes.Add($"desde={desde:yyyy-MM-dd}");
+        if (filtro.Ate is { } ate) partes.Add($"ate={ate:yyyy-MM-dd}");
+        if (!string.IsNullOrWhiteSpace(filtro.Texto)) partes.Add($"q={Uri.EscapeDataString(filtro.Texto.Trim())}");
+        if (filtro.Tecno > 0) partes.Add($"tecno={filtro.Tecno}");
+        using var resposta = await EnviarAsync(HttpMethod.Get, "intervencoes/todas?" + string.Join('&', partes), null, ct);
+        resposta.EnsureSuccessStatusCode();
+        return await resposta.Content.ReadFromJsonAsync<PaginaFichas>(ct) ?? new PaginaFichas([], false);
+    }
+
+    public async Task<ConfiguracaoManutencao> ObterConfiguracaoAsync(CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, "configuracao", null, ct);
+        resposta.EnsureSuccessStatusCode();
+        return await resposta.Content.ReadFromJsonAsync<ConfiguracaoManutencao>(ct) ?? throw new HttpRequestException();
+    }
+
+    // 400: o servidor explica o que está mal no campo "mensagem".
+    public async Task<ConfiguracaoManutencao> GuardarConfiguracaoAsync(ConfiguracaoManutencao configuracao, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Put, "configuracao", configuracao, ct);
+        if (resposta.StatusCode == HttpStatusCode.BadRequest)
+            throw new InvalidOperationException(await LerMensagemAsync(resposta, ct) ?? "Valores inválidos. Reveja a configuração.");
+        resposta.EnsureSuccessStatusCode();
+        return await resposta.Content.ReadFromJsonAsync<ConfiguracaoManutencao>(ct) ?? throw new HttpRequestException();
+    }
+
+    private sealed record CorpoMensagem(string? Mensagem);
+
+    private static async Task<string?> LerMensagemAsync(HttpResponseMessage resposta, CancellationToken ct)
+    {
+        try { return (await resposta.Content.ReadFromJsonAsync<CorpoMensagem>(ct))?.Mensagem; }
+        catch (System.Text.Json.JsonException) { return null; }
     }
 
     // 403 "sem_tecno": ainda não tem o número de técnico do PHC. Outros erros viram excepções genéricas.

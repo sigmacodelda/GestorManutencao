@@ -12,12 +12,28 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         public string Motivo { get; set; } = "";
     }
 
+    private sealed record Tarefa(string Id, string EquipamentoId, string Descricao, string Periodo, UnidadePeriodo Unidade, int Intervalo);
+
+    // UltimaIntervencao e FichasAbertas calculam-se a partir das fichas, como no SQL.
     private static readonly EquipamentoDto[] Equipamentos =
     [
-        new("E1", "Compressor de ar 02", "Produção"), new("E2", "Empilhador 05", "Armazém"), new("E3", "Câmara de frio 01", "Frio")
+        new("E1", "Compressor de ar 02", "Produção", "CMP-02", 2, "Compressor", "Atlas Copco", "GA 30", "AC-77120"),
+        new("E2", "Empilhador 05", "Armazém", "EMP-05", 5, "Empilhador", "Toyota", "8FBE15", "TY-30418"),
+        new("E3", "Câmara de frio 01", "Frio", "CF-01", 1, "Frio", "Kide", "CF-500", "KD-1190"),
+        new("E4", "Linha de embalagem", "Produção", "LE-01", 4, "Linha", "Cavanna", "LP-2", "CV-2231"),
+        new("E5", "Balança 03", "Expedição", "BAL-03", 3, "Balança", "Mettler", "IND-570", "MT-8841"),
+        new("E6", "Porta seccionada 07", "Armazém", "PRT-07", 7, "Portas", "Hormann", "SPU-40", "HR-5522", ForaDeServico: true),
+        new("E7", "Serra de fita antiga", "Produção", "SRF-01", 9, "Serra", "Bomar", "STG-280", "BM-0042", Obsoleto: true)
     ];
 
-    private readonly ConfigManutencao _cfg = configuracao ?? new ConfigManutencao(AvancaOrdem: true, ExtExigeDoc: false);
+    private static readonly Tarefa[] Tarefas =
+    [
+        new("TAREFA1", "E1", "Verificar o nível de óleo e os filtros", "Mensal", UnidadePeriodo.Meses, 1),
+        new("TAREFA2", "E1", "Drenar os condensados", "Semanal", UnidadePeriodo.Dias, 7),
+        new("TAREFA3", "E3", "Limpar os evaporadores", "Trimestral", UnidadePeriodo.Meses, 3)
+    ];
+
+    private ConfigManutencao _cfg = configuracao ?? new ConfigManutencao(AvancaOrdem: true, ExtExigeDoc: false);
     private readonly object _trinco = new();
     private readonly List<Ficha> _lista = Inicial(DateOnly.FromDateTime(relogio.GetLocalNow().DateTime));
 
@@ -33,7 +49,13 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
             new() { D = Nova("F2", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje, EstadoIntervencao.Planeada, tecnico: "Outra Pessoa", tecno: 999), Tecno = 999 },
             new() { D = Nova("F3", "Balança 03", "Expedição", TipoIntervencao.Curativa, hoje, EstadoIntervencao.Concluida, "Mostrador apagado", "Trocado o cabo",
                 new TimeOnly(8, 0), new TimeOnly(9, 0), "Ana Silva", 101), Tecno = 101 },
-            new() { D = Nova("F4", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje.AddDays(30), EstadoIntervencao.Planeada) }
+            new() { D = Nova("F4", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje.AddDays(30), EstadoIntervencao.Planeada) },
+            // Histórico (já fechado): não entra nas listas de trabalho nem na validação.
+            new() { D = Nova("H1", "Compressor de ar 02", "Produção", TipoIntervencao.Preventiva, hoje.AddDays(-35), EstadoIntervencao.Validada, null, "Óleo e filtros em bom estado",
+                new TimeOnly(8, 0), new TimeOnly(9, 0), "Ana Silva", 101), Tecno = 101, Tarefa = "TAREFA1" },
+            new() { D = Nova("H2", "Empilhador 05", "Armazém", TipoIntervencao.Curativa, hoje.AddDays(-120), EstadoIntervencao.Validada, "Não arranca", "Substituída a bateria",
+                new TimeOnly(14, 0), new TimeOnly(16, 30), "Chefe de Turno", 100), Tecno = 100 },
+            new() { D = Nova("H3", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje.AddDays(-60), EstadoIntervencao.Cancelada), Tarefa = "TAREFA3" }
         ];
 
     private IntervencaoDto Ver(Ficha f, bool podeValidar = true) => f.D with { Tecno = f.Tecno, PodeValidar = podeValidar };
@@ -60,12 +82,86 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         lock (Trinco()) return Task.FromResult(_lista.Where(f => f.D.Id == id && Minha(f, tecnico)).Select(f => (IntervencaoDto?)Ver(f)).FirstOrDefault());
     }
 
+    private static bool Contem(string? valor, string texto) => valor?.Contains(texto, StringComparison.OrdinalIgnoreCase) == true;
+
+    private EquipamentoDto Completo(EquipamentoDto e)
+    {
+        var fichas = _lista.Where(f => f.D.Equipamento == e.Nome).ToList();
+        var ultima = fichas.Where(f => f.D.Estado is EstadoIntervencao.Concluida or EstadoIntervencao.Validada && f.D.DataPlaneada <= Hoje)
+            .Select(f => (DateOnly?)f.D.DataPlaneada).Max();
+        return e with { UltimaIntervencao = ultima, FichasAbertas = fichas.Count(f => f.D.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida) };
+    }
+
+    public Task<IReadOnlyList<EquipamentoDto>> ListarEquipamentosAsync(FiltroEquipamentos filtro, CancellationToken ct)
+    {
+        lock (Trinco())
+            return Task.FromResult<IReadOnlyList<EquipamentoDto>>(Equipamentos
+                .Where(e => (filtro.Obsoletos || !e.Obsoleto)
+                    && (filtro.Tipo.Length == 0 || string.Equals(e.Tipo, filtro.Tipo, StringComparison.OrdinalIgnoreCase))
+                    && (filtro.Local.Length == 0 || string.Equals(e.Zona, filtro.Local, StringComparison.OrdinalIgnoreCase))
+                    && (filtro.Texto.Length == 0 || Contem(e.Nome, filtro.Texto) || Contem(e.Ref, filtro.Texto) || Contem(e.Marca, filtro.Texto) || Contem(e.Modelo, filtro.Texto)))
+                .OrderBy(e => e.Nome, StringComparer.CurrentCultureIgnoreCase).ThenBy(e => e.NoInterno).Take(RegrasManutencao.MaxEquipamentos + 1).Select(Completo).ToList());
+    }
+
     public Task<IReadOnlyList<EquipamentoDto>> PesquisarEquipamentosAsync(string texto, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<EquipamentoDto>>(Equipamentos.Where(e => e.Nome.Contains(texto, StringComparison.OrdinalIgnoreCase)).ToList());
+        Task.FromResult<IReadOnlyList<EquipamentoDto>>(Equipamentos
+            .Where(e => !e.Obsoleto && (Contem(e.Nome, texto) || Contem(e.Ref, texto)))
+            .OrderBy(e => e.Nome, StringComparer.CurrentCultureIgnoreCase).Take(RegrasManutencao.MaxPesquisaAvaria)
+            .Select(e => new EquipamentoDto(e.Id, e.Nome, e.Zona)).ToList());
+
+    public Task<FichaEquipamentoDto?> ObterEquipamentoAsync(string id, int tecno, CancellationToken ct)
+    {
+        lock (Trinco())
+        {
+            var e = Equipamentos.FirstOrDefault(x => x.Id == id);
+            if (e is null) return Task.FromResult<FichaEquipamentoDto?>(null);
+
+            var tarefas = Tarefas.Where(t => t.EquipamentoId == id).Select(t =>
+            {
+                var fichas = _lista.Where(f => f.Tarefa == t.Id).ToList();
+                DateTime? Maior(Func<Ficha, bool> onde) => fichas.Where(onde).Select(f => (DateTime?)f.D.DataPlaneada.ToDateTime(TimeOnly.MinValue)).Max();
+                var feita = Maior(f => f.D.Estado is EstadoIntervencao.Concluida or EstadoIntervencao.Validada);
+                var aberta = fichas.Where(Aberta).Select(f => (DateTime?)f.D.DataPlaneada.ToDateTime(TimeOnly.MinValue)).Min();
+                var proxima = RegrasManutencao.ProximaDaTarefa(feita, Maior(f => f.D.Estado == EstadoIntervencao.Cancelada), null, t.Unidade, t.Intervalo, aberta);
+                return new TarefaPlaneadaDto(t.Id, t.Descricao, t.Periodo, feita.HasValue ? DateOnly.FromDateTime(feita.Value) : null,
+                    proxima.HasValue ? DateOnly.FromDateTime(proxima.Value) : null);
+            }).ToList();
+
+            var historico = _lista.Where(f => f.D.Equipamento == e.Nome && f.D.Estado != EstadoIntervencao.Planeada)
+                .OrderByDescending(f => f.D.DataPlaneada).Take(RegrasManutencao.FichasNoHistorico)
+                .Select(f => Ver(f) with { PodeAbrir = tecno > 0 && Minha(f, new TecnicoAtual("", tecno, "")) }).ToList();
+            return Task.FromResult<FichaEquipamentoDto?>(new FichaEquipamentoDto(Completo(e), tarefas, historico));
+        }
+    }
+
+    public Task<PaginaFichasDto> ListarTodasAsync(FiltroFichas filtro, TecnicoAtual supervisor, CancellationToken ct)
+    {
+        lock (Trinco())
+        {
+            var todas = _lista
+                .Where(f => (filtro.Estado is null || f.D.Estado == filtro.Estado)
+                    && (filtro.Desde is null || f.D.DataPlaneada >= filtro.Desde) && (filtro.Ate is null || f.D.DataPlaneada <= filtro.Ate)
+                    && (filtro.Tecno == 0 || f.Tecno == filtro.Tecno)
+                    && (filtro.Texto.Length == 0 || Contem(f.D.Equipamento, filtro.Texto) || Contem(f.D.Anomalia, filtro.Texto) || Contem(f.D.Feito, filtro.Texto) || Contem(f.D.Tecnico, filtro.Texto)))
+                .OrderByDescending(f => f.D.DataPlaneada).ThenByDescending(f => f.D.Id)
+                .ToList();
+            var pagina = todas.Skip((filtro.Pagina - 1) * RegrasManutencao.FichasPorPagina).Take(RegrasManutencao.FichasPorPagina)
+                .Select(f => Ver(f) with { PodeAbrir = supervisor.Tecno > 0 && Minha(f, supervisor) }).ToList();
+            return Task.FromResult(new PaginaFichasDto(pagina, todas.Count > filtro.Pagina * RegrasManutencao.FichasPorPagina));
+        }
+    }
+
+    public Task<ConfigManutencao> ObterConfiguracaoAsync(CancellationToken ct) => Task.FromResult(_cfg);
+
+    public Task GuardarConfiguracaoAsync(ConfigManutencao configuracao, TecnicoAtual supervisor, CancellationToken ct)
+    {
+        _cfg = configuracao;
+        return Task.CompletedTask;
+    }
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct)
     {
-        var e = Equipamentos.FirstOrDefault(x => x.Id == equipamentoId);
+        var e = Equipamentos.FirstOrDefault(x => x.Id == equipamentoId && !x.Obsoleto);
         if (e is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
         var agora = relogio.GetLocalNow().DateTime;
         var nova = new Ficha

@@ -1,0 +1,155 @@
+@page "/fichas"
+@inject SessaoService Sessao
+@inject IIntervencoesService Intervencoes
+@inject IEquipaService ServicoEquipa
+
+<PageTitle>Todas as fichas · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="mais"><Icone Nome="arrow-left" /><span>Mais</span></a>
+        <h1 tabindex="-1">Todas as fichas</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else if (_indisponivel)
+    {
+        <p class="estado-lista" role="status">Esta parte ainda não está disponível.</p>
+    }
+    else
+    {
+        <form class="pesquisa" role="search" @onsubmit="PesquisarAsync" novalidate>
+            <div class="pesquisa-linha">
+                <div class="campo">
+                    <label for="fi-texto">Pesquisar</label>
+                    <input id="fi-texto" type="search" autocomplete="off" maxlength="@RegrasPesquisa.MaxTexto" placeholder="Equipamento, problema ou o que foi feito"
+                           aria-describedby="fi-erro" @bind="_texto" @bind:event="oninput" />
+                </div>
+                <button type="submit" class="btn btn-secundario" disabled="@_ocupado" aria-label="Pesquisar"><Icone Nome="search" /></button>
+            </div>
+            <details class="filtros-bloco">
+                <summary>Filtros@(Ativos > 0 ? $" ({Ativos})" : "")</summary>
+                <div class="filtros">
+                    <div class="campo">
+                        <label for="fi-estado">Estado</label>
+                        <select id="fi-estado" @bind="_estado">
+                            <option value="">Todos</option>
+                            @foreach (var e in Estados)
+                            {
+                                <option value="@e">@ApresentacaoIntervencao.Estado(e)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="campo">
+                        <label for="fi-tecnico">Técnico</label>
+                        <select id="fi-tecnico" @bind="_tecno">
+                            <option value="0">Todos</option>
+                            @foreach (var t in _tecnicos) { <option value="@t.Tecno">@t.Nome</option> }
+                        </select>
+                    </div>
+                    <div class="campo">
+                        <label for="fi-desde">Desde</label>
+                        <input id="fi-desde" type="date" min="1900-01-01" max="2999-12-31" @bind="_desde" />
+                    </div>
+                    <div class="campo">
+                        <label for="fi-ate">Até</label>
+                        <input id="fi-ate" type="date" min="1900-01-01" max="2999-12-31" @bind="_ate" />
+                    </div>
+                </div>
+            </details>
+        </form>
+        <p id="fi-erro" class="campo-erro" role="alert">@_erro</p>
+
+        @if (_a_carregar)
+        {
+            <p class="estado-lista" role="status">A carregar…</p>
+        }
+        else if (_falhou)
+        {
+            <div class="estado-lista" role="alert">
+                <p>Não foi possível carregar as fichas.</p>
+                <button type="button" class="btn btn-secundario" @onclick="PesquisarAsync">Tentar outra vez</button>
+            </div>
+        }
+        else if (_fichas.Count == 0)
+        {
+            <p class="estado-lista" role="status">Não há fichas com estes filtros.</p>
+        }
+        else
+        {
+            <ul class="lista-intervencoes">
+                @foreach (var i in _fichas)
+                {
+                    <FichaCartao Ficha="i" MostrarEquipamento="true" @key="i.Id" />
+                }
+            </ul>
+            @if (_temMais)
+            {
+                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="VerMaisAsync">Ver mais</button>
+            }
+        }
+    }
+</section>
+
+@code {
+    private static readonly EstadoIntervencao[] Estados = Enum.GetValues<EstadoIntervencao>();
+
+    private List<Intervencao> _fichas = [];
+    private IReadOnlyList<MembroEquipa> _tecnicos = [];
+    private string _texto = "", _erro = "";
+    private EstadoIntervencao? _estado;
+    private DateOnly? _desde, _ate;
+    private int _tecno, _pagina = 1;
+    private bool _a_carregar = true, _falhou, _indisponivel, _ocupado, _temMais;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Sessao.PodeSerSupervisor) return;
+        try { _tecnicos = (await ServicoEquipa.ListarAsync(Sessao.Utilizador?.Token)).Where(m => m.Tecno > 0).OrderBy(m => m.Nome).ToList(); }
+        catch (Exception) { /* sem a lista de técnicos o filtro fica só em "Todos" */ }
+        await PesquisarAsync();
+    }
+
+    private int Ativos => (_estado is null ? 0 : 1) + (_tecno > 0 ? 1 : 0) + (_desde is null ? 0 : 1) + (_ate is null ? 0 : 1);
+
+    private FiltroFichas Filtro() => new(_estado, _desde, _ate, _texto.Trim(), _tecno);
+
+    private async Task PesquisarAsync()
+    {
+        _erro = "";
+        if (!RegrasPesquisa.TextoValido(_texto)) { _erro = "Escreva pelo menos 2 letras para pesquisar."; return; }
+        if (_desde is { } d && _ate is { } a && a < d) { _erro = "A data final não pode ser antes da inicial."; return; }
+        var limiteInf = new DateOnly(1900, 1, 1);
+        var limiteSup = new DateOnly(2999, 12, 31);
+        if ((_desde is { } d1 && (d1 < limiteInf || d1 > limiteSup)) || (_ate is { } a1 && (a1 < limiteInf || a1 > limiteSup)))
+        { _erro = "As datas têm de estar entre 01/01/1900 e 31/12/2999."; return; }
+        _pagina = 1;
+        _ocupado = true; _falhou = false;
+        try
+        {
+            var p = await Intervencoes.ListarTodasAsync(Filtro(), _pagina);
+            _fichas = p.Itens.ToList();
+            _temMais = p.TemMais;
+        }
+        catch (NotSupportedException) { _indisponivel = true; }
+        catch (Exception) { _falhou = true; }
+        finally { _a_carregar = false; _ocupado = false; }
+    }
+
+    private async Task VerMaisAsync()
+    {
+        _ocupado = true; _erro = "";
+        try
+        {
+            var p = await Intervencoes.ListarTodasAsync(Filtro(), _pagina + 1);
+            _pagina++;
+            _fichas.AddRange(p.Itens);
+            _temMais = p.TemMais;
+        }
+        catch (Exception) { _erro = "Não foi possível carregar mais fichas. Tente outra vez."; }
+        finally { _ocupado = false; }
+    }
+}

@@ -1,0 +1,29 @@
+@* Cartão de uma ficha já feita ou em andamento: o título abre o detalhe só se o utilizador o puder ver (o botão "Ver tudo" do texto fica por cima). *@
+<li>
+    <div class="intervencao">
+        @if (Ficha.PodeAbrir)
+        {
+            <a class="intervencao-titulo cartao-link" href="intervencoes/@Ficha.Id">@Titulo</a>
+        }
+        else
+        {
+            <span class="intervencao-titulo">@Titulo</span>
+        }
+        <span class="intervencao-desc">@(MostrarEquipamento ? ApresentacaoIntervencao.Tipo(Ficha.Tipo) + " · " : "")@(string.IsNullOrWhiteSpace(Ficha.Tecnico) ? "Sem técnico" : Ficha.Tecnico)</span>
+        <span class="chips"><span class="chip @ApresentacaoIntervencao.ClasseChip(Ficha.Estado)">@ApresentacaoIntervencao.Estado(Ficha.Estado)</span></span>
+        <span class="intervencao-data">@Ficha.DataPlaneada.ToString("dd/MM/yyyy")</span>
+        @if (ApresentacaoIntervencao.Resumo(Ficha) is { } resumo)
+        {
+            <TextoLongo Texto="@resumo" Classe="ficha-texto" />
+        }
+    </div>
+</li>
+
+@code {
+    [Parameter, EditorRequired] public Intervencao Ficha { get; set; } = default!;
+
+    // Na lista de todas as fichas o título é o equipamento; na ficha do equipamento é o tipo.
+    [Parameter] public bool MostrarEquipamento { get; set; }
+
+    private string Titulo => MostrarEquipamento ? Ficha.Equipamento : ApresentacaoIntervencao.Tipo(Ficha.Tipo);
+}

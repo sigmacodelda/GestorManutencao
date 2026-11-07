@@ -1,0 +1,109 @@
+@page "/equipamentos/{Id}"
+@inject IEquipamentosService Servico
+
+<PageTitle>@(_ficha?.Equipamento.Nome ?? "Equipamento") · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="equipamentos"><Icone Nome="arrow-left" /><span>Equipamentos</span></a>
+        <h1 tabindex="-1">@(_ficha?.Equipamento.Nome ?? "Equipamento")</h1>
+    </div>
+
+    @if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_indisponivel)
+    {
+        <p class="estado-lista" role="status">Esta parte ainda não está disponível.</p>
+    }
+    else if (_falhou)
+    {
+        <div class="estado-lista" role="alert">
+            <p>Não foi possível carregar o equipamento.</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else if (_ficha is null)
+    {
+        <p class="estado-lista" role="status">Equipamento não encontrado.</p>
+    }
+    else
+    {
+        var e = _ficha.Equipamento;
+        <dl class="ficha">
+            @if (e.Ref.Length > 0) { <dt>Nº</dt><dd>@e.Ref</dd> }
+            @if (e.Tipo.Length > 0) { <dt>Tipo</dt><dd>@e.Tipo</dd> }
+            @if (e.Marca.Length + e.Modelo.Length > 0) { <dt>Marca e modelo</dt><dd>@($"{e.Marca} {e.Modelo}".Trim())</dd> }
+            @if (e.Serie.Length > 0) { <dt>Nº de série</dt><dd>@e.Serie</dd> }
+            <dt>Local</dt><dd>@(e.Zona.Length > 0 ? e.Zona : "Sem local")</dd>
+            <dt>Última intervenção</dt><dd>@(e.UltimaIntervencao is { } u ? u.ToString("dd/MM/yyyy") : "Sem registo")</dd>
+            <dt>Fichas abertas</dt><dd>@e.FichasAbertas</dd>
+            @if (e.ForaDeServico || e.Obsoleto)
+            {
+                <dt>Estado</dt>
+                <dd>
+                    @if (e.ForaDeServico) { <span class="chip chip-erro">Fora de serviço</span> }
+                    @if (e.Obsoleto) { <span class="chip">Obsoleto</span> }
+                </dd>
+            }
+        </dl>
+
+        <section aria-labelledby="titulo-tarefas">
+            <h2 id="titulo-tarefas" class="titulo-grupo"><Icone Nome="calendar" /> Tarefas planeadas <span class="contagem">@_ficha.Tarefas.Count</span></h2>
+            @if (_ficha.Tarefas.Count == 0)
+            {
+                <p class="estado-lista" role="status">Este equipamento não tem tarefas planeadas.</p>
+            }
+            <ul class="lista-intervencoes">
+                @foreach (var t in _ficha.Tarefas)
+                {
+                    var atrasada = t.EmAtraso(_hoje);
+                    <li class="intervencao @(atrasada ? "atrasada" : "")">
+                        <TextoLongo Texto="@t.Descricao" Classe="intervencao-titulo" />
+                        <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(t.Periodicidade) ? "Sem periodicidade" : t.Periodicidade)</span>
+                        <span class="intervencao-data">@(t.ProximaData is { } p ? p.ToString("dd/MM/yyyy") : "Sem data")</span>
+                        <p class="ficha-texto">
+                            Última intervenção: @(t.UltimaIntervencao is { } ultima ? ultima.ToString("dd/MM/yyyy") : "sem registo")
+                            @if (atrasada) { <span> · <strong>Fora de prazo</strong></span> }
+                        </p>
+                    </li>
+                }
+            </ul>
+        </section>
+
+        <section aria-labelledby="titulo-historico">
+            <h2 id="titulo-historico" class="titulo-grupo"><Icone Nome="clipboard-list" /> Últimas intervenções <span class="contagem">@_ficha.Historico.Count</span></h2>
+            @if (_ficha.Historico.Count == 0)
+            {
+                <p class="estado-lista" role="status">Ainda não há intervenções registadas.</p>
+            }
+            <ul class="lista-intervencoes">
+                @foreach (var i in _ficha.Historico)
+                {
+                    <FichaCartao Ficha="i" @key="i.Id" />
+                }
+            </ul>
+        </section>
+    }
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private FichaEquipamento? _ficha;
+    private bool _a_carregar = true, _falhou, _indisponivel;
+    private DateOnly _hoje = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnParametersSetAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        _a_carregar = true; _falhou = false; _indisponivel = false; _ficha = null;
+        _hoje = DateOnly.FromDateTime(DateTime.Today);
+        try { _ficha = await Servico.ObterFichaAsync(Id); }
+        catch (NotSupportedException) { _indisponivel = true; }
+        catch (Exception) { _falhou = true; }
+        finally { _a_carregar = false; }
+    }
+}
