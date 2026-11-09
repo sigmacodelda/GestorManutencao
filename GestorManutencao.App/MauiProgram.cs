@@ -31,11 +31,26 @@ public static class MauiProgram
 		builder.Logging.AddDebug();
 #endif
 
-		if (!string.IsNullOrWhiteSpace(ApiUrl))
+		var apiUrl = ApiUrl;
+		HttpMessageHandler? manipulador = null;
+#if DEBUG && ANDROID
+		// Telemóvel em depuração: chega à API deste computador por "adb reverse tcp:7257 tcp:7257" e aceita o certificado de desenvolvimento só para localhost.
+		if (string.IsNullOrWhiteSpace(apiUrl))
 		{
-			if (!ApiUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+			apiUrl = "https://localhost:7257";
+			manipulador = new HttpClientHandler
+			{
+				ServerCertificateCustomValidationCallback = (pedido, _, _, erros) =>
+					erros == System.Net.Security.SslPolicyErrors.None || pedido.RequestUri?.Host == "localhost"
+			};
+		}
+#endif
+
+		if (!string.IsNullOrWhiteSpace(apiUrl))
+		{
+			if (!apiUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
 				throw new InvalidOperationException("ApiUrl tem de ser https (o PIN não pode ir em claro).");
-			var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(15) };
+			var http = new HttpClient(manipulador ?? new HttpClientHandler()) { BaseAddress = new Uri(apiUrl), Timeout = TimeSpan.FromSeconds(15) };
 			builder.Services.AddSingleton<IAutenticacaoService>(new AutenticacaoApiService(http));
 			builder.Services.AddSingleton<IEquipaService>(new EquipaApiService(http));
 			builder.Services.AddScoped<IntervencoesApiService>(sp => new IntervencoesApiService(http, sp.GetRequiredService<SessaoService>()));

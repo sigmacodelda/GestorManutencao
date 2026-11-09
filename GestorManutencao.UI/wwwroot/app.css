@@ -607,9 +607,12 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 /* Cinco itens na barra de baixo cabem em ecrãs estreitos. */
 .nav-item { min-width: 0; }
 .nav-rotulo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 420px) {
-    .nav-item { font-size: .6875rem; }
+@media (max-width: 480px) {
+    .nav-item { font-size: .625rem; letter-spacing: -.01em; padding-inline: 0; }
+    .nav-rotulo { text-overflow: clip; }
     .nav-icone { width: 100%; max-width: 56px; }
+    /* A engrenagem fica toda dentro do cartão, sem sair do ecrã. */
+    .engr-hero { --g: 120px; right: 16px; bottom: 16px; top: auto; }
 }
 /* ---------- Notificações ---------- */
 .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
