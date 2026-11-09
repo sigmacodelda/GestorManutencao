@@ -407,3 +407,6 @@ obj/
 appsettings.Production.json
 **/appsettings.*.local.json
 .claude/worktrees/
+
+# APK e binarios de publicacao (gerados, nao se versionam)
+publicar-apk/
