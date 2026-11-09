@@ -31,6 +31,8 @@ public class SegurancaTests
     [InlineData("000000", false)]
     [InlineData("111111", false)]
     [InlineData("123456", false)]
+    [InlineData("0000", false)]
+    [InlineData("4821", true)]
     [InlineData("987654", false)]
     [InlineData("12345", false)]
     [InlineData("1234567", false)]

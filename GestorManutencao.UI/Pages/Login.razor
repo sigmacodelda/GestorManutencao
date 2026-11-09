@@ -18,7 +18,7 @@
     <section class="login-painel" aria-labelledby="titulo-login">
         <div class="login-form" tabindex="0" @ref="_raiz" @onkeydown="AoTecla" @onkeydown:preventDefault="_travarTeclas">
             <h1 id="titulo-login">Olá! Escreva o seu PIN</h1>
-            <p class="login-sub">São 6 números.</p>
+            <p class="login-sub">São 4 a 6 números.</p>
 
             @if (_erro is not null)
             {
@@ -28,8 +28,8 @@
                 </div>
             }
 
-            <div class="pin-pontos @(_erro is not null ? "pin-pontos-erro" : "")" role="img" aria-label="@_pin.Length de @RegrasPin.Tamanho números escritos">
-                @for (var n = 0; n < RegrasPin.Tamanho; n++)
+            <div class="pin-pontos @(_erro is not null ? "pin-pontos-erro" : "")" role="img" aria-label="@_pin.Length de @RegrasPin.Maximo números escritos">
+                @for (var n = 0; n < RegrasPin.Maximo; n++)
                 {
                     <span class="pin-ponto @(n < _pin.Length ? "cheio" : "")"></span>
                 }
@@ -40,7 +40,7 @@
                 {
                     <button type="button" class="tecla" disabled="@_aEntrar" @onclick="() => AdicionarAsync(d)">@d</button>
                 }
-                <span></span>
+                <button type="button" class="tecla tecla-entrar" disabled="@(_aEntrar || !RegrasPin.FormatoValido(_pin))" aria-label="Entrar" @onclick="Entrar"><Icone Nome="log-in" /></button>
                 <button type="button" class="tecla" disabled="@_aEntrar" @onclick="@(() => AdicionarAsync("0"))">0</button>
                 <button type="button" class="tecla tecla-apagar" disabled="@_aEntrar" aria-label="Apagar" @onclick="Apagar"><Icone Nome="delete" /></button>
             </div>
@@ -80,21 +80,22 @@
         }
     }
 
-    // Teclado do ecrã ou do computador: só números; ao chegar aos 6 entra sozinho.
+    // Teclado do ecrã ou do computador: só números; Enter ou o botão entram com 4 a 6, e aos 6 entra sozinho.
     private async Task AoTecla(KeyboardEventArgs e)
     {
         var digito = e.Key.Length == 1 && char.IsAsciiDigit(e.Key[0]);
-        _travarTeclas = digito || e.Key == "Backspace";
+        _travarTeclas = digito || e.Key == "Backspace" || e.Key == "Enter";
         if (digito) await AdicionarAsync(e.Key);
         else if (e.Key == "Backspace") Apagar();
+        else if (e.Key == "Enter") await Entrar();
     }
 
     private async Task AdicionarAsync(string digito)
     {
-        if (_aEntrar || _pin.Length >= RegrasPin.Tamanho) return;
+        if (_aEntrar || _pin.Length >= RegrasPin.Maximo) return;
         _erro = null;
         _pin += digito;
-        if (_pin.Length == RegrasPin.Tamanho) await Entrar();
+        if (_pin.Length == RegrasPin.Maximo) await Entrar();
     }
 
     private void Apagar()

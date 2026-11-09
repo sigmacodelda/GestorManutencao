@@ -40,7 +40,7 @@ public sealed class CicloVidaApp
 // Avisos derivados do estado das fichas (nada é gravado no servidor). Só corre com a app aberta ou em segundo plano.
 public sealed class NotificacaoService : IDisposable
 {
-    public static readonly TimeSpan Intervalo = TimeSpan.FromSeconds(60);
+    public static readonly TimeSpan Intervalo = TimeSpan.FromSeconds(5);
 
     private readonly SessaoService _sessao;
     private readonly IIntervencoesService _intervencoes;
@@ -98,7 +98,7 @@ public sealed class NotificacaoService : IDisposable
     // O Windows dispara "ativada" a cada foco da janela: ignora disparos seguidos.
     private void AoPrimeiroPlano()
     {
-        if (DateTime.UtcNow - _ultimaVerificacao < TimeSpan.FromSeconds(15)) return;
+        if (DateTime.UtcNow - _ultimaVerificacao < TimeSpan.FromSeconds(3)) return;
         _ = VerificarSemFalharAsync();
     }
 
@@ -115,7 +115,7 @@ public sealed class NotificacaoService : IDisposable
             using var temporizador = new PeriodicTimer(Intervalo);
             do
             {
-                // Uma falha numa verificação não pode parar o ciclo: tenta de novo no próximo minuto.
+                // Uma falha numa verificação não pode parar o ciclo: tenta de novo no próximo ciclo.
                 try { await VerificarAsync(ct); } catch (Exception e) when (e is not OperationCanceledException) { }
             } while (await temporizador.WaitForNextTickAsync(ct));
         }

@@ -82,7 +82,7 @@ public class ApiTests : IDisposable
 
     [Theory]
     [InlineData("")]
-    [InlineData("12345")]
+    [InlineData("123")]
     [InlineData("1234567")]
     [InlineData("12a456")]
     [InlineData(null)]

@@ -19,7 +19,7 @@
         }
         <header class="topo">
             <Logo />
-            <div class="topo-direita">
+            <div class="topo-direita @(Sessao.Utilizador is { PinProvisorio: false } ? "so-largo" : "")">
                 <span class="utilizador" title="@Sessao.Utilizador!.Nome">
                     <span class="avatar" aria-hidden="true">@Sessao.Utilizador.Iniciais</span>
                     <span class="utilizador-nome">@Sessao.Utilizador.Nome</span>

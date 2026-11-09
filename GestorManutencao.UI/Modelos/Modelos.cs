@@ -36,9 +36,10 @@ public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null
 // Mesmas regras do servidor, só para avisar logo no ecrã (o servidor volta a validar).
 public static class RegrasPin
 {
-    public const int Tamanho = 6;
+    public const int Minimo = 4;
+    public const int Maximo = 6;
 
-    public static bool FormatoValido(string? pin) => pin is { Length: Tamanho } && pin.All(c => c is >= '0' and <= '9');
+    public static bool FormatoValido(string? pin) => pin is { Length: >= Minimo and <= Maximo } && pin.All(c => c is >= '0' and <= '9');
 
     public static bool Aceitavel(string? pin)
     {
@@ -48,7 +49,7 @@ public static class RegrasPin
     }
 
     public static string? ValidarNovo(string? pin, string? repetido) =>
-        !FormatoValido(pin) ? "O PIN tem de ter 6 números."
+        !FormatoValido(pin) ? "O PIN tem de ter de 4 a 6 números."
         : !Aceitavel(pin) ? "Esse PIN é fácil de adivinhar. Escolha outro."
         : pin != repetido ? "Os dois PINs não são iguais."
         : null;

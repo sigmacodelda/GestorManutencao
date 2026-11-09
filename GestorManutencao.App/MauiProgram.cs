@@ -9,7 +9,7 @@ public static class MauiProgram
 	private const string TemaCliente = "landeiro";
 
 	// Endereço (https) da GestorManutencao.Api deste cliente. Vazio só serve em Debug (utilizadores fictícios).
-	private const string ApiUrl = "";
+	private const string ApiUrl = "https://192.168.18.168:5055/";
 
 	public static MauiApp CreateMauiApp()
 	{
@@ -45,7 +45,6 @@ public static class MauiProgram
 			};
 		}
 #endif
-
 		if (!string.IsNullOrWhiteSpace(apiUrl))
 		{
 			if (!apiUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))

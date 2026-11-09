@@ -102,7 +102,7 @@ public class SessaoTests
 
     [Theory]
     [InlineData("482913", "482913", null)]
-    [InlineData("12345", "12345", "O PIN tem de ter 6 números.")]
+    [InlineData("123", "123", "O PIN tem de ter de 4 a 6 números.")]
     [InlineData("111111", "111111", "Esse PIN é fácil de adivinhar. Escolha outro.")]
     [InlineData("913753", "913754", "Os dois PINs não são iguais.")]
     [InlineData("913753", "913753", null)]

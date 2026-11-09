@@ -267,7 +267,7 @@ a.intervencao { color: inherit; text-decoration: none; }
 .tecla:active:not(:disabled) { background: var(--primario); color: var(--sobre-primario); border-color: var(--primario); }
 .tecla:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; }
 .tecla:disabled { opacity: .5; }
-.tecla-apagar .icone { width: 30px; height: 30px; }
+.tecla-apagar .icone, .tecla-entrar .icone { width: 30px; height: 30px; }
 .login-form:focus { outline: none; }
 .btn-grande { min-height: 64px; font-size: 1.1875rem; gap: var(--esp-3); }
 .btn-grande .icone { width: 26px; height: 26px; }
@@ -461,8 +461,9 @@ a.intervencao:active { transform: translateY(1px); }
     transition: transform .08s ease, box-shadow .08s ease;
 }
 .tecla:active:not(:disabled) { background: var(--gradiente-prim); color: var(--sobre-primario); border-color: transparent; transform: translateY(5px); box-shadow: 0 1px 0 rgb(255 255 255 / .3) inset, 0 0 0 var(--prim-aresta); }
-.tecla-apagar { background: transparent; border-color: transparent; box-shadow: none; }
-.tecla-apagar:active:not(:disabled) { background: color-mix(in srgb, var(--primario) 18%, transparent); color: var(--primario); transform: scale(.94); box-shadow: none; }
+.tecla-apagar, .tecla-entrar { background: transparent; border-color: transparent; box-shadow: none; }
+.tecla-apagar:active:not(:disabled), .tecla-entrar:active:not(:disabled) { background: color-mix(in srgb, var(--primario) 18%, transparent); color: var(--primario); transform: scale(.94); box-shadow: none; }
+.tecla-entrar:not(:disabled) { color: var(--primario); }
 .pin-ponto { width: 18px; height: 18px; border-width: 2px; }
 .pin-ponto.cheio { background: var(--gradiente-prim); border-color: var(--prim-escuro); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primario) 22%, transparent), 0 4px 10px -2px var(--prim-brilho); transform: scale(1.15); }
 
@@ -646,3 +647,17 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 
 .alerta-devolvida { align-items: flex-start; }
 .alerta-devolvida p { margin: var(--esp-1) 0 0; font-weight: 600; overflow-wrap: anywhere; }
+
+/* ---------- Telemóvel: sem barra de navegação; o início leva a tudo e termina a sessão ---------- */
+.hero-sair, .hero-utilizador { display: none; }
+@media (max-width: 899px) {
+    .navegacao { display: none; }
+    .conteudo-wrap { padding-bottom: calc(var(--esp-6) + env(safe-area-inset-bottom)); }
+    .fab { bottom: calc(var(--esp-4) + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 719px) {
+    .so-largo { display: none; }
+    .hero-sair { display: grid; position: absolute; top: var(--esp-3); right: var(--esp-3); z-index: 2; }
+    .hero-utilizador { display: flex; align-items: center; gap: var(--esp-2); margin-top: var(--esp-2); font-weight: 600; font-size: .9375rem; color: var(--sobre-marca); }
+    .hero-utilizador .avatar { width: 28px; height: 28px; font-size: .75rem; }
+}

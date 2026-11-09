@@ -15,7 +15,7 @@ public partial class App : Application
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
 		var janela = new Window(new MainPage()) { Title = "Gestor de Manutenção" };
-		// Ao voltar ao primeiro plano as notificações são verificadas logo, sem esperar pelos 60 s.
+		// Ao voltar ao primeiro plano as notificações são verificadas logo, sem esperar pelos 5 s.
 		var ciclo = activationState?.Context.Services.GetService<CicloVidaApp>();
 		if (ciclo is not null)
 		{
