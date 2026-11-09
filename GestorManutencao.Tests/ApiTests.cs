@@ -82,7 +82,7 @@ public class ApiTests : IDisposable
 
     [Theory]
     [InlineData("")]
-    [InlineData("12345")]
+    [InlineData("123")]
     [InlineData("1234567")]
     [InlineData("12a456")]
     [InlineData(null)]
@@ -225,7 +225,7 @@ public class ApiTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Created, criado.StatusCode);
         var pin = (await criado.Content.ReadFromJsonAsync<RespostaPin>())!.Pin;
-        Assert.Matches(@"^\d{6}$", pin);
+        Assert.Matches(@"^\d{4}$", pin);
 
         var entrada = (await (await Cliente().PostAsJsonAsync("/auth/login", new PedidoLogin(pin))).Content.ReadFromJsonAsync<RespostaLogin>())!;
         Assert.Equal("Novo Utilizador", entrada.Nome);

@@ -1,0 +1,24 @@
+@page "/mais"
+@inject SessaoService Sessao
+
+<PageTitle>Mais · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Mais</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else
+    {
+        <ul class="mosaicos">
+            <Mosaico Icone="list" Titulo="Todas as fichas" Href="fichas" Descricao="Pesquisar fichas de qualquer estado" />
+            <Mosaico Icone="users" Titulo="Equipa" Href="equipa" Descricao="Utilizadores e PINs" />
+            <Mosaico Icone="settings" Titulo="Configuração" Href="configuracao" Descricao="Regras da manutenção" />
+        </ul>
+    }
+</section>

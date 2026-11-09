@@ -1,0 +1,191 @@
+@page "/equipamentos"
+@inject IEquipamentosService Servico
+
+<PageTitle>Equipamentos · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Equipamentos</h1>
+    </div>
+
+    @if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_indisponivel)
+    {
+        <p class="estado-lista" role="status">Esta parte ainda não está disponível.</p>
+    }
+    else if (_falhou)
+    {
+        <div class="estado-lista" role="alert">
+            <p>Não foi possível carregar os equipamentos.</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        <form class="pesquisa" role="search" @onsubmit="PesquisarAsync" novalidate>
+            <div class="pesquisa-linha">
+                <div class="campo">
+                    <label for="eq-texto">Pesquisar</label>
+                    <input id="eq-texto" type="search" autocomplete="off" maxlength="@RegrasPesquisa.MaxTexto" placeholder="Nº, nome, marca ou modelo"
+                           aria-describedby="eq-erro" @bind="_texto" @bind:event="oninput" />
+                </div>
+                <button type="submit" class="btn btn-secundario" disabled="@_a_pesquisar" aria-label="Pesquisar"><Icone Nome="search" /></button>
+            </div>
+            <details class="filtros-bloco">
+                <summary>Filtros@(Ativos > 0 ? $" ({Ativos})" : "")</summary>
+                <div class="filtros">
+                    <div class="campo">
+                        <label for="eq-tipo">Tipo</label>
+                        <select id="eq-tipo" value="@_tipo" @onchange="e => MudarFiltroAsync(e.Value?.ToString(), null)">
+                            <option value="">Todos</option>
+                            @foreach (var t in _tipos) { <option value="@t">@t</option> }
+                        </select>
+                    </div>
+                    <div class="campo">
+                        <label for="eq-local">Local</label>
+                        <select id="eq-local" value="@_local" @onchange="e => MudarFiltroAsync(null, e.Value?.ToString())">
+                            <option value="">Todos</option>
+                            @foreach (var l in _locais) { <option value="@l">@l</option> }
+                        </select>
+                    </div>
+                    <label class="opcao-caixa" for="eq-obsoletos">
+                        <input id="eq-obsoletos" type="checkbox" checked="@_obsoletos" @onchange="MudarObsoletosAsync" />
+                        <span>Mostrar obsoletos</span>
+                    </label>
+                </div>
+            </details>
+        </form>
+        <p id="eq-erro" class="campo-erro" role="alert">@_erro</p>
+
+        <ul class="contadores contadores-4" aria-label="Resumo dos equipamentos">
+            <li><div class="contador"><span class="led" aria-hidden="true"></span><span class="contador-num">@_base.Count</span><span class="contador-rot">Ativos</span></div></li>
+            <li><div class="contador"><span class="led" aria-hidden="true"></span><span class="contador-num">@_base.Count(e => e.FichasAbertas > 0)</span><span class="contador-rot">Com fichas abertas</span></div></li>
+            <li><div class="contador @(_base.Any(e => e.ForaDeServico) ? "alerta-led" : "")"><span class="led" aria-hidden="true"></span><span class="contador-num">@_base.Count(e => e.ForaDeServico)</span><span class="contador-rot">Fora de serviço</span></div></li>
+            <li><div class="contador @(_base.Any(e => e.SemIntervencaoHaUmAno(_hoje)) ? "alerta-led" : "")"><span class="led" aria-hidden="true"></span><span class="contador-num">@_base.Count(e => e.SemIntervencaoHaUmAno(_hoje))</span><span class="contador-rot">Sem intervenção +1 ano</span></div></li>
+        </ul>
+        @if (_baseCortada)
+        {
+            <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>Mostrar só os primeiros @RegrasPesquisa.MaxEquipamentos; refine a pesquisa. Os totais acima estão incompletos.</span></p>
+        }
+
+        @if (_lista.Count == 0)
+        {
+            <p class="estado-lista" role="status">Não há equipamentos com estes filtros.</p>
+        }
+        else
+        {
+            @if (_listaCortada)
+            {
+                <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>Mostrar só os primeiros @RegrasPesquisa.MaxEquipamentos; refine a pesquisa.</span></p>
+            }
+            <p class="estado-lista" role="status">@_lista.Count equipamentos</p>
+            <ul class="lista-intervencoes">
+                @foreach (var e in _lista.Take(_limite))
+                {
+                    <li>
+                        <a class="intervencao @(e.SemIntervencaoHaUmAno(_hoje) ? "atrasada" : "")" href="equipamentos/@e.Id">
+                            <span class="intervencao-titulo">@e.Nome</span>
+                            <span class="intervencao-desc">@Descricao(e)</span>
+                            <span class="chips">
+                                @if (e.ForaDeServico) { <span class="chip chip-erro">Fora de serviço</span> }
+                                @if (e.Obsoleto) { <span class="chip">Obsoleto</span> }
+                                @if (e.FichasAbertas > 0) { <span class="chip chip-curso">@e.FichasAbertas @(e.FichasAbertas == 1 ? "ficha aberta" : "fichas abertas")</span> }
+                            </span>
+                            <span class="intervencao-data">@(e.UltimaIntervencao is { } u ? u.ToString("dd/MM/yyyy") : "Sem registo")</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+            @if (_lista.Count > _limite)
+            {
+                <button type="button" class="btn btn-secundario" @onclick="() => _limite += PorPagina">Ver mais (@(_lista.Count - _limite))</button>
+            }
+        }
+    }
+</section>
+
+@code {
+    private const int PorPagina = 20;
+
+    private IReadOnlyList<Equipamento> _base = [], _lista = [];
+    private IReadOnlyList<string> _tipos = [], _locais = [];
+    private string _texto = "", _tipo = "", _local = "", _erro = "";
+    private bool _obsoletos, _a_carregar = true, _a_pesquisar, _falhou, _indisponivel, _baseCortada, _listaCortada;
+    private int _limite = PorPagina;
+    private DateOnly _hoje = DateOnly.FromDateTime(DateTime.Today);
+
+    private int Ativos => (_tipo.Length > 0 ? 1 : 0) + (_local.Length > 0 ? 1 : 0) + (_obsoletos ? 1 : 0);
+
+    protected override async Task OnInitializedAsync() => await CarregarAsync();
+
+    // A base (sem filtros, sem obsoletos) dá os contadores e as opções dos filtros.
+    private async Task CarregarAsync()
+    {
+        _a_carregar = true; _falhou = false; _indisponivel = false;
+        _hoje = DateOnly.FromDateTime(DateTime.Today);
+        try
+        {
+            var todos = await Servico.ListarAsync(new FiltroEquipamentos());
+            (_base, _baseCortada) = Cortar(todos);
+            _tipos = _base.Select(e => e.Tipo).Where(t => t.Length > 0).Distinct().Order().ToList();
+            _locais = _base.Select(e => e.Zona).Where(l => l.Length > 0).Distinct().Order().ToList();
+            _lista = _base;
+            _listaCortada = false;
+        }
+        catch (NotSupportedException) { _indisponivel = true; }
+        catch (Exception) { _falhou = true; }
+        finally { _a_carregar = false; }
+    }
+
+    // A API devolve um a mais que o máximo quando cortou a lista.
+    private static (IReadOnlyList<Equipamento>, bool) Cortar(IReadOnlyList<Equipamento> lista) =>
+        lista.Count > RegrasPesquisa.MaxEquipamentos ? (lista.Take(RegrasPesquisa.MaxEquipamentos).ToList(), true) : (lista, false);
+
+    private async Task MudarFiltroAsync(string? tipo, string? local)
+    {
+        if (tipo is not null) _tipo = tipo;
+        if (local is not null) _local = local;
+        await PesquisarAsync();
+    }
+
+    private async Task MudarObsoletosAsync(ChangeEventArgs e)
+    {
+        _obsoletos = e.Value is true;
+        await PesquisarAsync();
+    }
+
+    private async Task PesquisarAsync()
+    {
+        _erro = "";
+        if (!RegrasPesquisa.TextoValido(_texto))
+        {
+            _erro = "Escreva pelo menos 2 letras para pesquisar.";
+            _lista = [];
+            _listaCortada = false;
+            return;
+        }
+        _a_pesquisar = true;
+        try
+        {
+            (_lista, _listaCortada) = Cortar(await Servico.ListarAsync(new FiltroEquipamentos(_texto.Trim(), _tipo, _local, _obsoletos)));
+            _limite = PorPagina;
+        }
+        catch (Exception) { _erro = "Não foi possível pesquisar. Tente outra vez."; }
+        finally { _a_pesquisar = false; }
+    }
+
+    private static string Descricao(Equipamento e)
+    {
+        var partes = new List<string>();
+        if (e.Ref.Length > 0) partes.Add(e.Ref);
+        if (e.Tipo.Length > 0) partes.Add(e.Tipo);
+        var marca = $"{e.Marca} {e.Modelo}".Trim();
+        if (marca.Length > 0) partes.Add(marca);
+        partes.Add(e.Zona.Length > 0 ? e.Zona : "Sem local");
+        return string.Join(" · ", partes);
+    }
+}

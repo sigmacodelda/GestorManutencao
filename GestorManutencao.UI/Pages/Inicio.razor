@@ -1,6 +1,10 @@
 @page "/"
+@implements IDisposable
 @inject SessaoService Sessao
 @inject IIntervencoesService Intervencoes
+@inject NotificacaoService Notificacoes
+@inject IGestorOffline Offline
+@inject NavigationManager Nav
 
 <PageTitle>Início · Gestor de Manutenção</PageTitle>
 
@@ -10,17 +14,24 @@
     <section class="conteudo">
         <div class="boas-vindas hero">
             <Engrenagem Classe="engr-hero" />
+            <button type="button" class="btn-icone hero-sair" aria-label="Terminar sessão" @onclick="Sair">
+                <Icone Nome="log-out" />
+            </button>
             <div class="hero-texto">
                 <p class="sobretitulo">@(supervisor ? "Supervisor" : "Operador")</p>
                 <h1>@Saudacao(), @PrimeiroNome</h1>
+                <p class="hero-utilizador">
+                    <span class="avatar" aria-hidden="true">@Sessao.Utilizador!.Iniciais</span>
+                    <span>@Sessao.Utilizador.Nome</span>
+                </p>
                 <p class="hero-data">@DataExtenso()</p>
             </div>
         </div>
 
-        @if (_contadores is { Count: > 0 })
+        @if (_contadores is { Count: > 0 } || Offline.Pendentes > 0 || Offline.Conflitos > 0)
         {
             <ul class="contadores" aria-label="Resumo">
-                @foreach (var c in _contadores)
+                @foreach (var c in Contadores())
                 {
                     <li>
                         <a class="contador @(c.Alerta && c.Valor > 0 ? "alerta-led" : "")" href="@c.Href">
@@ -52,22 +63,69 @@
             {
                 <Mosaico Icone="calendar" Titulo="Planeadas" Href="planeadas" Descricao="Intervenções por atribuir e em atraso" />
                 <Mosaico Icone="shield-check" Titulo="Validação" Href="validacao" Descricao="Fichas concluídas a validar" />
+                <Mosaico Icone="factory" Titulo="Equipamentos" Href="equipamentos" Descricao="Fichas e histórico de cada equipamento" />
+                <Mosaico Icone="list" Titulo="Todas as fichas" Href="fichas" Descricao="Pesquisar fichas de qualquer estado" />
                 <Mosaico Icone="users" Titulo="Equipa" Href="equipa" Descricao="Utilizadores e PINs" />
+                <Mosaico Icone="settings" Titulo="Configuração" Href="configuracao" Descricao="Regras da manutenção" />
             }
             else
             {
                 <Mosaico Icone="clipboard-list" Titulo="As minhas intervenções" Href="intervencoes" Descricao="O que tenho para fazer hoje" />
                 <Mosaico Icone="triangle-alert" Titulo="Registar avaria" Href="avaria" Descricao="Avisar de um problema no equipamento" />
+                <Mosaico Icone="factory" Titulo="Equipamentos" Href="equipamentos" Descricao="Consultar fichas e histórico" />
             }
+            <Mosaico Icone="bell" Titulo="Notificações" Href="notificacoes" Contagem="Notificacoes.NaoLidas"
+                     Descricao="@(Notificacoes.NaoLidas > 0 ? "Tem avisos novos" : "Sem avisos novos")" />
         </ul>
+        @if (_pendentesSaida > 0)
+        {
+            <ConfirmaSaida Pendentes="_pendentesSaida" Sair="TerminarSessaoAsync" Ficar="() => _pendentesSaida = 0" />
+        }
     </section>
 }
 
 @code {
     private sealed record Contador(string Rotulo, int Valor, string Href, bool Alerta = false);
     private List<Contador>? _contadores;
+    private int _pendentesSaida;
 
-    protected override async Task OnInitializedAsync() { if (Sessao.TemSessao) await CarregarAsync(); }
+    protected override async Task OnInitializedAsync()
+    {
+        Notificacoes.Alterado += Atualizar;
+        Offline.Mudou += Atualizar;
+        if (Sessao.TemSessao) await CarregarAsync();
+    }
+
+    private void Atualizar() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Notificacoes.Alterado -= Atualizar;
+        Offline.Mudou -= Atualizar;
+    }
+
+    // Os resumos do dia mais o que ficou por enviar e por rever neste telemóvel.
+    private IEnumerable<Contador> Contadores()
+    {
+        foreach (var c in _contadores ?? []) yield return c;
+        if (Offline.Pendentes > 0) yield return new("Por enviar", Offline.Pendentes, "intervencoes");
+        if (Offline.Conflitos > 0) yield return new("Por rever", Offline.Conflitos, "por-rever", true);
+    }
+
+    // Com registos por enviar pede confirmação; a fila fica guardada e segue quando o mesmo utilizador voltar a entrar.
+    private async Task Sair()
+    {
+        var pendentes = await Offline.ContarPendentesAsync();
+        if (pendentes > 0) { _pendentesSaida = pendentes; return; }
+        await TerminarSessaoAsync();
+    }
+
+    private async Task TerminarSessaoAsync()
+    {
+        _pendentesSaida = 0;
+        await Sessao.SairAsync();
+        Nav.NavigateTo("login", replace: true);
+    }
 
     private async Task Mudar(ModoTrabalho modo) { Sessao.MudarModo(modo); await CarregarAsync(); }
 

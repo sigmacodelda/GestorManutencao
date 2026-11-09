@@ -7,7 +7,7 @@
 <section class="conteudo">
     <div class="boas-vindas">
         <h1 tabindex="-1">Escolha o seu PIN</h1>
-        <p class="login-sub">O PIN que recebeu é provisório. Escolha um só seu, com 6 números, que mais ninguém conheça.</p>
+        <p class="login-sub">O PIN que recebeu é provisório. Escolha um só seu, com 4 a 6 números, que mais ninguém conheça.</p>
     </div>
 
     <form class="formulario" @onsubmit="GuardarAsync" novalidate>
@@ -36,7 +36,7 @@
 
     private async Task GuardarAsync()
     {
-        _erro = !RegrasPin.FormatoValido(_atual) ? "Escreva o PIN que recebeu (6 números)."
+        _erro = !RegrasPin.FormatoValido(_atual) ? "Escreva o PIN que recebeu (4 a 6 números)."
               : RegrasPin.ValidarNovo(_novo, _repetir)
               ?? (_novo == _atual ? "O PIN novo tem de ser diferente do que recebeu." : "");
         if (_erro.Length > 0) return;

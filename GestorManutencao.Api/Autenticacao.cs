@@ -43,7 +43,7 @@ public sealed class JwtOpcoes
     public string Chave { get; set; } = "";
     public string Emissor { get; set; } = "GestorManutencao.Api";
     public string Audiencia { get; set; } = "GestorManutencao.App";
-    public int HorasValidade { get; set; } = 10;
+    public int HorasValidade { get; set; } = 336;
 }
 
 public sealed class PinOpcoes
@@ -54,14 +54,15 @@ public sealed class PinOpcoes
 
 public static partial class RegrasPin
 {
-    public const int Tamanho = 6;
+    public const int Minimo = 4;
+    public const int Maximo = 6;
 
-    [GeneratedRegex(@"^\d{6}$")]
-    private static partial Regex SeisDigitos();
+    [GeneratedRegex(@"^\d{4,6}$")]
+    private static partial Regex QuatroASeisDigitos();
 
-    public static bool FormatoValido(string? pin) => pin is not null && SeisDigitos().IsMatch(pin);
+    public static bool FormatoValido(string? pin) => pin is not null && QuatroASeisDigitos().IsMatch(pin);
 
-    // Recusa os PINs que qualquer pessoa tentaria primeiro: 000000, 123456, 654321...
+    // Recusa os PINs que qualquer pessoa tentaria primeiro: 0000, 1234, 4321, 123456...
     public static bool Aceitavel(string? pin)
     {
         if (!FormatoValido(pin)) return false;
@@ -73,7 +74,7 @@ public static partial class RegrasPin
     {
         while (true)
         {
-            var pin = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+            var pin = RandomNumberGenerator.GetInt32(0, 10_000).ToString("D4");
             if (Aceitavel(pin)) return pin;
         }
     }

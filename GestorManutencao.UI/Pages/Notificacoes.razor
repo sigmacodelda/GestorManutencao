@@ -1,0 +1,74 @@
+@page "/notificacoes"
+@implements IDisposable
+@inject SessaoService Sessao
+@inject NotificacaoService Centro
+
+<PageTitle>Notificações · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Notificações</h1>
+    </div>
+
+    @if (!Sessao.TemSessao)
+    {
+        <p class="estado-lista" role="status">Entre para ver as notificações.</p>
+    }
+    else
+    {
+        var perfil = Sessao.Utilizador!.Perfil;
+        var lista = Centro.Lista;
+        @if (lista.Count == 0)
+        {
+            <div class="estado-lista" role="status">
+                <p>Ainda não há notificações.</p>
+                <p>@(perfil == Perfil.Supervisor
+                    ? "Aqui aparecem as fichas por validar, as avarias, as fichas em atraso e as que estão sem técnico."
+                    : "Aqui aparecem as intervenções que lhe atribuem, as que lhe devolvem, as de hoje e as em atraso.")</p>
+                <p>Os avisos só chegam com a app aberta ou em segundo plano.</p>
+            </div>
+        }
+        else
+        {
+            <div class="avisos-barra">
+                <h2 class="titulo-grupo">Mais recentes <span class="contagem">@lista.Count</span></h2>
+                <button type="button" class="btn btn-secundario" disabled="@(Centro.NaoLidas == 0)" @onclick="Centro.MarcarTodasLidasAsync">
+                    <Icone Nome="check" /><span>Marcar todas como lidas</span>
+                </button>
+            </div>
+            <ul class="lista-intervencoes">
+                @foreach (var e in lista)
+                {
+                    var a = e.Aviso;
+                    <li>
+                        <a class="intervencao aviso @(e.Lido ? "" : "aviso-novo") @(a.Tipo is TipoAviso.Atraso or TipoAviso.Devolvida ? "atrasada" : "")"
+                           href="@a.Destino(perfil)" @onclick="() => Centro.MarcarLidaAsync(a.Chave)">
+                            <span class="intervencao-titulo">@a.Titulo</span>
+                            <span class="intervencao-desc">@a.Texto</span>
+                            <span class="chips">
+                                @if (!e.Lido) { <span class="chip chip-curso">Nova</span> }
+                            </span>
+                            <span class="intervencao-data aviso-quando">@Quando(a.Quando)</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
+    }
+</section>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        Centro.Alterado += Atualizar;
+        if (Sessao.TemSessao) await Centro.VerificarAsync();
+    }
+
+    private static string Quando(DateTime quando) =>
+        quando.Date == DateTime.Today ? quando.ToString("HH:mm") : quando.ToString("dd/MM");
+
+    private void Atualizar() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Centro.Alterado -= Atualizar;
+}

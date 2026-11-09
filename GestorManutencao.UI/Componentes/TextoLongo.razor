@@ -1,0 +1,24 @@
+@* Texto de várias linhas (checklists) cortado a 3 linhas, com "Ver tudo" / "Ver menos" por item. *@
+<div class="texto-longo @Classe">
+    <p id="@_id" class="texto-longo-corpo @(_aberto ? "aberto" : "")">@Mostrado</p>
+    @if (Longo)
+    {
+        <button type="button" class="btn-texto" aria-expanded="@(_aberto ? "true" : "false")" aria-controls="@_id" @onclick="() => _aberto = !_aberto">
+            @(_aberto ? "Ver menos" : "Ver tudo")
+        </button>
+    }
+</div>
+
+@code {
+    private static int _contador;
+    private readonly string _id = "texto-" + System.Threading.Interlocked.Increment(ref _contador);
+    private bool _aberto;
+
+    [Parameter, EditorRequired] public string Texto { get; set; } = "";
+    [Parameter] public string? Classe { get; set; }
+
+    private bool Longo => Texto.Length > 120 || Texto.Contains('\n');
+
+    // Aberto, os " - " das listas passam a linhas próprias (white-space: pre-line).
+    private string Mostrado => _aberto ? Texto.Replace(" - ", "\n- ") : Texto;
+}

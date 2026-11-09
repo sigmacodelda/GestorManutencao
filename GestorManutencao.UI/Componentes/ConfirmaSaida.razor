@@ -1,0 +1,36 @@
+<div class="dialogo-fundo" @onkeydown="AoTecla">
+    <div tabindex="0" aria-hidden="true" @onfocus="FocarUltimoAsync"></div>
+    <div class="dialogo" role="alertdialog" aria-modal="true" aria-labelledby="saida-titulo" aria-describedby="saida-texto">
+        <h2 id="saida-titulo">Sair agora?</h2>
+        <p id="saida-texto">
+            Tem @(Pendentes == 1 ? "1 registo" : $"{Pendentes} registos") por enviar. Se sair agora, ficam guardados neste telemóvel até voltar a entrar com a mesma conta.
+        </p>
+        <div class="dialogo-acoes">
+            <button type="button" class="btn btn-primario" @ref="_ficar" @onclick="() => Ficar.InvokeAsync()">Ficar</button>
+            <button type="button" class="btn btn-secundario" @ref="_sair" @onclick="() => Sair.InvokeAsync()">Sair mesmo assim</button>
+        </div>
+    </div>
+    <div tabindex="0" aria-hidden="true" @onfocus="FocarPrimeiroAsync"></div>
+</div>
+
+@code {
+    [Parameter] public int Pendentes { get; set; }
+    [Parameter] public EventCallback Sair { get; set; }
+    [Parameter] public EventCallback Ficar { get; set; }
+
+    private ElementReference _ficar, _sair;
+
+    protected override async Task OnAfterRenderAsync(bool primeira)
+    {
+        if (primeira) await _ficar.FocusAsync();
+    }
+
+    // O foco fica preso no diálogo: os dois guardas (antes e depois) devolvem-no ao extremo oposto.
+    private async Task FocarPrimeiroAsync() => await _ficar.FocusAsync();
+    private async Task FocarUltimoAsync() => await _sair.FocusAsync();
+
+    private async Task AoTecla(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await Ficar.InvokeAsync();
+    }
+}

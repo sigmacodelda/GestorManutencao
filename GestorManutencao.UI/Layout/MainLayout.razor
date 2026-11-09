@@ -2,11 +2,44 @@
 @implements IDisposable
 @inject SessaoService Sessao
 @inject NavigationManager Nav
+@inject NotificacaoService Notificacoes
+@inject IGestorOffline Offline
 
 @if (_pronto && Sessao.TemSessao)
 {
     <div class="shell">
-        <header class="topo">
+        @if (Offline.SemLigacao || Offline.TextoDados is not null || Offline.Estado != EstadoSincronizacao.Sincronizado)
+        {
+            <div class="faixa-estado" role="status" aria-live="polite">
+                @if (Offline.SemLigacao || Offline.TextoDados is not null)
+                {
+                    <span class="faixa-estado-item"><Icone Nome="wifi-off" /><span>Sem ligação. @(Offline.TextoDados ?? "Pode continuar a trabalhar.")</span></span>
+                }
+                @if (Offline.Estado == EstadoSincronizacao.ASincronizar)
+                {
+                    <span class="faixa-estado-item"><Icone Nome="refresh-cw" /><span>A enviar…</span></span>
+                }
+                else if (Offline.Pendentes > 0)
+                {
+                    <span class="faixa-estado-item"><Icone Nome="clock" /><span>@Offline.Pendentes por enviar</span></span>
+                }
+                @if (Offline.Conflitos > 0)
+                {
+                    <a class="faixa-estado-item faixa-estado-rever" href="por-rever"><Icone Nome="triangle-alert" /><span>@Offline.Conflitos por rever</span></a>
+                }
+            </div>
+        }
+        @if (_faixa is { } faixa)
+        {
+            <div class="faixa-aviso" role="status" aria-live="polite">
+                <a class="faixa-corpo" href="@faixa.Destino(Sessao.Utilizador!.Perfil)" @onclick="FecharFaixa">
+                    <Icone Nome="bell" />
+                    <span><strong>@faixa.Titulo</strong> @faixa.Texto</span>
+                </a>
+                <button type="button" class="faixa-fechar" aria-label="Fechar aviso" @onclick="FecharFaixa"><Icone Nome="x" /></button>
+            </div>
+        }
+        <header class="topo @(Sessao.Utilizador is { PinProvisorio: false } ? "so-largo" : "")">
             <Logo />
             <div class="topo-direita">
                 <span class="utilizador" title="@Sessao.Utilizador!.Nome">
@@ -28,33 +61,89 @@
                     {
                         <NavLink class="nav-item" href="planeadas"><span class="nav-icone"><Icone Nome="calendar" /></span><span class="nav-rotulo">Planeadas</span></NavLink>
                         <NavLink class="nav-item" href="validacao"><span class="nav-icone"><Icone Nome="shield-check" /></span><span class="nav-rotulo">Validação</span></NavLink>
-                        <NavLink class="nav-item" href="equipa"><span class="nav-icone"><Icone Nome="users" /></span><span class="nav-rotulo">Equipa</span></NavLink>
+                        <NavLink class="nav-item" href="equipamentos" Match="NavLinkMatch.Prefix" title="Equipamentos"><span class="nav-icone"><Icone Nome="factory" /></span><span class="nav-rotulo">Máquinas</span></NavLink>
+                        <NavLink class="nav-item" href="mais"><span class="nav-icone"><Icone Nome="ellipsis" /></span><span class="nav-rotulo">Mais</span></NavLink>
                     }
                     else
                     {
                         <NavLink class="nav-item" href="intervencoes" Match="NavLinkMatch.Prefix"><span class="nav-icone"><Icone Nome="clipboard-list" /></span><span class="nav-rotulo">Intervenções</span></NavLink>
                         <NavLink class="nav-item" href="avaria"><span class="nav-icone"><Icone Nome="triangle-alert" /></span><span class="nav-rotulo">Avaria</span></NavLink>
+                        <NavLink class="nav-item" href="equipamentos" Match="NavLinkMatch.Prefix" title="Equipamentos"><span class="nav-icone"><Icone Nome="factory" /></span><span class="nav-rotulo">Máquinas</span></NavLink>
                     }
+                    <NavLink class="nav-item" href="notificacoes">
+                        <span class="nav-icone">
+                            <Icone Nome="bell" />
+                            @if (Notificacoes.NaoLidas > 0)
+                            {
+                                <span class="nav-badge" aria-hidden="true">@(Notificacoes.NaoLidas > 9 ? "9+" : Notificacoes.NaoLidas.ToString())</span>
+                            }
+                        </span>
+                        <span class="nav-rotulo">
+                            Avisos
+                            @if (Notificacoes.NaoLidas > 0)
+                            {
+                                <span class="so-leitor"> (@Notificacoes.NaoLidas por ler)</span>
+                            }
+                        </span>
+                    </NavLink>
                 </nav>
             }
             <div class="conteudo-wrap">@Body</div>
         </div>
+        @if (_pendentesSaida > 0)
+        {
+            <ConfirmaSaida Pendentes="_pendentesSaida" Sair="TerminarSessaoAsync" Ficar="() => _pendentesSaida = 0" />
+        }
     </div>
 }
 
 @code {
     private bool _pronto;
+    private int _pendentesSaida;
+    private Aviso? _faixa;
+    private CancellationTokenSource? _faixaCts;
 
     protected override async Task OnInitializedAsync()
     {
         Sessao.Alterada += Atualizar;
+        Notificacoes.Alterado += Atualizar;
+        Notificacoes.AvisoNaApp += MostrarFaixa;
+        Offline.Mudou += Atualizar;
         await Sessao.RestaurarAsync();
         _pronto = true;
         if (!Sessao.TemSessao) Nav.NavigateTo("login", replace: true);
+        else { Notificacoes.Iniciar(); Offline.Iniciar(); }
     }
 
+    private void MostrarFaixa(Aviso aviso) => InvokeAsync(async () =>
+    {
+        _faixaCts?.Cancel();
+        var cts = _faixaCts = new CancellationTokenSource();
+        _faixa = aviso;
+        StateHasChanged();
+        try { await Task.Delay(TimeSpan.FromSeconds(8), cts.Token); }
+        catch (TaskCanceledException) { return; }
+        _faixa = null;
+        StateHasChanged();
+    });
+
+    private void FecharFaixa()
+    {
+        _faixaCts?.Cancel();
+        _faixa = null;
+    }
+
+    // Com registos por enviar pede confirmação; a fila fica guardada e segue quando o mesmo utilizador voltar a entrar.
     private async Task Sair()
     {
+        var pendentes = await Offline.ContarPendentesAsync();
+        if (pendentes > 0) { _pendentesSaida = pendentes; return; }
+        await TerminarSessaoAsync();
+    }
+
+    private async Task TerminarSessaoAsync()
+    {
+        _pendentesSaida = 0;
         await Sessao.SairAsync();
         Nav.NavigateTo("login", replace: true);
     }
@@ -68,5 +157,12 @@
 
     private void Atualizar() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Sessao.Alterada -= Atualizar;
+    public void Dispose()
+    {
+        Sessao.Alterada -= Atualizar;
+        Notificacoes.Alterado -= Atualizar;
+        Notificacoes.AvisoNaApp -= MostrarFaixa;
+        Offline.Mudou -= Atualizar;
+        _faixaCts?.Cancel();
+    }
 }
