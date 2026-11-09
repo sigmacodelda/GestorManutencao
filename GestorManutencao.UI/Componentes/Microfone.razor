@@ -1,0 +1,111 @@
+@* Botão Falar / Parar para uma caixa de texto: enquanto grava, o que se diz vai aparecendo no texto. *@
+@using GestorManutencao.UI.Servicos
+@implements IDisposable
+@inject IDitado Ditado
+
+@if (Ditado.Disponivel)
+{
+    <div class="ditado @(_aDitar ? "a-ditar" : "")">
+        @if (_aDitar)
+        {
+            <button type="button" class="btn btn-parar" disabled="@_aParar" @onclick="PararAsync">
+                <span class="ponto-gravar" aria-hidden="true"></span><Icone Nome="square" Classe="icone-parar" />
+                <span>@(_aParar ? "A terminar…" : "Parar")</span>
+            </button>
+            <span class="ditado-estado" role="status">A gravar… fale agora</span>
+        }
+        else
+        {
+            <button type="button" class="btn btn-secundario" disabled="@_aArrancar" @onclick="IniciarAsync">
+                <Icone Nome="mic" /><span>Falar</span>
+            </button>
+        }
+        @if (_erro != "")
+        {
+            <p class="campo-erro" role="alert">@_erro</p>
+        }
+    </div>
+}
+
+@code {
+    private bool _aDitar, _aParar, _aArrancar;
+    private string _erro = "", _inserido = "";
+
+    [Parameter] public string Texto { get; set; } = "";
+    [Parameter] public EventCallback<string> TextoChanged { get; set; }
+    // 0 = sem limite.
+    [Parameter] public int MaxLength { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Ditado.Parcial += AoParcial;
+        Ditado.Frase += AoFrase;
+        Ditado.Terminou += AoTerminar;
+    }
+
+    private async Task IniciarAsync()
+    {
+        _erro = "";
+        _aArrancar = true;
+        try
+        {
+            _inserido = "";
+            // Marcado antes de arrancar: o primeiro resultado pode chegar antes do retorno.
+            _aDitar = true;
+            var erro = await Ditado.IniciarAsync();
+            if (erro is not null)
+            {
+                _aDitar = false;
+                _erro = erro;
+            }
+        }
+        catch (Exception)
+        {
+            _aDitar = false;
+            _erro = "Não foi possível iniciar o ditado.";
+        }
+        finally { _aArrancar = false; }
+    }
+
+    private async Task PararAsync()
+    {
+        _aParar = true;
+        try { await Ditado.PararAsync(); }
+        catch (Exception) { }
+        // Se o serviço não levantou Terminou, não deixar o botão preso.
+        if (_aDitar) { _aDitar = false; _aParar = false; _inserido = ""; }
+    }
+
+    private void AoParcial(string texto) => _ = InvokeAsync(() => AplicarAsync(texto, fechada: false));
+    private void AoFrase(string texto) => _ = InvokeAsync(() => AplicarAsync(texto, fechada: true));
+
+    private async Task AplicarAsync(string falado, bool fechada)
+    {
+        if (!_aDitar) return;
+        var (texto, inserido) = TextoDitado.Aplicar(Texto, _inserido, falado, MaxLength);
+        _inserido = fechada ? "" : inserido;
+        if (texto != Texto)
+        {
+            Texto = texto;
+            await TextoChanged.InvokeAsync(texto);
+        }
+        StateHasChanged();
+    }
+
+    private void AoTerminar(string? motivo) => _ = InvokeAsync(() =>
+    {
+        if (!_aDitar) return;
+        _aDitar = _aParar = false;
+        _inserido = "";
+        _erro = motivo ?? "";
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Ditado.Parcial -= AoParcial;
+        Ditado.Frase -= AoFrase;
+        Ditado.Terminou -= AoTerminar;
+        if (_aDitar) _ = Ditado.PararAsync();
+    }
+}

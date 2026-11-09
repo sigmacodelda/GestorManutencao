@@ -9,7 +9,9 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         public int Tecno { get; set; }
         public string Tarefa { get; set; } = "";
         public List<MaterialDto> Materiais { get; } = [];
+        public List<(FotoDto Foto, byte[] Dados)> Fotos { get; } = [];
         public string Motivo { get; set; } = "";
+        public string? OpId { get; set; }
     }
 
     private sealed record Tarefa(string Id, string EquipamentoId, string Descricao, string Periodo, UnidadePeriodo Unidade, int Intervalo);
@@ -79,6 +81,17 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
             return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista
                 .Where(f => Aberta(f) && (f.Tecno == tecnico.Tecno || (f.Tecno == 0 && f.D.DataPlaneada <= ate)))
                 .OrderBy(f => f.D.DataPlaneada).Select(f => Ver(f)).ToList());
+        }
+    }
+
+    public Task<IReadOnlyList<IntervencaoDto>> ListarRecentesAsync(TecnicoAtual tecnico, int dias, CancellationToken ct)
+    {
+        lock (Trinco())
+        {
+            var desde = Hoje.AddDays(-dias);
+            return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista
+                .Where(f => f.Tecno == tecnico.Tecno && f.D.Estado is EstadoIntervencao.Concluida or EstadoIntervencao.Validada or EstadoIntervencao.Cancelada && f.D.DataPlaneada >= desde)
+                .OrderByDescending(f => f.D.DataPlaneada).Take(RegrasIntervencao.MaxRecentes).Select(f => Ver(f)).ToList());
         }
     }
 
@@ -164,7 +177,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         return Task.CompletedTask;
     }
 
-    public Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct)
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct, string? opId = null)
     {
         var e = Equipamentos.FirstOrDefault(x => x.Id == equipamentoId && !x.Obsoleto);
         if (e is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
@@ -173,9 +186,15 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         {
             D = Nova(Guid.NewGuid().ToString("N")[..25], e.Nome, e.Zona, TipoIntervencao.Curativa, DateOnly.FromDateTime(agora), EstadoIntervencao.EmCurso,
                 anomalia, null, TimeOnly.FromDateTime(agora), null, tecnico.Nome, tecnico.Tecno),
-            Tecno = tecnico.Tecno
+            Tecno = tecnico.Tecno,
+            OpId = opId
         };
-        lock (Trinco()) _lista.Add(nova);
+        lock (Trinco())
+        {
+            if (opId is not null && _lista.FirstOrDefault(x => x.OpId == opId && x.Tecno == tecnico.Tecno) is { } repetida)
+                return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(repetida)));
+            _lista.Add(nova);
+        }
         return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(nova)));
     }
 
@@ -185,6 +204,9 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         {
             var f = _lista.FirstOrDefault(x => x.D.Id == id);
             if (f is null || !Minha(f, tecnico)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
+            // Repetição do mesmo pedido (a resposta perdeu-se): a ficha já está em curso e é do mesmo técnico.
+            if (f.D.Estado == EstadoIntervencao.EmCurso && f.Tecno == tecnico.Tecno)
+                return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
             if (f.D.Estado != EstadoIntervencao.Planeada) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
 
             // A primeira planeada da fila da mesma zona, por data.
@@ -209,13 +231,19 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         {
             var f = _lista.FirstOrDefault(x => x.D.Id == id);
             if (f is null || !Minha(f, tecnico)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
+            if (f.D.Estado == EstadoIntervencao.Concluida && f.Tecno == tecnico.Tecno && f.D.Feito == feito
+                && Segundos(f.D.HoraInicio) == Segundos(inicio) && Segundos(f.D.HoraFim) == Segundos(fim))
+                return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
             if (f.D.Estado != EstadoIntervencao.EmCurso) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
+            if (_cfg.ExigeMaterial && f.Materiais.Count == 0) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.SemMaterial));
 
             f.D = f.D with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim, DataPlaneada = Hoje };
             GerarSeguinte(f);
             return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
         }
     }
+
+    private static TimeOnly? Segundos(TimeOnly? hora) => hora is { } h ? new TimeOnly(h.Hour, h.Minute, h.Second) : null;
 
     // Uma só ficha aberta por tarefa: ao concluir gera-se a seguinte, como no PHC.
     private void GerarSeguinte(Ficha feita)
@@ -319,6 +347,48 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
             if (f is null) return Task.FromResult(ResultadoIntervencao.NaoExiste);
             if (f.D.Estado != EstadoIntervencao.EmCurso || f.Tecno != tecnico.Tecno) return Task.FromResult(ResultadoIntervencao.Conflito);
             return Task.FromResult(f.Materiais.RemoveAll(m => m.Id == materialId) > 0 ? ResultadoIntervencao.Ok : ResultadoIntervencao.NaoExiste);
+        }
+    }
+
+    public Task<IReadOnlyList<FotoDto>?> ListarFotosAsync(string id, TecnicoAtual quem, bool supervisor, CancellationToken ct)
+    {
+        lock (Trinco())
+            return Task.FromResult(_lista.FirstOrDefault(x => x.D.Id == id && (supervisor || Minha(x, quem))) is { } f
+                ? (IReadOnlyList<FotoDto>?)f.Fotos.Select(x => x.Foto).ToList() : null);
+    }
+
+    public Task<FotoConteudo?> ObterFotoAsync(string id, string fotoId, TecnicoAtual quem, bool supervisor, CancellationToken ct)
+    {
+        lock (Trinco())
+        {
+            var f = _lista.FirstOrDefault(x => x.D.Id == id && (supervisor || Minha(x, quem)));
+            var foto = f?.Fotos.FirstOrDefault(x => x.Foto.Id == fotoId);
+            return Task.FromResult(foto is { Foto: not null } ? new FotoConteudo(foto.Value.Foto.Nome, foto.Value.Dados) : null);
+        }
+    }
+
+    public Task<(ResultadoIntervencao, FotoDto?)> AdicionarFotoAsync(string id, string nome, byte[] dados, TecnicoAtual tecnico, CancellationToken ct)
+    {
+        lock (Trinco())
+        {
+            var f = _lista.FirstOrDefault(x => x.D.Id == id && Minha(x, tecnico));
+            if (f is null) return Task.FromResult(Falha<FotoDto>(ResultadoIntervencao.NaoExiste));
+            if (f.D.Estado != EstadoIntervencao.EmCurso || f.Tecno != tecnico.Tecno) return Task.FromResult(Falha<FotoDto>(ResultadoIntervencao.Conflito));
+            if (f.Fotos.Count >= RegrasIntervencao.MaxFotos) return Task.FromResult(Falha<FotoDto>(ResultadoIntervencao.LimiteFotos));
+            var foto = new FotoDto(Guid.NewGuid().ToString("N")[..25], nome, dados.Length);
+            f.Fotos.Add((foto, dados));
+            return Task.FromResult<(ResultadoIntervencao, FotoDto?)>((ResultadoIntervencao.Ok, foto));
+        }
+    }
+
+    public Task<ResultadoIntervencao> ApagarFotoAsync(string id, string fotoId, TecnicoAtual tecnico, CancellationToken ct)
+    {
+        lock (Trinco())
+        {
+            var f = _lista.FirstOrDefault(x => x.D.Id == id && Minha(x, tecnico));
+            if (f is null) return Task.FromResult(ResultadoIntervencao.NaoExiste);
+            if (f.D.Estado != EstadoIntervencao.EmCurso || f.Tecno != tecnico.Tecno) return Task.FromResult(ResultadoIntervencao.Conflito);
+            return Task.FromResult(f.Fotos.RemoveAll(x => x.Foto.Id == fotoId) > 0 ? ResultadoIntervencao.Ok : ResultadoIntervencao.NaoExiste);
         }
     }
 

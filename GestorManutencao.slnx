@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="GestorManutencao.Api/GestorManutencao.Api.csproj" />
   <Project Path="GestorManutencao.App/GestorManutencao.App.csproj" />
+  <Project Path="GestorManutencao.Armazenamento/GestorManutencao.Armazenamento.csproj" />
   <Project Path="GestorManutencao.Tests/GestorManutencao.Tests.csproj" />
   <Project Path="GestorManutencao.UI/GestorManutencao.UI.csproj" />
 </Solution>

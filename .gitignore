@@ -406,3 +406,4 @@ obj/
 .playwright-mcp/
 appsettings.Production.json
 **/appsettings.*.local.json
+.claude/worktrees/

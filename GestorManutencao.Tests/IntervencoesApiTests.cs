@@ -106,13 +106,13 @@ public class IntervencoesApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Iniciar_duas_vezes_da_409_e_concluir_sem_iniciar_tambem()
+    public async Task Iniciar_duas_vezes_e_idempotente_e_concluir_sem_iniciar_da_409()
     {
         var c = await ComoAsync("482913");
 
         Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync("/intervencoes/F1/concluir", new PedidoConclusao("x", new TimeOnly(8, 0), new TimeOnly(9, 0)))).StatusCode);
         await c.PostAsync("/intervencoes/F1/iniciar", null);
-        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync("/intervencoes/F1/iniciar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync("/intervencoes/F1/iniciar", null)).StatusCode);
     }
 
     [Fact]

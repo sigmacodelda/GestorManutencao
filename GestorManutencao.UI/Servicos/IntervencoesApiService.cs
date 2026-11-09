@@ -2,11 +2,12 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using GestorManutencao.UI.Modelos;
+using GestorManutencao.UI.Offline;
 
 namespace GestorManutencao.UI.Servicos;
 
 // Intervenções e equipamentos através da API; o token vem da sessão atual.
-public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao) : IIntervencoesService, IEquipamentosService
+public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao) : IIntervencoesRemoto
 {
     public async Task<IReadOnlyList<Intervencao>> ListarMinhasAsync(CancellationToken ct = default)
     {
@@ -25,6 +26,17 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
 
     public Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, "intervencoes/avaria", new { equipamentoId, anomalia }, ct);
+
+    // Repetir o mesmo opId devolve a mesma ficha: permite reenviar a avaria sem a duplicar.
+    public Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, string opId, CancellationToken ct = default) =>
+        AlterarAsync(HttpMethod.Post, "intervencoes/avaria", new { equipamentoId, anomalia, opId }, ct);
+
+    public async Task<IReadOnlyList<Intervencao>> ListarRecentesAsync(int dias, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"intervencoes/recentes?dias={dias}", null, ct);
+        await VerificarAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<List<Intervencao>>(ct) ?? [];
+    }
 
     public Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/iniciar", null, ct);
@@ -70,6 +82,42 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
     public async Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
     {
         using var resposta = await EnviarAsync(HttpMethod.Delete, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}", null, ct);
+        if (resposta.StatusCode != HttpStatusCode.NotFound) await VerificarAsync(resposta, ct);
+    }
+
+    public async Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"intervencoes/{Uri.EscapeDataString(id)}/fotos", null, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return [];
+        await VerificarAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<List<Foto>>(ct) ?? [];
+    }
+
+    public async Task<byte[]?> ObterFotoAsync(string id, string fotoId, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"intervencoes/{Uri.EscapeDataString(id)}/fotos/{Uri.EscapeDataString(fotoId)}", null, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return null;
+        await VerificarAsync(resposta, ct);
+        return await resposta.Content.ReadAsByteArrayAsync(ct);
+    }
+
+    public async Task<Foto> AdicionarFotoAsync(string id, string nome, byte[] jpeg, CancellationToken ct = default)
+    {
+        var pedido = new HttpRequestMessage(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/fotos?nome={Uri.EscapeDataString(nome)}")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", sessao.Utilizador?.Token) },
+            Content = new ByteArrayContent(jpeg) { Headers = { ContentType = new MediaTypeHeaderValue("image/jpeg") } }
+        };
+        using var resposta = await http.SendAsync(pedido, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+        if (resposta.StatusCode == HttpStatusCode.RequestEntityTooLarge) throw new InvalidOperationException("A foto é demasiado grande. Tente outra vez.");
+        await VerificarAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<Foto>(ct) ?? throw new HttpRequestException();
+    }
+
+    public async Task ApagarFotoAsync(string id, string fotoId, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Delete, $"intervencoes/{Uri.EscapeDataString(id)}/fotos/{Uri.EscapeDataString(fotoId)}", null, ct);
         if (resposta.StatusCode != HttpStatusCode.NotFound) await VerificarAsync(resposta, ct);
     }
 

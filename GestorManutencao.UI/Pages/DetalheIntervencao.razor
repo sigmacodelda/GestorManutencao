@@ -1,5 +1,8 @@
 @page "/intervencoes/{Id}"
+@implements IDisposable
 @inject IIntervencoesService Intervencoes
+@inject IGestorOffline Offline
+@inject NavigationManager Nav
 
 <PageTitle>Intervenção · Gestor de Manutenção</PageTitle>
 
@@ -30,6 +33,17 @@
             </div>
         }
 
+        @if (_i.Pendente)
+        {
+            <div class="alerta-pendente" role="status">
+                <Icone Nome="clock" />
+                <div>
+                    <strong>Por enviar</strong>
+                    <p>@(Offline.SemLigacao ? "Guardado. Será enviado quando houver rede." : "Guardado. Vai ser enviado assim que for possível.")</p>
+                </div>
+            </div>
+        }
+
         <dl class="ficha">
             @if (!string.IsNullOrWhiteSpace(_i.Zona)) { <dt>Zona</dt><dd>@_i.Zona</dd> }
             <dt>Tipo</dt><dd>@(_i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</dd>
@@ -50,7 +64,9 @@
                     {
                         <li class="intervencao material-linha">
                             <span>
-                                <span class="intervencao-titulo">@m.Design</span><br />
+                                <span class="intervencao-titulo">@m.Design</span>
+                                @if (ClassificacaoErros.IdLocal(m.Id)) { <span class="chip chip-pendente">Por enviar</span> }
+                                <br />
                                 <span class="intervencao-desc">@m.Qtt.ToString("0.###") × @m.Epv.ToString("0.00") € = @m.Custo.ToString("0.00") €</span>
                             </span>
                             @if (_i.Estado == EstadoIntervencao.EmCurso)
@@ -67,6 +83,7 @@
                             <div class="campo">
                                 <label for="material">Material</label>
                                 <input id="material" type="text" maxlength="35" autocomplete="off" @bind="_material" @bind:event="oninput" />
+                                <Microfone @bind-Texto="_material" MaxLength="35" />
                             </div>
                             <div class="campo">
                                 <label for="qtt">Quantidade</label>
@@ -84,6 +101,48 @@
             </section>
         }
 
+        @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
+        {
+            <section class="fotos" aria-labelledby="titulo-fotos">
+                <h2 id="titulo-fotos" class="titulo-grupo"><Icone Nome="camera" /> Fotos <span class="contagem">@_fotos.Count</span></h2>
+                @if (_fotos.Count == 0)
+                {
+                    <p class="estado-lista" role="status">Ainda sem fotos.</p>
+                }
+                <ul class="fotos-grelha">
+                    @foreach (var f in _fotos)
+                    {
+                        <li class="foto">
+                            @if (_miniaturas.TryGetValue(f.Id, out var url))
+                            {
+                                <img src="@url" alt="@f.Nome" />
+                            }
+                            @if (ClassificacaoErros.IdLocal(f.Id))
+                            {
+                                <span class="chip chip-pendente foto-pendente">Por enviar</span>
+                            }
+                            @if (_i.Estado == EstadoIntervencao.EmCurso)
+                            {
+                                <button type="button" class="btn-texto foto-apagar" aria-label="Tirar a foto @f.Nome" disabled="@_a_gravar" @onclick="() => ApagarFotoAsync(f)"><Icone Nome="trash" /></button>
+                            }
+                        </li>
+                    }
+                </ul>
+                @if (_i.Estado == EstadoIntervencao.EmCurso && _fotos.Count < RegrasFoto.Max)
+                {
+                    <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
+                        <Icone Nome="camera" /><span>Tirar foto</span>
+                        <InputFile accept="image/*" capture="environment" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
+                    </label>
+                    <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
+                        <Icone Nome="plus" /><span>Escolher da galeria</span>
+                        <InputFile accept="image/*" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
+                    </label>
+                }
+                <p class="campo-erro" role="alert">@_erroFoto</p>
+            </section>
+        }
+
         @if (_i.Estado == EstadoIntervencao.Planeada)
         {
             <button type="button" class="btn btn-primario btn-grande" disabled="@_a_gravar" @onclick="IniciarAsync"><Icone Nome="play" /><span>Começar</span></button>
@@ -94,6 +153,7 @@
                 <div class="campo">
                     <label for="feito">O que fez?</label>
                     <textarea id="feito" rows="4" maxlength="254" @bind="_feito" @bind:event="oninput"></textarea>
+                    <Microfone @bind-Texto="_feito" MaxLength="254" />
                 </div>
                 <div class="horas">
                     <div class="campo">
@@ -129,13 +189,54 @@
     private string _feito = "", _erro = "", _material = "", _erroMaterial = "";
     private decimal? _qtt, _epv;
     private IReadOnlyList<Material> _materiais = [];
+    private IReadOnlyList<Foto> _fotos = [];
+    private readonly Dictionary<string, string> _miniaturas = [];
+    private string _erroFoto = "";
     private TimeOnly? _inicio, _fim;
     private bool _a_carregar = true, _a_gravar, _indisponivel;
+
+    protected override void OnInitialized() => Offline.Mudou += AoMudarOffline;
+
+    public void Dispose() => Offline.Mudou -= AoMudarOffline;
+
+    // A avaria registada sem rede tinha um id local; quando já foi criada no servidor a rota passa a usar o id real.
+    private async Task<bool> IrParaIdRealAsync()
+    {
+        var real = await Offline.ResolverIdAsync(Id);
+        if (real == Id) return false;
+        Nav.NavigateTo($"intervencoes/{Uri.EscapeDataString(real)}", replace: true);
+        return true;
+    }
+
+    // Quando termina o envio, a ficha deixa de estar "por enviar": volta a ler o que está guardado.
+    private void AoMudarOffline() => InvokeAsync(async () =>
+    {
+        if (_i is not { Pendente: true } || _a_gravar || _a_carregar || Offline.Estado == EstadoSincronizacao.ASincronizar) return;
+        try
+        {
+            if (await IrParaIdRealAsync()) return;
+            if (await Intervencoes.ObterAsync(Id) is { } ficha) _i = ficha;
+            await CarregarMateriaisAsync();
+            await CarregarFotosAsync();
+        }
+        catch (Exception) { /* fica como está até à próxima leitura */ }
+        StateHasChanged();
+    });
+
+    private async Task RefrescarFichaAsync()
+    {
+        try { if (await Intervencoes.ObterAsync(Id) is { } ficha) _i = ficha; }
+        catch (Exception) { /* mantém a ficha que já tem */ }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         _a_carregar = true;
-        try { Usar(await Intervencoes.ObterAsync(Id)); await CarregarMateriaisAsync(); }
+        try
+        {
+            if (await IrParaIdRealAsync()) return;
+            Usar(await Intervencoes.ObterAsync(Id)); await CarregarMateriaisAsync(); await CarregarFotosAsync();
+        }
         catch (NotSupportedException) { _indisponivel = true; }
         catch (Exception) { _erro = "Não foi possível carregar."; }
         finally { _a_carregar = false; }
@@ -156,6 +257,48 @@
         catch (Exception) { _materiais = []; }
     }
 
+    private async Task CarregarFotosAsync()
+    {
+        _fotos = []; _miniaturas.Clear();
+        if (_i is not { Estado: EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida }) return;
+        try
+        {
+            _fotos = await Intervencoes.ListarFotosAsync(Id);
+            foreach (var f in _fotos)
+                if (await Intervencoes.ObterFotoAsync(Id, f.Id) is { } dados) _miniaturas[f.Id] = "data:image/jpeg;base64," + Convert.ToBase64String(dados);
+        }
+        catch (Exception) { _erroFoto = "Não foi possível carregar as fotos."; }
+    }
+
+    // A foto é reduzida no próprio telemóvel (JPEG, lado maior 1600 px) antes de seguir.
+    private async Task AdicionarFotoAsync(InputFileChangeEventArgs e)
+    {
+        _erroFoto = "";
+        _a_gravar = true;
+        try
+        {
+            var reduzida = await e.File.RequestImageFileAsync("image/jpeg", RegrasFoto.LadoMaximo, RegrasFoto.LadoMaximo);
+            await using var fluxo = reduzida.OpenReadStream(RegrasFoto.MaxBytes);
+            using var memoria = new MemoryStream();
+            await fluxo.CopyToAsync(memoria);
+            await Intervencoes.AdicionarFotoAsync(Id, $"foto_{DateTime.Now:yyyyMMdd_HHmmss}", memoria.ToArray());
+            await RefrescarFichaAsync();
+            await CarregarFotosAsync();
+        }
+        catch (InvalidOperationException ex) { _erroFoto = ex.Message; }
+        catch (IOException) { _erroFoto = "A foto é demasiado grande. Tente outra vez."; }
+        catch (Exception) { _erroFoto = "Não foi possível guardar a foto. Tente outra vez."; }
+        finally { _a_gravar = false; }
+    }
+
+    private async Task ApagarFotoAsync(Foto f)
+    {
+        _a_gravar = true; _erroFoto = "";
+        try { await Intervencoes.ApagarFotoAsync(Id, f.Id); await RefrescarFichaAsync(); await CarregarFotosAsync(); }
+        catch (Exception) { _erroFoto = "Não foi possível tirar a foto. Tente outra vez."; }
+        finally { _a_gravar = false; }
+    }
+
     private async Task AdicionarMaterialAsync()
     {
         _erroMaterial = RegrasMaterial.Validar(_material, _qtt, _epv) ?? "";
@@ -165,6 +308,7 @@
         {
             await Intervencoes.AdicionarMaterialAsync(Id, _material.Trim(), _qtt!.Value, _epv ?? 0);
             _material = ""; _qtt = _epv = null;
+            await RefrescarFichaAsync();
             await CarregarMateriaisAsync();
         }
         catch (InvalidOperationException ex) { _erroMaterial = ex.Message; }
@@ -175,7 +319,7 @@
     private async Task ApagarMaterialAsync(Material m)
     {
         _a_gravar = true; _erroMaterial = "";
-        try { await Intervencoes.ApagarMaterialAsync(Id, m.Id); await CarregarMateriaisAsync(); }
+        try { await Intervencoes.ApagarMaterialAsync(Id, m.Id); await RefrescarFichaAsync(); await CarregarMateriaisAsync(); }
         catch (Exception) { _erroMaterial = "Não foi possível tirar o material. Tente outra vez."; }
         finally { _a_gravar = false; }
     }
@@ -192,7 +336,7 @@
     private async Task Gravar(Func<Task<Intervencao>> operacao)
     {
         _a_gravar = true; _erro = "";
-        try { Usar(await operacao()); await CarregarMateriaisAsync(); }
+        try { Usar(await operacao()); await CarregarMateriaisAsync(); await CarregarFotosAsync(); }
         catch (InvalidOperationException ex) { _erro = ex.Message; }
         catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
         finally { _a_gravar = false; }

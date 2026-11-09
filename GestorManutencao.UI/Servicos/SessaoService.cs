@@ -87,6 +87,9 @@ public static class ServicosExtensions
         services.AddSingleton<CicloVidaApp>().AddScoped<NotificacaoService>();
         services.TryAddSingleton<IAvisoSistema, AvisoSistemaNenhum>();
         services.TryAddSingleton<IArmazemAvisos, ArmazemAvisosMemoria>();
+        services.TryAddSingleton<IDitado, DitadoNenhum>();
+        services.TryAddScoped<Offline.IGestorOffline, Offline.GestorOfflineNenhum>();
+        services.TryAddSingleton<Offline.IAreaTransferencia, Offline.AreaTransferenciaNenhuma>();
         return services;
     }
 }

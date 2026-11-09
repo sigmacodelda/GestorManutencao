@@ -1,0 +1,101 @@
+@page "/por-rever"
+@implements IDisposable
+@inject SessaoService Sessao
+@inject IGestorOffline Offline
+@inject IAreaTransferencia Transferencia
+
+<PageTitle>Por rever · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Por rever</h1>
+    </div>
+
+    @if (!Sessao.TemSessao)
+    {
+        <p class="estado-lista" role="status">Entre para ver o que ficou por rever.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_avisos.Count == 0)
+    {
+        <p class="estado-lista" role="status">Não há nada por rever.</p>
+    }
+    else
+    {
+        <p class="estado-lista">Estes registos feitos sem rede não foram aceites. O que escreveu fica aqui para o poder copiar. Quando já não precisar, carregue em "Percebi".</p>
+        <ul class="rever">
+            @foreach (var a in _avisos)
+            {
+                var id = a.Id[..Math.Min(8, a.Id.Length)];
+                <li class="rever-item">
+                    <h2>@(string.IsNullOrWhiteSpace(a.Equipamento) ? "Registo sem rede" : a.Equipamento)</h2>
+                    <p role="alert">@a.Mensagem</p>
+                    @for (var n = 0; n < a.Textos.Count; n++)
+                    {
+                        var texto = a.Textos[n];
+                        var campo = $"texto-{id}-{n}";
+                        <div class="rever-texto">
+                            <label for="@campo">@texto.Rotulo</label>
+                            <textarea id="@campo" readonly rows="3">@texto.Texto</textarea>
+                            @if (_copiavel)
+                            {
+                                <button type="button" class="btn-texto" @onclick="() => CopiarAsync(texto.Texto)"><Icone Nome="copy" /><span>Copiar</span></button>
+                            }
+                        </div>
+                    }
+                    <div class="rever-acoes">
+                        <button type="button" class="btn btn-primario" @onclick="() => PercebiAsync(a)"><Icone Nome="check" /><span>Percebi</span></button>
+                    </div>
+                </li>
+            }
+        </ul>
+        <p class="@(_copiavel ? "campo-ok" : "campo-erro")" role="status">@_mensagem</p>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<AvisoConflito> _avisos = [];
+    private bool _a_carregar = true, _copiavel = true;
+    private string _mensagem = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Offline.Mudou += Atualizar;
+        await CarregarAsync();
+    }
+
+    private async Task CarregarAsync()
+    {
+        try { _avisos = Sessao.TemSessao ? await Offline.ListarAvisosAsync() : []; }
+        catch (Exception) { _avisos = []; }
+        _a_carregar = false;
+    }
+
+    private void Atualizar() => InvokeAsync(async () => { await CarregarAsync(); StateHasChanged(); });
+
+    private async Task PercebiAsync(AvisoConflito a)
+    {
+        _mensagem = "";
+        try { await Offline.DescartarConflitoAsync(a.Id); }
+        catch (Exception) { _mensagem = "Não foi possível guardar. Tente outra vez."; }
+        await CarregarAsync();
+    }
+
+    // Sem área de transferência no aparelho, o texto fica selecionável e o botão não aparece.
+    private async Task CopiarAsync(string texto)
+    {
+        _mensagem = "";
+        if (!await Transferencia.CopiarAsync(texto))
+        {
+            _copiavel = false;
+            _mensagem = "Não foi possível copiar. Toque no texto para o selecionar.";
+        }
+        else _mensagem = "Copiado.";
+    }
+
+    public void Dispose() => Offline.Mudou -= Atualizar;
+}

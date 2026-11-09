@@ -3,6 +3,7 @@
 @inject SessaoService Sessao
 @inject IIntervencoesService Intervencoes
 @inject NotificacaoService Notificacoes
+@inject IGestorOffline Offline
 @inject NavigationManager Nav
 
 <PageTitle>Início · Gestor de Manutenção</PageTitle>
@@ -27,10 +28,10 @@
             </div>
         </div>
 
-        @if (_contadores is { Count: > 0 })
+        @if (_contadores is { Count: > 0 } || Offline.Pendentes > 0 || Offline.Conflitos > 0)
         {
             <ul class="contadores" aria-label="Resumo">
-                @foreach (var c in _contadores)
+                @foreach (var c in Contadores())
                 {
                     <li>
                         <a class="contador @(c.Alerta && c.Valor > 0 ? "alerta-led" : "")" href="@c.Href">
@@ -76,25 +77,52 @@
             <Mosaico Icone="bell" Titulo="Notificações" Href="notificacoes" Contagem="Notificacoes.NaoLidas"
                      Descricao="@(Notificacoes.NaoLidas > 0 ? "Tem avisos novos" : "Sem avisos novos")" />
         </ul>
+        @if (_pendentesSaida > 0)
+        {
+            <ConfirmaSaida Pendentes="_pendentesSaida" Sair="TerminarSessaoAsync" Ficar="() => _pendentesSaida = 0" />
+        }
     </section>
 }
 
 @code {
     private sealed record Contador(string Rotulo, int Valor, string Href, bool Alerta = false);
     private List<Contador>? _contadores;
+    private int _pendentesSaida;
 
     protected override async Task OnInitializedAsync()
     {
         Notificacoes.Alterado += Atualizar;
+        Offline.Mudou += Atualizar;
         if (Sessao.TemSessao) await CarregarAsync();
     }
 
     private void Atualizar() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Notificacoes.Alterado -= Atualizar;
+    public void Dispose()
+    {
+        Notificacoes.Alterado -= Atualizar;
+        Offline.Mudou -= Atualizar;
+    }
 
+    // Os resumos do dia mais o que ficou por enviar e por rever neste telemóvel.
+    private IEnumerable<Contador> Contadores()
+    {
+        foreach (var c in _contadores ?? []) yield return c;
+        if (Offline.Pendentes > 0) yield return new("Por enviar", Offline.Pendentes, "intervencoes");
+        if (Offline.Conflitos > 0) yield return new("Por rever", Offline.Conflitos, "por-rever", true);
+    }
+
+    // Com registos por enviar pede confirmação; a fila fica guardada e segue quando o mesmo utilizador voltar a entrar.
     private async Task Sair()
     {
+        var pendentes = await Offline.ContarPendentesAsync();
+        if (pendentes > 0) { _pendentesSaida = pendentes; return; }
+        await TerminarSessaoAsync();
+    }
+
+    private async Task TerminarSessaoAsync()
+    {
+        _pendentesSaida = 0;
         await Sessao.SairAsync();
         Nav.NavigateTo("login", replace: true);
     }

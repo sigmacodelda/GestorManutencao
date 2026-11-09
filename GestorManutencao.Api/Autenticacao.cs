@@ -43,7 +43,7 @@ public sealed class JwtOpcoes
     public string Chave { get; set; } = "";
     public string Emissor { get; set; } = "GestorManutencao.Api";
     public string Audiencia { get; set; } = "GestorManutencao.App";
-    public int HorasValidade { get; set; } = 10;
+    public int HorasValidade { get; set; } = 336;
 }
 
 public sealed class PinOpcoes

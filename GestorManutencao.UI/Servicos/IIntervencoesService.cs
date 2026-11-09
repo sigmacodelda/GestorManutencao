@@ -24,6 +24,11 @@ public interface IIntervencoesService
     Task<IReadOnlyList<Material>> ListarMateriaisAsync(string id, CancellationToken ct = default);
     Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, CancellationToken ct = default);
     Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default);
+    // Fotos da intervenção (JPEG): o técnico junta e apaga com a ficha em curso; o supervisor só vê.
+    Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default);
+    Task<byte[]?> ObterFotoAsync(string id, string fotoId, CancellationToken ct = default);
+    Task<Foto> AdicionarFotoAsync(string id, string nome, byte[] jpeg, CancellationToken ct = default);
+    Task ApagarFotoAsync(string id, string fotoId, CancellationToken ct = default);
     // Só para supervisores: todas as fichas, filtradas e por páginas (pagina começa em 1).
     Task<PaginaFichas> ListarTodasAsync(FiltroFichas filtro, int pagina, CancellationToken ct = default);
     // Só para supervisores: configuração da manutenção. Guardar lança InvalidOperationException com a mensagem a mostrar se o servidor recusar os valores.
@@ -44,6 +49,8 @@ public static class MensagensIntervencao
         "fora_de_ordem" => "Há intervenções mais antigas nesta zona. Comece pela primeira da lista.",
         "externa_sem_documento" => "Falta o fornecedor ou o documento externo. Peça ao supervisor para os indicar no PHC.",
         "propria" => "Não pode validar uma intervenção feita por si.",
+        "sem_material" => "Indique o material usado antes de concluir.",
+        "limite_fotos" => $"No máximo {RegrasFoto.Max} fotos por intervenção.",
         _ => Mudou
     };
 }
@@ -136,7 +143,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         return Alterar(id, EstadoIntervencao.EmCurso, i => i with
         {
             Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null
-        });
+        }, () => _configuracao.ExigeMaterial && !(_materiais.GetValueOrDefault(id)?.Count > 0) ? throw new InvalidOperationException(MensagensIntervencao.Para("sem_material")) : null);
     }
 
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default)
@@ -189,6 +196,37 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     public Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
     {
         lock (_trinco) _materiais.GetValueOrDefault(id)?.RemoveAll(m => m.Id == materialId);
+        return Task.CompletedTask;
+    }
+
+    private readonly Dictionary<string, List<(Foto Foto, byte[] Dados)>> _fotos = [];
+
+    public Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Foto>>(_fotos.GetValueOrDefault(id)?.Select(f => f.Foto).ToList() ?? []);
+    }
+
+    public Task<byte[]?> ObterFotoAsync(string id, string fotoId, CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult(_fotos.GetValueOrDefault(id)?.FirstOrDefault(f => f.Foto.Id == fotoId).Dados);
+    }
+
+    public Task<Foto> AdicionarFotoAsync(string id, string nome, byte[] jpeg, CancellationToken ct = default)
+    {
+        lock (_trinco)
+        {
+            if (_lista.FirstOrDefault(i => i.Id == id) is not { Estado: EstadoIntervencao.EmCurso }) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            if (!_fotos.TryGetValue(id, out var lista)) _fotos[id] = lista = [];
+            if (lista.Count >= RegrasFoto.Max) throw new InvalidOperationException(MensagensIntervencao.Para("limite_fotos"));
+            var foto = new Foto(Guid.NewGuid().ToString("N"), nome, jpeg.Length);
+            lista.Add((foto, jpeg));
+            return Task.FromResult(foto);
+        }
+    }
+
+    public Task ApagarFotoAsync(string id, string fotoId, CancellationToken ct = default)
+    {
+        lock (_trinco) _fotos.GetValueOrDefault(id)?.RemoveAll(f => f.Foto.Id == fotoId);
         return Task.CompletedTask;
     }
 
@@ -266,12 +304,13 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         lock (_trinco) return Task.FromResult(_configuracao = configuracao);
     }
 
-    private Task<Intervencao> Alterar(string id, EstadoIntervencao? esperado, Func<Intervencao, Intervencao> mudar)
+    private Task<Intervencao> Alterar(string id, EstadoIntervencao? esperado, Func<Intervencao, Intervencao> mudar, Func<object?>? extra = null)
     {
         lock (_trinco)
         {
             var pos = _lista.FindIndex(i => i.Id == id);
             if (pos < 0 || (esperado is not null && _lista[pos].Estado != esperado)) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            extra?.Invoke();
             _lista[pos] = mudar(_lista[pos]);
             return Task.FromResult(_lista[pos]);
         }
@@ -295,6 +334,10 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<IReadOnlyList<Material>> ListarMateriaisAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, CancellationToken ct = default) => throw new NotSupportedException();
     public Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<byte[]?> ObterFotoAsync(string id, string fotoId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Foto> AdicionarFotoAsync(string id, string nome, byte[] jpeg, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task ApagarFotoAsync(string id, string fotoId, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Equipamento>> PesquisarAsync(string texto, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Equipamento>> ListarAsync(FiltroEquipamentos filtro, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<FichaEquipamento?> ObterFichaAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();

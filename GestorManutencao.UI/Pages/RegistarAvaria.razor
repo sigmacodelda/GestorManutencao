@@ -2,6 +2,7 @@
 @inject IIntervencoesService Intervencoes
 @inject IEquipamentosService Equipamentos
 @inject NavigationManager Nav
+@inject IGestorOffline Offline
 
 <PageTitle>Registar avaria · Gestor de Manutenção</PageTitle>
 
@@ -11,6 +12,17 @@
         <h1 tabindex="-1">Registar avaria</h1>
     </div>
 
+    @if (_guardadoSemRede)
+    {
+        <div class="sucesso" role="status">
+            <span class="sucesso-icone"><Icone Nome="circle-check" /></span>
+            <p class="sucesso-titulo">Guardado.</p>
+            <p class="sucesso-desc">Será enviado quando houver rede.</p>
+            <a class="btn btn-primario btn-grande" href="intervencoes"><span>Ver as minhas intervenções</span></a>
+        </div>
+    }
+    else
+    {
     <form class="formulario" @onsubmit="GuardarAsync" novalidate>
         <div class="campo">
             <label for="equipamento">Equipamento</label>
@@ -29,24 +41,36 @@
                     }
                 </ul>
             }
+            else if (_semResultados)
+            {
+                <p class="campo-erro" role="status">Não encontrei este equipamento na lista guardada neste telemóvel. Quando houver rede, tente outra vez.</p>
+            }
         </div>
 
         <div class="campo">
             <label for="anomalia">Qual é o problema?</label>
-            <textarea id="anomalia" rows="4" maxlength="200" @bind="_anomalia" @bind:event="oninput"></textarea>
+            <textarea id="anomalia" rows="4" maxlength="@Max" @bind="_anomalia" @bind:event="oninput" aria-describedby="contador-avaria"></textarea>
+            <span id="contador-avaria" class="campo-contador @(_anomalia.Length >= Max ? "no-limite" : "")" aria-live="polite">
+                @(_anomalia.Length >= Max ? $"Chegou ao limite de {Max} letras." : $"{_anomalia.Length} de {Max} letras")
+            </span>
+            <Microfone @bind-Texto="_anomalia" MaxLength="Max" />
         </div>
 
         <p id="erro-avaria" class="campo-erro" role="alert">@_erro</p>
 
         <button type="submit" class="btn btn-primario" disabled="@_a_guardar">@(_a_guardar ? "A guardar…" : "Guardar avaria")</button>
     </form>
+    }
 </section>
 
 @code {
     private string _texto = "", _anomalia = "", _erro = "";
     private IReadOnlyList<Equipamento> _opcoes = [];
     private Equipamento? _escolhido;
-    private bool _a_guardar;
+    private bool _a_guardar, _guardadoSemRede, _semResultados;
+
+    // Com o identificador da operação (avaria registada sem rede) o texto tem este limite.
+    private const int Max = RegrasIntervencao.MaxAnomaliaComOpId;
 
     private CancellationTokenSource? _espera;
 
@@ -56,6 +80,7 @@
         _texto = e.Value?.ToString() ?? "";
         _escolhido = null;
         _erro = "";
+        _semResultados = false;
         _espera?.Cancel();
         _espera = new CancellationTokenSource();
         var cancelamento = _espera.Token;
@@ -65,7 +90,11 @@
             await Task.Delay(300, cancelamento);
             var texto = _texto;
             var encontrados = await Equipamentos.PesquisarAsync(texto, cancelamento);
-            if (!cancelamento.IsCancellationRequested) _opcoes = encontrados;
+            if (!cancelamento.IsCancellationRequested)
+            {
+                _opcoes = encontrados;
+                _semResultados = encontrados.Count == 0 && Offline.SemLigacao && RegrasPesquisa.TextoValido(texto) && texto.Trim().Length > 0;
+            }
         }
         catch (OperationCanceledException) { /* veio outra tecla */ }
         catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
@@ -82,8 +111,9 @@
         _a_guardar = true;
         try
         {
-            await Intervencoes.RegistarAvariaAsync(_escolhido!.Id, _anomalia);
-            Nav.NavigateTo("intervencoes");
+            var ficha = await Intervencoes.RegistarAvariaAsync(_escolhido!.Id, _anomalia);
+            if (ficha.Pendente) _guardadoSemRede = true;
+            else Nav.NavigateTo("intervencoes");
         }
         catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
         catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }

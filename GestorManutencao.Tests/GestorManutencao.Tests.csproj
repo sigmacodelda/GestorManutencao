@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\GestorManutencao.UI\GestorManutencao.UI.csproj" />
     <ProjectReference Include="..\GestorManutencao.Api\GestorManutencao.Api.csproj" />
+    <ProjectReference Include="..\GestorManutencao.Armazenamento\GestorManutencao.Armazenamento.csproj" />
   </ItemGroup>
 
 </Project>

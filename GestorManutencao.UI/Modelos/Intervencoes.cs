@@ -25,7 +25,8 @@ public sealed record Intervencao(
     DateOnly? UltimaIntervencao = null,
     DateOnly? UltimaCancelada = null,
     DateOnly? DataPrevista = null,
-    bool PodeAbrir = false, string? Motivo = null)
+    bool PodeAbrir = false, string? Motivo = null,
+    bool Pendente = false)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
@@ -59,7 +60,8 @@ public sealed record FiltroFichas(EstadoIntervencao? Estado = null, DateOnly? De
 public sealed record PaginaFichas(IReadOnlyList<Intervencao> Itens, bool TemMais);
 
 public sealed record ConfiguracaoManutencao(
-    int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false, bool ExtExigeDoc = true, bool ComprasFichaInt = true);
+    int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false, bool ExtExigeDoc = true, bool ComprasFichaInt = true,
+    bool ExigeMaterial = false);
 
 public static class RegrasConfiguracao
 {
@@ -83,6 +85,14 @@ public static class RegrasPesquisa
 
 public sealed record Material(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo);
 
+public sealed record Foto(string Id, string Nome, int Bytes);
+
+public static class RegrasFoto
+{
+    // Mesmos limites do servidor: 10 fotos por intervenção, até 3 MB cada (a app comprime antes de enviar).
+    public const int Max = 10, MaxBytes = 3 * 1024 * 1024, LadoMaximo = 1600;
+}
+
 public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros);
 
 public static class RegrasMaterial
@@ -104,10 +114,13 @@ public static class RegrasIntervencao
     // Limites das colunas da ficha de intervenção no PHC.
     public const int MaxAnomalia = 200, MaxFeito = 254;
 
+    // Com o identificador da operação (avaria registada sem rede) o servidor guarda no máximo 200 - 6 - 32 letras; a UI usa sempre este limite.
+    public const int MaxAnomaliaComOpId = 162;
+
     public static string? ValidarAvaria(string? equipamento, string? anomalia) =>
         string.IsNullOrWhiteSpace(equipamento) ? "Escolha o equipamento."
         : string.IsNullOrWhiteSpace(anomalia) ? "Descreva o problema."
-        : anomalia.Trim().Length > MaxAnomalia ? $"Escreva menos: no máximo {MaxAnomalia} letras."
+        : anomalia.Trim().Length > MaxAnomaliaComOpId ? $"Escreva menos: no máximo {MaxAnomaliaComOpId} letras."
         : null;
 
     public static string? ValidarConclusao(string? feito, TimeOnly? inicio, TimeOnly? fim) =>

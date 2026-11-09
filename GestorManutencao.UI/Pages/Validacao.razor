@@ -71,6 +71,7 @@
                             <div class="campo ficha-texto">
                                 <label for="motivo-@f.Id">Porque devolve?</label>
                                 <textarea id="motivo-@f.Id" rows="2" maxlength="254" @bind="_motivo" @bind:event="oninput"></textarea>
+                                <Microfone @bind-Texto="_motivo" MaxLength="254" />
                             </div>
                             <div class="ficha-acoes">
                                 <button type="button" class="btn" disabled="@(_ocupado || string.IsNullOrWhiteSpace(_motivo))" @onclick="() => DevolverAsync(f)">

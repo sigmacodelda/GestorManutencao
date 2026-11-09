@@ -3,10 +3,32 @@
 @inject SessaoService Sessao
 @inject NavigationManager Nav
 @inject NotificacaoService Notificacoes
+@inject IGestorOffline Offline
 
 @if (_pronto && Sessao.TemSessao)
 {
     <div class="shell">
+        @if (Offline.SemLigacao || Offline.TextoDados is not null || Offline.Estado != EstadoSincronizacao.Sincronizado)
+        {
+            <div class="faixa-estado" role="status" aria-live="polite">
+                @if (Offline.SemLigacao || Offline.TextoDados is not null)
+                {
+                    <span class="faixa-estado-item"><Icone Nome="wifi-off" /><span>Sem ligação. @(Offline.TextoDados ?? "Pode continuar a trabalhar.")</span></span>
+                }
+                @if (Offline.Estado == EstadoSincronizacao.ASincronizar)
+                {
+                    <span class="faixa-estado-item"><Icone Nome="refresh-cw" /><span>A enviar…</span></span>
+                }
+                else if (Offline.Pendentes > 0)
+                {
+                    <span class="faixa-estado-item"><Icone Nome="clock" /><span>@Offline.Pendentes por enviar</span></span>
+                }
+                @if (Offline.Conflitos > 0)
+                {
+                    <a class="faixa-estado-item faixa-estado-rever" href="por-rever"><Icone Nome="triangle-alert" /><span>@Offline.Conflitos por rever</span></a>
+                }
+            </div>
+        }
         @if (_faixa is { } faixa)
         {
             <div class="faixa-aviso" role="status" aria-live="polite">
@@ -17,9 +39,9 @@
                 <button type="button" class="faixa-fechar" aria-label="Fechar aviso" @onclick="FecharFaixa"><Icone Nome="x" /></button>
             </div>
         }
-        <header class="topo">
+        <header class="topo @(Sessao.Utilizador is { PinProvisorio: false } ? "so-largo" : "")">
             <Logo />
-            <div class="topo-direita @(Sessao.Utilizador is { PinProvisorio: false } ? "so-largo" : "")">
+            <div class="topo-direita">
                 <span class="utilizador" title="@Sessao.Utilizador!.Nome">
                     <span class="avatar" aria-hidden="true">@Sessao.Utilizador.Iniciais</span>
                     <span class="utilizador-nome">@Sessao.Utilizador.Nome</span>
@@ -68,11 +90,16 @@
             }
             <div class="conteudo-wrap">@Body</div>
         </div>
+        @if (_pendentesSaida > 0)
+        {
+            <ConfirmaSaida Pendentes="_pendentesSaida" Sair="TerminarSessaoAsync" Ficar="() => _pendentesSaida = 0" />
+        }
     </div>
 }
 
 @code {
     private bool _pronto;
+    private int _pendentesSaida;
     private Aviso? _faixa;
     private CancellationTokenSource? _faixaCts;
 
@@ -81,10 +108,11 @@
         Sessao.Alterada += Atualizar;
         Notificacoes.Alterado += Atualizar;
         Notificacoes.AvisoNaApp += MostrarFaixa;
+        Offline.Mudou += Atualizar;
         await Sessao.RestaurarAsync();
         _pronto = true;
         if (!Sessao.TemSessao) Nav.NavigateTo("login", replace: true);
-        else Notificacoes.Iniciar();
+        else { Notificacoes.Iniciar(); Offline.Iniciar(); }
     }
 
     private void MostrarFaixa(Aviso aviso) => InvokeAsync(async () =>
@@ -105,8 +133,17 @@
         _faixa = null;
     }
 
+    // Com registos por enviar pede confirmação; a fila fica guardada e segue quando o mesmo utilizador voltar a entrar.
     private async Task Sair()
     {
+        var pendentes = await Offline.ContarPendentesAsync();
+        if (pendentes > 0) { _pendentesSaida = pendentes; return; }
+        await TerminarSessaoAsync();
+    }
+
+    private async Task TerminarSessaoAsync()
+    {
+        _pendentesSaida = 0;
         await Sessao.SairAsync();
         Nav.NavigateTo("login", replace: true);
     }
@@ -125,6 +162,7 @@
         Sessao.Alterada -= Atualizar;
         Notificacoes.Alterado -= Atualizar;
         Notificacoes.AvisoNaApp -= MostrarFaixa;
+        Offline.Mudou -= Atualizar;
         _faixaCts?.Cancel();
     }
 }

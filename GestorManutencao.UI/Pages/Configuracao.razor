@@ -65,6 +65,12 @@
                 <span class="interruptor-texto">Contar as compras ligadas nos totais da ficha</span>
             </label>
 
+            <label class="interruptor">
+                <input type="checkbox" role="switch" @bind="_exigeMaterial" />
+                <span class="interruptor-trilho" aria-hidden="true"></span>
+                <span class="interruptor-texto">Exigir o material usado para concluir uma ficha</span>
+            </label>
+
             <p id="cfg-erro" class="campo-erro" role="alert">@_erro</p>
             @if (_guardada)
             {
@@ -77,7 +83,7 @@
 
 @code {
     private string _antecedencia = "", _erro = "";
-    private bool _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt;
+    private bool _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt, _exigeMaterial;
     private bool _a_carregar = true, _falhou, _indisponivel, _a_guardar, _guardada;
 
     protected override async Task OnInitializedAsync()
@@ -99,7 +105,7 @@
     {
         _antecedencia = c.Antecedencia.ToString();
         _gerarPlaneadas = c.GerarPlaneadas; _avancaOrdem = c.AvancaOrdem; _validarPropria = c.ValidarPropria;
-        _extExigeDoc = c.ExtExigeDoc; _comprasFichaInt = c.ComprasFichaInt;
+        _extExigeDoc = c.ExtExigeDoc; _comprasFichaInt = c.ComprasFichaInt; _exigeMaterial = c.ExigeMaterial;
     }
 
     private async Task GuardarAsync()
@@ -111,7 +117,7 @@
         _a_guardar = true;
         try
         {
-            Aplicar(await Intervencoes.GuardarConfiguracaoAsync(new ConfiguracaoManutencao(dias!.Value, _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt)));
+            Aplicar(await Intervencoes.GuardarConfiguracaoAsync(new ConfiguracaoManutencao(dias!.Value, _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt, _exigeMaterial)));
             _guardada = true;
         }
         catch (InvalidOperationException ex) { _erro = ex.Message; }
