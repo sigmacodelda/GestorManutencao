@@ -19,6 +19,8 @@ public interface IIntervencoesService
     // Só para supervisores: planeadas e em curso de todos, atribuição de técnico (tecno 0 = sem dono) e geração das planeadas.
     Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default);
     Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default);
+    // Só para supervisores: técnicos adicionais da intervenção (substitui a lista; o principal é ignorado).
+    Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default);
     Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default);
     // Material usado na ficha (só se lança com a ficha em curso).
     Task<IReadOnlyList<Material>> ListarMateriaisAsync(string id, CancellationToken ct = default);
@@ -168,8 +170,15 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default)
     {
         var nome = tecno switch { 101 => "Operador de Teste", 102 => "Novo Operador de Teste", _ => null };
-        return Alterar(id, null, i => i.PorFazer ? i with { Tecno = tecno, Tecnico = tecno == 0 ? null : nome } : throw new InvalidOperationException(MensagensIntervencao.Mudou));
+        return Alterar(id, null, i => i.PorFazer ? i with { Tecno = tecno, Tecnico = tecno == 0 ? null : nome, Adicionais = tecno == 0 ? null : i.OutrosTecnicos.Where(a => a.Tecno != tecno).ToList() is { Count: > 0 } l ? l : null } : throw new InvalidOperationException(MensagensIntervencao.Mudou));
     }
+
+    public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) =>
+        Alterar(id, null, i => i.PorFazer && i.Tecno > 0
+            ? i with { Adicionais = tecnos.Distinct().Where(t => t != i.Tecno).Order().Select(t => new TecnicoFicha(t, NomeDev(t))).ToList() is { Count: > 0 } l ? l : null }
+            : throw new InvalidOperationException(MensagensIntervencao.Mudou));
+
+    private static string NomeDev(int tecno) => tecno switch { 100 => "Chefe de Turno", 101 => "Operador de Teste", 102 => "Novo Operador de Teste", _ => "PHC " + tecno };
 
     public Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default) => Task.FromResult(new RelatorioGeracao(0, _lista.Count(i => i.PorFazer), 0, 0));
 
@@ -285,7 +294,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
             var todas = _lista
                 .Where(i => (filtro.Estado is null || i.Estado == filtro.Estado)
                     && (filtro.Desde is null || i.DataPlaneada >= filtro.Desde) && (filtro.Ate is null || i.DataPlaneada <= filtro.Ate)
-                    && (filtro.Tecno == 0 || i.Tecno == filtro.Tecno)
+                    && (filtro.Tecno == 0 || i.Envolve(filtro.Tecno))
                     && (texto.Length == 0 || Contem(i.Equipamento, texto) || Contem(i.Anomalia ?? "", texto) || Contem(i.Feito ?? "", texto) || Contem(i.Tecnico ?? "", texto)))
                 .OrderByDescending(i => i.DataPlaneada).ThenByDescending(i => i.Id).ToList();
             var itens = todas.Skip((Math.Max(pagina, 1) - 1) * PorPagina).Take(PorPagina).Select(i => i with { PodeAbrir = true }).ToList();
@@ -330,6 +339,7 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Material>> ListarMateriaisAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, CancellationToken ct = default) => throw new NotSupportedException();

@@ -26,9 +26,16 @@ public sealed record Intervencao(
     DateOnly? UltimaCancelada = null,
     DateOnly? DataPrevista = null,
     bool PodeAbrir = false, string? Motivo = null,
-    bool Pendente = false)
+    bool Pendente = false,
+    IReadOnlyList<TecnicoFicha>? Adicionais = null)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
+
+    // Técnicos além do principal (omissão = nenhum; fichas antigas na cache não os têm).
+    public IReadOnlyList<TecnicoFicha> OutrosTecnicos => Adicionais ?? [];
+
+    // O técnico é o principal ou um dos adicionais.
+    public bool Envolve(int tecno) => tecno > 0 && (Tecno == tecno || OutrosTecnicos.Any(a => a.Tecno == tecno));
 
     // Derivado, nunca gravado: o estado "atrasada" depende só da data de hoje.
     public bool EstaAtrasada(DateOnly hoje) => PorFazer && DataPlaneada < hoje;
@@ -36,6 +43,9 @@ public sealed record Intervencao(
     // A data em que devia ter sido feita (última + periodicidade) já passou, mesmo que a planeada esteja para hoje.
     public bool ForaDePrazo(DateOnly hoje) => PorFazer && DataPrevista is { } p && p < hoje;
 }
+
+// Técnico adicional da intervenção (o nome vem resolvido da API).
+public sealed record TecnicoFicha(int Tecno, string Nome);
 
 // Id, Nome e Zona bastam à pesquisa da avaria; o resto serve à lista e à ficha de equipamentos.
 public sealed record Equipamento(

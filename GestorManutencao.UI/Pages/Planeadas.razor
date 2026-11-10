@@ -58,7 +58,7 @@
                         var atrasada = f.EstaAtrasada(_hoje) || foraDePrazo;
                         <li class="intervencao @(atrasada ? "atrasada" : "")">
                             <span class="intervencao-titulo">@f.Equipamento</span>
-                            <span class="intervencao-desc">@(f.Tecno == 0 ? "Sem técnico" : f.Tecnico ?? "PHC " + f.Tecno)</span>
+                            <span class="intervencao-desc">@(f.Tecno == 0 ? "Sem técnico" : f.Tecnico ?? "PHC " + f.Tecno)@(f.OutrosTecnicos.Count > 0 ? " + " + string.Join(", ", f.OutrosTecnicos.Select(a => a.Nome)) : "")</span>
                             <span class="chips">
                                 @if (foraDePrazo) { <span class="chip chip-erro">Fora de prazo</span> }
                                 else if (atrasada) { <span class="chip chip-erro">Atrasada</span> }
@@ -89,6 +89,30 @@
                                     }
                                 </select>
                             </div>
+                            @if (f.Tecno > 0)
+                            {
+                                <details class="filtros-bloco ficha-texto">
+                                    <summary>Outros técnicos@(f.OutrosTecnicos.Count > 0 ? $" ({f.OutrosTecnicos.Count})" : "")</summary>
+                                    <div class="filtros">
+                                        @foreach (var a in f.OutrosTecnicos.Where(a => !_tecnicos.Any(t => t.Tecno == a.Tecno)))
+                                        {
+                                            <label class="opcao-caixa" for="adic-@f.Id-@a.Tecno">
+                                                <input id="adic-@f.Id-@a.Tecno" type="checkbox" disabled="@_ocupado" checked="true"
+                                                       @onchange="e => AlternarAdicionalAsync(f, a.Tecno, e.Value is true)" />
+                                                <span>@a.Nome</span>
+                                            </label>
+                                        }
+                                        @foreach (var t in _tecnicos.Where(t => t.Tecno != f.Tecno))
+                                        {
+                                            <label class="opcao-caixa" for="adic-@f.Id-@t.Tecno">
+                                                <input id="adic-@f.Id-@t.Tecno" type="checkbox" disabled="@_ocupado" checked="@f.OutrosTecnicos.Any(a => a.Tecno == t.Tecno)"
+                                                       @onchange="e => AlternarAdicionalAsync(f, t.Tecno, e.Value is true)" />
+                                                <span>@t.Nome</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </details>
+                            }
                         </li>
                     }
                 </ul>
@@ -161,6 +185,31 @@
             _erro = ex.Message;
         }
         catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _ocupado = false; }
+    }
+
+    private async Task AlternarAdicionalAsync(Intervencao f, int tecno, bool marcado)
+    {
+        _ocupado = true; _aviso = _erro = null;
+        try
+        {
+            var novos = f.OutrosTecnicos.Select(a => a.Tecno).Where(t => t != tecno).ToList();
+            if (marcado) novos.Add(tecno);
+            var nova = await Intervencoes.DefinirAdicionaisAsync(f.Id, novos);
+            var pos = _fichas.FindIndex(x => x.Id == f.Id);
+            if (pos >= 0) _fichas[pos] = nova;
+            _aviso = $"{f.Equipamento}: técnicos atualizados.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            await CarregarAsync();
+            _erro = ex.Message;
+        }
+        catch (Exception)
+        {
+            await CarregarAsync();
+            _erro = "Não foi possível guardar. Tente outra vez.";
+        }
         finally { _ocupado = false; }
     }
 

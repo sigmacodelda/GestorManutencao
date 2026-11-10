@@ -10,13 +10,16 @@ public enum EstadoIntervencao { Planeada, EmCurso, Concluida, Validada, Cancelad
 public enum TipoIntervencao { Preventiva, Curativa }
 
 // Última, Cancelada e DataPrevista só vêm nas planeadas. Tecno é o número de utilizador do PHC de quem tem a ficha (0 = sem dono). PodeValidar só conta na lista de validação.
-// Motivo só vem nas fichas devolvidas pelo supervisor (em curso com observação gravada).
+// Motivo só vem nas fichas devolvidas pelo supervisor (em curso com observação gravada). Adicionais: técnicos além do principal (omissão = nenhum).
 public sealed record IntervencaoDto(
     string Id, string Equipamento, string Zona, TipoIntervencao Tipo, DateOnly DataPlaneada, EstadoIntervencao Estado,
     string? Anomalia = null, string? Feito = null, TimeOnly? HoraInicio = null, TimeOnly? HoraFim = null,
     string? Tecnico = null, int Tecno = 0, bool PodeValidar = true,
     DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null,
-    bool PodeAbrir = false, string? Motivo = null);
+    bool PodeAbrir = false, string? Motivo = null, IReadOnlyList<TecnicoFichaDto>? Adicionais = null);
+
+// Técnico adicional da intervenção: o número vem do memo tecnos da ficha e o nome resolve-se na API (nunca fica gravado na ficha).
+public sealed record TecnicoFichaDto(int Tecno, string Nome);
 
 // Id, Nome e Zona bastam à pesquisa da avaria; o resto serve à lista e à ficha de equipamentos.
 public sealed record EquipamentoDto(
@@ -54,9 +57,11 @@ public sealed record PedidoDevolucao(string? Motivo);
 
 public sealed record PedidoAtribuicao(int? Tecno);
 
+public sealed record PedidoAdicionais(IReadOnlyList<int>? Tecnos);
+
 public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros);
 
-public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, SemMaterial, LimiteFotos }
+public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, SemMaterial, LimiteFotos, TecnicoInvalido }
 
 // O nome vai em tecnome (45); nas colunas de auditoria vai o código (30); a identidade da pessoa nas fichas é o Tecno.
 public sealed record TecnicoAtual(string Codigo, int Tecno, string Nome);
@@ -64,6 +69,39 @@ public sealed record TecnicoAtual(string Codigo, int Tecno, string Nome);
 public static class RegrasIntervencao
 {
     public const int MaxAnomalia = 200, MaxFeito = 254;
+
+    // Técnicos adicionais: memo tecnos de u_fichaint com os números entre ponto e vírgula (";12;45;", vazio = nenhum); nunca inclui o principal.
+    public const string ColunaTecnos = "tecnos";
+    public const int MaxTecnoPhc = 99999, MaxAdicionais = 50;
+
+    // Tolerante a lixo: ignora o que não for número entre 1 e 99999; sem duplicados e ordenado.
+    public static IReadOnlyList<int> LerTecnos(string? texto) =>
+        (texto ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(p => int.TryParse(p, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 0)
+            .Where(n => n is >= 1 and <= MaxTecnoPhc).Distinct().Order().ToList();
+
+    public static string EscreverTecnos(IEnumerable<int> tecnos, int principal = 0)
+    {
+        var lista = tecnos.Where(n => n is >= 1 and <= MaxTecnoPhc && n != principal).Distinct().Order().ToList();
+        return lista.Count == 0 ? "" : ";" + string.Join(';', lista) + ";";
+    }
+
+    public static bool EstaNaLista(string? texto, int tecno) => tecno > 0 && LerTecnos(texto).Contains(tecno);
+
+    // Padrão do LIKE sobre o memo: ";12;" nunca apanha ";123;".
+    public static string PadraoTecno(int tecno) => $"%;{tecno};%";
+
+    // Principal ou adicional.
+    public static bool PertenceAFicha(int principal, string? tecnos, int tecno) => tecno > 0 && (principal == tecno || EstaNaLista(tecnos, tecno));
+
+    // Pode mexer na ficha: é do técnico (principal ou adicional) ou ainda não tem dono.
+    public static bool PodeMexer(int principal, string? tecnos, int tecno) => principal == 0 || PertenceAFicha(principal, tecnos, tecno);
+
+    public static IReadOnlyList<TecnicoFichaDto>? AdicionaisDe(string? tecnos, int principal) =>
+        LerTecnos(tecnos).Where(n => n != principal).Select(n => new TecnicoFichaDto(n, "")).ToList() is { Count: > 0 } l ? l : null;
+
+    public static bool Envolve(IntervencaoDto ficha, int tecno) =>
+        tecno > 0 && (ficha.Tecno == tecno || ficha.Adicionais?.Any(a => a.Tecno == tecno) == true);
 
     // Marcador gravado no fim do problema: " [op:" + OpId + "]". Com o OpId máximo o texto fica em 200 - 6 - 32 = 162 caracteres.
     public const int MinOpId = 8, MaxOpId = 32, MaxAnomaliaComOpId = MaxAnomalia - 6 - MaxOpId;
@@ -141,6 +179,8 @@ public interface IRepositorioIntervencoes
     // Supervisor: planeadas e em curso de todos, atribuição de técnico (tecno 0 = sem dono) e geração das planeadas.
     Task<IReadOnlyList<IntervencaoDto>> ListarPlaneadasAsync(CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> AtribuirAsync(string id, int tecno, string nome, TecnicoAtual supervisor, CancellationToken ct);
+    // Técnicos adicionais (substitui a lista); só os números novos têm de estar em `ativos` (TecnicoInvalido se não); o principal é ignorado e só valem fichas por fazer e não fechadas, com técnico principal.
+    Task<(ResultadoIntervencao, IntervencaoDto?)> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, IReadOnlySet<int> ativos, TecnicoAtual supervisor, CancellationToken ct);
     Task<RelatorioGeracao> GerarPlaneadasAsync(TecnicoAtual supervisor, CancellationToken ct);
 
     // Supervisor: todas as fichas, filtradas e paginadas (PodeAbrir diz se o supervisor pode abrir a ficha no detalhe); configuração (u_configman).
@@ -171,7 +211,7 @@ public static class EndpointsIntervencoes
             if ((rotas.TryGetValue("id", out var id) && id?.ToString()?.Length > 25)
                 || (rotas.TryGetValue("materialId", out var mat) && mat?.ToString()?.Length > 25)
                 || (rotas.TryGetValue("fotoId", out var foto) && foto?.ToString()?.Length > 25)) return Results.NotFound();
-            try { return await next(ctx); }
+            try { return await ComNomesAsync(await next(ctx), ctx.HttpContext); }
             catch (RepositorioIndisponivelException) { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
         });
 
@@ -335,6 +375,45 @@ public static class EndpointsIntervencoes
                     }
                     return Resposta(await repo.AtribuirAsync(id, p.Tecno!.Value, nome, s, ct));
                 })).RequireAuthorization("Supervisor");
+
+        g.MapPut("/planeadas/{id}/tecnicos", (string id, PedidoAdicionais p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            p.Tecnos is null || p.Tecnos.Count > RegrasIntervencao.MaxAdicionais || p.Tecnos.Any(t => t is < 1 or > RegrasIntervencao.MaxTecnoPhc)
+                ? Task.FromResult(Results.BadRequest())
+                : ComoSupervisor(eu, utilizadores, ct, async s =>
+                {
+                    var pedidos = p.Tecnos.Distinct().ToList();
+                    var ativos = (await utilizadores.ListarAsync(ct)).Where(u => u.Ativo && u.Tecno > 0).Select(u => u.Tecno).ToHashSet();
+                    return Resposta(await repo.DefinirAdicionaisAsync(id, pedidos, ativos, s, ct));
+                })).RequireAuthorization("Supervisor");
+    }
+
+    // Os nomes dos adicionais resolvem-se aqui (a ficha só guarda os números).
+    private static async Task<object?> ComNomesAsync(object? resultado, HttpContext http)
+    {
+        if (resultado is not IValueHttpResult { Value: { } valor }) return resultado;
+        static bool Tem(IntervencaoDto i) => i.Adicionais is { Count: > 0 };
+        var precisa = valor switch
+        {
+            IntervencaoDto i => Tem(i),
+            IReadOnlyList<IntervencaoDto> l => l.Any(Tem),
+            PaginaFichasDto pg => pg.Itens.Any(Tem),
+            FichaEquipamentoDto f => f.Historico.Any(Tem),
+            _ => false
+        };
+        if (!precisa) return resultado;
+
+        var nomes = (await http.RequestServices.GetRequiredService<IRepositorioUtilizadores>().ListarAsync(http.RequestAborted))
+            .Where(u => u.Tecno > 0).GroupBy(u => u.Tecno).ToDictionary(g => g.Key, g => Truncar(g.First().Nome));
+        IntervencaoDto N(IntervencaoDto i) => i.Adicionais is null ? i
+            : i with { Adicionais = i.Adicionais.Select(a => a with { Nome = nomes.GetValueOrDefault(a.Tecno, "PHC " + a.Tecno) }).ToList() };
+        return valor switch
+        {
+            IntervencaoDto i => Results.Ok(N(i)),
+            IReadOnlyList<IntervencaoDto> l => Results.Ok((IReadOnlyList<IntervencaoDto>)l.Select(N).ToList()),
+            PaginaFichasDto pg => Results.Ok(pg with { Itens = pg.Itens.Select(N).ToList() }),
+            FichaEquipamentoDto f => Results.Ok(f with { Historico = f.Historico.Select(N).ToList() }),
+            _ => resultado
+        };
     }
 
     private static async Task<UtilizadorApp?> Ativo(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct)
@@ -374,9 +453,9 @@ public static class EndpointsIntervencoes
     internal static FichaEquipamentoDto RestringirHistorico(FichaEquipamentoDto ficha, int tecno, bool supervisor) =>
         supervisor ? ficha : ficha with
         {
-            Historico = ficha.Historico.Select(h => tecno > 0 && h.Tecno == tecno
+            Historico = ficha.Historico.Select(h => RegrasIntervencao.Envolve(h, tecno)
                 ? h
-                : h with { Anomalia = null, Feito = null, Tecnico = null, Tecno = 0, HoraInicio = null, HoraFim = null, Motivo = null }).ToList()
+                : h with { Anomalia = null, Feito = null, Tecnico = null, Tecno = 0, HoraInicio = null, HoraFim = null, Motivo = null, Adicionais = null }).ToList()
         };
 
     // Na ficha, o nome do técnico cabe em 45 caracteres.
@@ -388,6 +467,7 @@ public static class EndpointsIntervencoes
     {
         ResultadoIntervencao.Ok => Results.Ok(r.Dados),
         ResultadoIntervencao.NaoExiste => Results.NotFound(),
+        ResultadoIntervencao.TecnicoInvalido => Results.Json(new { erro = "tecnico_invalido" }, statusCode: StatusCodes.Status404NotFound),
         ResultadoIntervencao.ForaDeOrdem => Conflito("fora_de_ordem"),
         ResultadoIntervencao.ExigeDocumento => Conflito("externa_sem_documento"),
         ResultadoIntervencao.Propria => Conflito("propria"),
