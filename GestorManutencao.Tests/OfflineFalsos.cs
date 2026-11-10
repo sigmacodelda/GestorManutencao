@@ -28,7 +28,6 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     public Dictionary<string, Exception> DepoisFalha { get; } = [];
     public TimeSpan Atraso { get; set; }
     public int MaxConcorrencia { get; private set; }
-    public bool ExigeMaterial { get; set; }
 
     public List<string> Chamadas { get; } = [];
     public List<string> OpIds { get; } = [];
@@ -125,7 +124,6 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
             var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
             if (f.Estado == EstadoIntervencao.EmCurso)
             {
-                if (ExigeMaterial && !(Materiais.GetValueOrDefault(id)?.Count > 0)) throw new InvalidOperationException(MensagensIntervencao.Para("sem_material"));
                 f = Fichas[id] = f with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim };
             }
             else if (f.Estado != EstadoIntervencao.Concluida) throw new InvalidOperationException(MensagensIntervencao.Mudou);

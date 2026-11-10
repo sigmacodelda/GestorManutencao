@@ -312,7 +312,6 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
                 && Segundos(f.D.HoraInicio) == Segundos(inicio) && Segundos(f.D.HoraFim) == Segundos(fim))
                 return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
             if (f.D.Estado != EstadoIntervencao.EmCurso) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
-            if (_cfg.ExigeMaterial && f.Materiais.Count == 0) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.SemMaterial));
 
             f.D = f.D with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim, DataPlaneada = Hoje };
             GerarSeguinte(f);

@@ -35,7 +35,7 @@ Legenda: **feito** = cumpre o que o Landeiro faz; **parcial** = falta ou difere 
 | Datas 1900 e "-----------" como vazios | **Parcial**: na ficha completa sim (`Visivel`, `DataOuNula`); nas listas só se tiram espaços. |
 | Tamanhos máximos iguais | **Sim**: constantes copiadas (ref 30, designação 45, problema 200, resolução 254, etc.), validadas e testadas. |
 | Auditoria `ousr*`/`usr*` e stamps `varchar(25)` | **Sim** em todas as escritas novas (stamps em maiúsculas); por validar numa base. |
-| `matobrig` só existe nesta app | **Pendente do PHC**: o campo tem de ser criado pelo utilizador; sem ele "exigir material" lê-se desligado e não grava. |
+| `matobrig` só existia nesta app | **Retirado a pedido do utilizador (10/11/2026)**: nada é obrigatório; a opção "exigir material ao concluir" foi removida e não é preciso criar o campo no PHC. |
 | Ações de gestão só para Supervisor | **Sim**: política Supervisor mais verificação na base; testes de 403 ao Operador. |
 
 ## 3. Nunca correu numa base
@@ -46,7 +46,6 @@ Tudo o que é SQL novo ou alterado compila, mas nenhum correu contra uma base:
 - `SqlRepositorioGestao.cs`: equipamentos, histórico, instruções, tarefas, periodicidades, e as transações com `updlock/holdlock`.
 - `SqlRepositorioIntervencoes.cs`: lista de fichas com ordenação dinâmica, `(nolock)`, guarda de viaturas, transações no material.
 - Coluna `[aquisiçao]` de `u_equip` (nome com cedilha).
-- Campo `matobrig` de `u_configman` (não existe até ser criado no PHC).
 - `GerarSeguinteAsync` depois de cancelar e de gravar tarefa.
 
 Também nunca foi visto: nenhum dos ecrãs novos ou alterados, em Android ou Windows, e o `NavigationLock` no BlazorWebView.

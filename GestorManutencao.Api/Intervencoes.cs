@@ -45,8 +45,7 @@ public sealed record FiltroFichas(EstadoIntervencao? Estado, DateOnly? Desde, Da
 
 public sealed record PaginaFichasDto(IReadOnlyList<IntervencaoDto> Itens, bool TemMais);
 
-// ExigeMaterial ausente conta como falso (clientes antigos não o enviam).
-public sealed record PedidoConfiguracao(int? Antecedencia, bool? GerarPlaneadas, bool? AvancaOrdem, bool? ValidarPropria, bool? ExtExigeDoc, bool? ComprasFichaInt, bool? ExigeMaterial = null);
+public sealed record PedidoConfiguracao(int? Antecedencia, bool? GerarPlaneadas, bool? AvancaOrdem, bool? ValidarPropria, bool? ExtExigeDoc, bool? ComprasFichaInt);
 
 public sealed record MaterialDto(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo);
 
@@ -70,7 +69,7 @@ public sealed record PedidoAdicionais(IReadOnlyList<int>? Tecnos);
 
 public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros);
 
-public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, SemMaterial, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, Viatura, InstrucaoObsoleta }
+public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, Viatura, InstrucaoObsoleta }
 
 // O nome vai em tecnome (45); nas colunas de auditoria vai o código (30); a identidade da pessoa nas fichas é o Tecno.
 public sealed record TecnicoAtual(string Codigo, int Tecno, string Nome);
@@ -333,13 +332,13 @@ public static partial class EndpointsIntervencoes
             if (RegrasManutencao.ValidarConfiguracao(p) is { } mensagem)
                 return Results.Json(new { erro = "pedido_invalido", mensagem }, statusCode: StatusCodes.Status400BadRequest);
 
-            var nova = new ConfigManutencao(p.Antecedencia!.Value, p.GerarPlaneadas!.Value, p.AvancaOrdem!.Value, p.ValidarPropria!.Value, p.ExtExigeDoc!.Value, p.ComprasFichaInt!.Value, p.ExigeMaterial ?? false);
+            var nova = new ConfigManutencao(p.Antecedencia!.Value, p.GerarPlaneadas!.Value, p.AvancaOrdem!.Value, p.ValidarPropria!.Value, p.ExtExigeDoc!.Value, p.ComprasFichaInt!.Value);
             return await ComoSupervisor(eu, utilizadores, ct, async s =>
             {
                 await repo.GuardarConfiguracaoAsync(nova, s, ct);
-                log.LogInformation("Configuração da manutenção alterada por {Supervisor}: antecedência {Antecedencia}, gerar planeadas {Gerar}, avança ordem {Ordem}, validar própria {Propria}, externa exige documento {Doc}, compras na ficha {Compras}, exige material {Material}.",
-                    s.Codigo, nova.Antecedencia, nova.GerarPlaneadas, nova.AvancaOrdem, nova.ValidarPropria, nova.ExtExigeDoc, nova.ComprasFichaInt, nova.ExigeMaterial);
-                // Devolve o que ficou guardado: sem o campo no PHC o "exige material" não grava e o ecrã mostra-o desligado.
+                log.LogInformation("Configuração da manutenção alterada por {Supervisor}: antecedência {Antecedencia}, gerar planeadas {Gerar}, avança ordem {Ordem}, validar própria {Propria}, externa exige documento {Doc}, compras na ficha {Compras}.",
+                    s.Codigo, nova.Antecedencia, nova.GerarPlaneadas, nova.AvancaOrdem, nova.ValidarPropria, nova.ExtExigeDoc, nova.ComprasFichaInt);
+                // Devolve o que ficou guardado.
                 return Results.Ok(await repo.ObterConfiguracaoAsync(ct));
             });
         }).RequireAuthorization("Supervisor");
@@ -623,7 +622,6 @@ public static partial class EndpointsIntervencoes
         ResultadoIntervencao.ForaDeOrdem => Conflito("fora_de_ordem"),
         ResultadoIntervencao.ExigeDocumento => Conflito("externa_sem_documento"),
         ResultadoIntervencao.Propria => Conflito("propria"),
-        ResultadoIntervencao.SemMaterial => Conflito("sem_material"),
         ResultadoIntervencao.LimiteFotos => Conflito("limite_fotos"),
         ResultadoIntervencao.SemPermissao => Results.Json(new { erro = "sem_permissao" }, statusCode: StatusCodes.Status403Forbidden),
         ResultadoIntervencao.Invalido => Results.Json(new { erro = "pedido_invalido", mensagem = "Algum dos valores indicados não é válido." }, statusCode: StatusCodes.Status400BadRequest),

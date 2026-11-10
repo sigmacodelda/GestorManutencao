@@ -95,17 +95,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         from u_configman with (nolock) order by ousrdata, ousrhora
         """;
 
-    // matobrig (bit) é o campo novo de u_configman ("exigir material ao concluir"): tem de ser criado no PHC; enquanto não existir, lê-se como desligado.
-    private const string SqlConfiguracaoMaterial =
-        """
-        select top 1 antecedencia, gerarplaneadas, avancaordem, validarpropria, extexigedoc, comprasfichaint, matobrig
-        from u_configman with (nolock) order by ousrdata, ousrhora
-        """;
-
-    private static volatile bool _campoMaterialExiste;
-
-    private const string SqlMateriaisDaFicha = "select count(*) from u_matinterv with (nolock) where u_fichaintstamp = @id";
-
     // Anexos do PHC ligados à ficha. oritable e tabnm identificam a tabela de origem (Suposição: 'U_FICHAINT' / 'Fichas de Intervenção', por confirmar
     // com um anexo real da ficha no PHC); origem identifica as fotos desta app, que são as únicas que a app lista e apaga.
     private const string OrigemAnexos = "GestorManutencao", OriTableFicha = "U_FICHAINT", TabNmFicha = "Fichas de Intervenção";
@@ -473,22 +462,12 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         Texto(cmd, "@hora", 8, m.Hora);
     }
 
-    // Só depois de o campo existir é que passa a ser lido e gravado; a verificação repete-se até existir (sem reiniciar a API).
-    private static async Task<bool> CampoMaterialAsync(SqlConnection conn, CancellationToken ct)
-    {
-        if (_campoMaterialExiste) return true;
-        await using var cmd = new SqlCommand("select col_length('u_configman', 'matobrig')", conn);
-        return _campoMaterialExiste = await cmd.ExecuteScalarAsync(ct) is not (null or DBNull);
-    }
-
     private static async Task<ConfigManutencao> LerConfiguracaoAsync(SqlConnection conn, CancellationToken ct)
     {
-        var comMaterial = await CampoMaterialAsync(conn, ct);
-        await using var cmd = new SqlCommand(comMaterial ? SqlConfiguracaoMaterial : SqlConfiguracao, conn);
+        await using var cmd = new SqlCommand(SqlConfiguracao, conn);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct)
-            ? new ConfigManutencao((int)r.GetDecimal(0), r.GetBoolean(1), r.GetBoolean(2), r.GetBoolean(3), r.GetBoolean(4), r.GetBoolean(5),
-                comMaterial && !r.IsDBNull(6) && Convert.ToBoolean(r.GetValue(6), CultureInfo.InvariantCulture))
+            ? new ConfigManutencao((int)r.GetDecimal(0), r.GetBoolean(1), r.GetBoolean(2), r.GetBoolean(3), r.GetBoolean(4), r.GetBoolean(5))
             : new ConfigManutencao();
     }
 
@@ -705,15 +684,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     public Task GuardarConfiguracaoAsync(ConfigManutencao configuracao, TecnicoAtual supervisor, CancellationToken ct) => Executar(async conn =>
     {
-        var comMaterial = await CampoMaterialAsync(conn, ct);
-        if (!comMaterial && configuracao.ExigeMaterial)
-            log.LogWarning("Falta o campo matobrig (bit) em u_configman: 'exigir material ao concluir' não foi gravado. Criar o campo no PHC.");
-        var sql = !comMaterial ? SqlGuardarConfiguracao : SqlGuardarConfiguracao
-            .Replace("comprasfichaint = @compras,", "comprasfichaint = @compras, matobrig = @material,")
-            .Replace("pinmaxtent, comprasfichaint,", "pinmaxtent, comprasfichaint, matobrig,")
-            .Replace("5, @compras,", "5, @compras, @material,");
-        await using var cmd = new SqlCommand(sql, conn);
-        if (comMaterial) cmd.Parameters.Add("@material", SqlDbType.Bit).Value = configuracao.ExigeMaterial;
+        await using var cmd = new SqlCommand(SqlGuardarConfiguracao, conn);
         Texto(cmd, "@stamp", 25, Guid.NewGuid().ToString("N")[..25].ToUpperInvariant());
         Numero(cmd, "@antecedencia", configuracao.Antecedencia, 5);
         cmd.Parameters.Add("@gerar", SqlDbType.Bit).Value = configuracao.GerarPlaneadas;
@@ -819,12 +790,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
         var cfg = await LerConfiguracaoAsync(conn, ct);
         if (cfg.ExtExigeDoc && RegrasManutencao.FaltaParaFechar(a.TipoManut, a.NoFornecedor, a.DocExterno) is not null) return (ResultadoIntervencao.ExigeDocumento, null);
-        if (cfg.ExigeMaterial)
-        {
-            await using var contar = new SqlCommand(SqlMateriaisDaFicha, conn);
-            Texto(contar, "@id", 25, id);
-            if (Convert.ToInt32(await contar.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture) == 0) return (ResultadoIntervencao.SemMaterial, null);
-        }
 
         // As horas ficam no dia em que a ficha foi iniciada; a data da ficha passa a ser esse dia (base da próxima).
         var agora = await AgoraAsync(conn, ct);

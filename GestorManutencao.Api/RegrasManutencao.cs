@@ -5,7 +5,7 @@ public enum UnidadePeriodo { Dias, Meses, Nenhum }
 // Configuração da manutenção (u_configman, uma linha); sem linha valem estes valores, como na LandeiroMaui.
 public sealed record ConfigManutencao(
     int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false,
-    bool ExtExigeDoc = true, bool ComprasFichaInt = true, bool ExigeMaterial = false);
+    bool ExtExigeDoc = true, bool ComprasFichaInt = true);
 
 // Regras copiadas da LandeiroMaui (Helpers/ManutencaoRegras e PeriodicidadeHelper) para as duas apps tratarem as fichas da mesma forma.
 public static class RegrasManutencao

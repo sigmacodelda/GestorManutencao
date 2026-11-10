@@ -19,7 +19,7 @@ internal static class ClassificacaoErros
     private static readonly HashSet<string> MensagensProprias =
     [
         MensagensIntervencao.Mudou, FotoJaNaoExiste, OperacaoInvalida, FotoDemasiadoGrande, "A foto é demasiado grande.",
-        .. new[] { "fora_de_ordem", "externa_sem_documento", "propria", "sem_material", "limite_fotos" }.Select(MensagensIntervencao.Para)
+        .. new[] { "fora_de_ordem", "externa_sem_documento", "propria", "limite_fotos" }.Select(MensagensIntervencao.Para)
     ];
 
     // Sem resposta do servidor: sem rede, timeout ou ligação cortada. 401, 403 e 5xx não são "offline".

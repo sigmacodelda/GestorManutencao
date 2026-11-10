@@ -78,31 +78,23 @@ public class MaterialFotosTests : IDisposable
     }
 
     [Fact]
-    public async Task Com_a_opcao_ligada_recusa_sem_material_e_aceita_com_material()
+    public async Task Conclui_com_material_registado_tal_como_sem_material()
     {
-        var fabrica = Criar(new ConfigManutencao(AvancaOrdem: true, ExtExigeDoc: false, ExigeMaterial: true));
-        _extra.Add(fabrica);
-        var c = await AnaComFichaEmCursoAsync(fabrica);
-
-        var recusada = await Concluir(c);
-        Assert.Equal(HttpStatusCode.Conflict, recusada.StatusCode);
-        Assert.Contains("sem_material", await recusada.Content.ReadAsStringAsync());
+        var c = await AnaComFichaEmCursoAsync(_fabrica);
 
         Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/intervencoes/F1/materiais", new PedidoMaterial("Rolamento", 2, 5))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Concluir(c)).StatusCode);
     }
 
     [Fact]
-    public async Task Configuracao_guarda_exige_material_e_pedidos_antigos_ficam_desligados()
+    public async Task Configuracao_ignora_o_campo_antigo_exigeMaterial()
     {
         var chefe = await ComoAsync(_fabrica, "603918");
 
-        var ligar = await chefe.PutAsJsonAsync("/configuracao", new { antecedencia = 7, gerarPlaneadas = true, avancaOrdem = true, validarPropria = false, extExigeDoc = false, comprasFichaInt = true, exigeMaterial = true });
-        Assert.True((await ligar.Content.ReadFromJsonAsync<ConfigManutencao>())!.ExigeMaterial);
+        var r = await chefe.PutAsJsonAsync("/configuracao", new { antecedencia = 7, gerarPlaneadas = true, avancaOrdem = true, validarPropria = false, extExigeDoc = false, comprasFichaInt = true, exigeMaterial = true });
 
-        var antigo = await chefe.PutAsJsonAsync("/configuracao", new { antecedencia = 7, gerarPlaneadas = true, avancaOrdem = true, validarPropria = false, extExigeDoc = false, comprasFichaInt = true });
-        Assert.False((await antigo.Content.ReadFromJsonAsync<ConfigManutencao>())!.ExigeMaterial);
-        Assert.False((await chefe.GetFromJsonAsync<ConfigManutencao>("/configuracao"))!.ExigeMaterial);
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.DoesNotContain("xigeMaterial", await r.Content.ReadAsStringAsync());
     }
 
     // ---- Fotos ----

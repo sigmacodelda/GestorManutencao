@@ -85,7 +85,6 @@ public static class MensagensIntervencao
         "fora_de_ordem" => "Há intervenções mais antigas nesta zona. Comece pela primeira da lista.",
         "externa_sem_documento" => "Falta o fornecedor ou o documento externo. Peça ao supervisor para os indicar no PHC.",
         "propria" => "Não pode validar uma intervenção feita por si.",
-        "sem_material" => "Indique o material usado antes de concluir.",
         "limite_fotos" => $"No máximo {RegrasFoto.Max} fotos por intervenção.",
         _ => Mudou
     };
@@ -179,7 +178,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         return Alterar(id, EstadoIntervencao.EmCurso, i => i with
         {
             Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null
-        }, () => _configuracao.ExigeMaterial && !(_materiais.GetValueOrDefault(id)?.Count > 0) ? throw new InvalidOperationException(MensagensIntervencao.Para("sem_material")) : null);
+        });
     }
 
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default)

@@ -80,8 +80,7 @@ public sealed record FiltroFichas(
 public sealed record PaginaFichas(IReadOnlyList<Intervencao> Itens, bool TemMais);
 
 public sealed record ConfiguracaoManutencao(
-    int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false, bool ExtExigeDoc = true, bool ComprasFichaInt = true,
-    bool ExigeMaterial = false);
+    int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false, bool ExtExigeDoc = true, bool ComprasFichaInt = true);
 
 public static class RegrasConfiguracao
 {
