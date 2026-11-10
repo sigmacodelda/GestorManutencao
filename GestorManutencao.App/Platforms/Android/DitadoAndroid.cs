@@ -10,7 +10,7 @@ public sealed class DitadoAndroid : IDitado
 {
 	private SpeechRecognizer? _reconhecedor;
 	private Intent? _pedido;
-	private bool _ativo;
+	private bool _ativo, _preferirOffline;
 	private int _sessao;
 	private TaskCompletionSource? _fim;
 
@@ -53,6 +53,7 @@ public sealed class DitadoAndroid : IDitado
 		Libertar();
 		_sessao++;
 		_ativo = true;
+		_preferirOffline = true;
 		_reconhecedor = SpeechRecognizer.CreateSpeechRecognizer(contexto);
 		_reconhecedor!.SetRecognitionListener(new Ouvinte(this, _sessao));
 
@@ -61,6 +62,8 @@ public sealed class DitadoAndroid : IDitado
 		_pedido.PutExtra(RecognizerIntent.ExtraLanguage, "pt-PT");
 		_pedido.PutExtra(RecognizerIntent.ExtraPartialResults, true);
 		_pedido.PutExtra(RecognizerIntent.ExtraMaxResults, 1);
+		// Usa o pacote de voz do telemóvel, se existir, para funcionar sem internet.
+		_pedido.PutExtra(RecognizerIntent.ExtraPreferOffline, _preferirOffline);
 		_pedido.PutExtra(RecognizerIntent.ExtraCallingPackage, contexto.PackageName);
 		_reconhecedor.StartListening(_pedido);
 	}
@@ -82,6 +85,14 @@ public sealed class DitadoAndroid : IDitado
 		_sessao++;
 		_fim?.TrySetResult();
 		Terminou?.Invoke(motivo);
+	}
+
+	// O pacote offline não existe para esta língua: volta ao reconhecimento online.
+	private void SemPacoteOffline(int sessao)
+	{
+		_preferirOffline = false;
+		_pedido?.PutExtra(RecognizerIntent.ExtraPreferOffline, false);
+		Recomecar(sessao);
 	}
 
 	private void Recomecar(int sessao)
@@ -114,11 +125,12 @@ public sealed class DitadoAndroid : IDitado
 			// Falta de fala ou de correspondência é normal numa pausa: se a pessoa não parou, continua.
 			var normal = erro is SpeechRecognizerError.NoMatch or SpeechRecognizerError.SpeechTimeout or SpeechRecognizerError.RecognizerBusy;
 			if (!dono._ativo) { dono.Terminar(sessao, null); return; }
+			if (dono._preferirOffline && (int)erro is 12 or 13) { dono.SemPacoteOffline(sessao); return; }
 			if (normal) { dono.Recomecar(sessao); return; }
 			dono.Terminar(sessao, erro switch
 			{
 				SpeechRecognizerError.InsufficientPermissions => "Sem acesso ao microfone. Permita-o nas definições da app.",
-				SpeechRecognizerError.Network or SpeechRecognizerError.NetworkTimeout => "Sem ligação à internet para reconhecer a voz.",
+				SpeechRecognizerError.Network or SpeechRecognizerError.NetworkTimeout => "Sem internet. Para ditar offline, instale o português nas definições de voz do Google (reconhecimento offline).",
 				_ => "O ditado parou. Tente outra vez."
 			});
 		}

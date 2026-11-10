@@ -105,7 +105,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
 
     private SqlConnection Abrir()
     {
-        var ligacao = configuracao.GetConnectionString("PHCConn");
+        var ligacao = LigacaoPhc.Obter(configuracao);
         if (string.IsNullOrWhiteSpace(ligacao)) throw new RepositorioIndisponivelException();
         return new SqlConnection(ligacao);
     }

@@ -458,6 +458,7 @@ public sealed class OfflineIntervencoesService(
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => remoto.DevolverAsync(id, motivo, ct);
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => remoto.ListarPlaneadasAsync(ct);
     public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) => remoto.AtribuirAsync(id, tecno, ct);
+    public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) => remoto.DefinirAdicionaisAsync(id, tecnos, ct);
     public Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default) => remoto.GerarPlaneadasAsync(ct);
     public Task<PaginaFichas> ListarTodasAsync(FiltroFichas filtro, int pagina, CancellationToken ct = default) => remoto.ListarTodasAsync(filtro, pagina, ct);
     public Task<ConfiguracaoManutencao> ObterConfiguracaoAsync(CancellationToken ct = default) => remoto.ObterConfiguracaoAsync(ct);

@@ -25,6 +25,7 @@ public static class MauiProgram
 #if ANDROID
 		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaAndroid>();
 		builder.Services.AddSingleton<IDitado, DitadoAndroid>();
+		builder.Services.AddSingleton<ICamara, CamaraAndroid>();
 #elif WINDOWS
 		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaWindows>();
 		builder.Services.AddSingleton<IDitado, DitadoWindows>();

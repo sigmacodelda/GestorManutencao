@@ -42,8 +42,8 @@ public static class CentroAvisos
         return avisos;
     }
 
-    // tecno 0 = desconhecido: a API já só devolve as fichas do próprio e as sem dono, por isso basta excluir as sem dono.
-    private static bool Minha(Intervencao f, int tecno) => f.Tecno != 0 && (tecno == 0 || f.Tecno == tecno);
+    // tecno 0 = desconhecido: a API já só devolve as fichas do próprio (principal ou adicional) e as sem dono, por isso basta excluir as sem dono.
+    private static bool Minha(Intervencao f, int tecno) => f.Tecno != 0 && (tecno == 0 || f.Envolve(tecno));
 
     private static List<Aviso> ParaTecnico(List<Intervencao> fichas, int tecno, DateOnly hoje, DateTime agora)
     {

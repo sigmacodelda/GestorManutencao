@@ -3,6 +3,7 @@
 @inject IIntervencoesService Intervencoes
 @inject IGestorOffline Offline
 @inject NavigationManager Nav
+@inject ICamara Camara
 
 <PageTitle>Intervenção · Gestor de Manutenção</PageTitle>
 
@@ -48,6 +49,11 @@
             @if (!string.IsNullOrWhiteSpace(_i.Zona)) { <dt>Zona</dt><dd>@_i.Zona</dd> }
             <dt>Tipo</dt><dd>@(_i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</dd>
             <dt>Data prevista</dt><dd>@_i.DataPlaneada.ToString("dd/MM/yyyy")</dd>
+            @if (_i.OutrosTecnicos.Count > 0)
+            {
+                <dt>Técnico principal</dt><dd>@(_i.Tecnico ?? "PHC " + _i.Tecno)</dd>
+                <dt>Outros técnicos</dt><dd>@string.Join(", ", _i.OutrosTecnicos.Select(a => a.Nome))</dd>
+            }
             @if (!string.IsNullOrWhiteSpace(_i.Anomalia)) { <dt>Problema</dt><dd>@_i.Anomalia</dd> }
         </dl>
 
@@ -130,10 +136,17 @@
                 </ul>
                 @if (_i.Estado == EstadoIntervencao.EmCurso && _fotos.Count < RegrasFoto.Max)
                 {
-                    <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
-                        <Icone Nome="camera" /><span>Tirar foto</span>
-                        <InputFile accept="image/*" capture="environment" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
-                    </label>
+                    @if (Camara.Disponivel)
+                    {
+                        <button type="button" class="btn btn-secundario" disabled="@_a_gravar" @onclick="TirarFotoAsync"><Icone Nome="camera" /><span>Tirar foto</span></button>
+                    }
+                    else
+                    {
+                        <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
+                            <Icone Nome="camera" /><span>Tirar foto</span>
+                            <InputFile accept="image/*" capture="environment" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
+                        </label>
+                    }
                     <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
                         <Icone Nome="plus" /><span>Escolher da galeria</span>
                         <InputFile accept="image/*" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
@@ -273,15 +286,27 @@
     // A foto é reduzida no próprio telemóvel (JPEG, lado maior 1600 px) antes de seguir.
     private async Task AdicionarFotoAsync(InputFileChangeEventArgs e)
     {
-        _erroFoto = "";
-        _a_gravar = true;
-        try
+        await GuardarFotoAsync(async () =>
         {
             var reduzida = await e.File.RequestImageFileAsync("image/jpeg", RegrasFoto.LadoMaximo, RegrasFoto.LadoMaximo);
             await using var fluxo = reduzida.OpenReadStream(RegrasFoto.MaxBytes);
             using var memoria = new MemoryStream();
             await fluxo.CopyToAsync(memoria);
-            await Intervencoes.AdicionarFotoAsync(Id, $"foto_{DateTime.Now:yyyyMMdd_HHmmss}", memoria.ToArray());
+            return memoria.ToArray();
+        });
+    }
+
+    private Task TirarFotoAsync() =>
+        GuardarFotoAsync(() => Camara.TirarFotoAsync(RegrasFoto.LadoMaximo, RegrasFoto.MaxBytes));
+
+    private async Task GuardarFotoAsync(Func<Task<byte[]?>> obter)
+    {
+        _erroFoto = "";
+        _a_gravar = true;
+        try
+        {
+            if (await obter() is not { } dados) return;
+            await Intervencoes.AdicionarFotoAsync(Id, $"foto_{DateTime.Now:yyyyMMdd_HHmmss}", dados);
             await RefrescarFichaAsync();
             await CarregarFotosAsync();
         }

@@ -117,10 +117,21 @@ public sealed class ManutencaoCache(ICacheLocal cache, IFilaSaida fila, IDonoDad
     public Task MesclarFichasAsync(IEnumerable<Intervencao> servidor, string? dono = null, long? marca = null) => ComTrincoAsync(async () =>
     {
         if (dono is not null && donoDados.Dono != dono) return;
-        foreach (var s in servidor)
-            if (await cache.ObterFichaAsync(s.Id) is not { Pendente: true } && !(marca is { } m && EnviadaDesde(s.Id, m)))
-                await cache.GuardarFichasAsync([s with { Pendente = false }]);
+        var existentes = (await cache.ListarFichasAsync()).ToDictionary(f => f.Id);
+        await GuardarDoServidorAsync(servidor, existentes, marca, null);
     });
+
+    // Uma só gravação para todas: a cache SQLite faz um commit por gravação e, ficha a ficha, a lista demorava segundos no telemóvel.
+    private async Task GuardarDoServidorAsync(IEnumerable<Intervencao> servidor, Dictionary<string, Intervencao> existentes, long? marca, HashSet<string>? comOperacoes)
+    {
+        var gravar = servidor
+            .Where(s => !(existentes.TryGetValue(s.Id, out var e) && e.Pendente)
+                        && !(comOperacoes?.Contains(s.Id) ?? false)
+                        && !(marca is { } m && EnviadaDesde(s.Id, m)))
+            .Select(s => s with { Pendente = false })
+            .ToList();
+        if (gravar.Count > 0) await cache.GuardarFichasAsync(gravar);
+    }
 
     // A lista das minhas por fazer é completa: as por fazer que já não vêm (atribuídas a outro, concluídas) saem da cache.
     public Task MesclarMinhasAsync(IReadOnlyList<Intervencao> servidor, string? donoEsperado = null, long? marca = null) => ComTrincoAsync(async () =>
@@ -130,9 +141,7 @@ public sealed class ManutencaoCache(ICacheLocal cache, IFilaSaida fila, IDonoDad
         var comOperacoes = await FichasComOperacoesAsync(dono);
         var ids = servidor.Select(s => s.Id).ToHashSet();
         var fichas = await cache.ListarFichasAsync();
-        foreach (var s in servidor)
-            if (await cache.ObterFichaAsync(s.Id) is not { Pendente: true } && !comOperacoes.Contains(s.Id) && !(marca is { } m && EnviadaDesde(s.Id, m)))
-                await cache.GuardarFichasAsync([s with { Pendente = false }]);
+        await GuardarDoServidorAsync(servidor, fichas.ToDictionary(f => f.Id), marca, comOperacoes);
         var obsoletas = fichas.Where(f => f.PorFazer && !f.Pendente && !ClassificacaoErros.IdLocal(f.Id) && !ids.Contains(f.Id) && !comOperacoes.Contains(f.Id)
             && !(marca is { } m2 && EnviadaDesde(f.Id, m2))).Select(f => f.Id);
         await cache.RemoverFichasAsync(obsoletas);

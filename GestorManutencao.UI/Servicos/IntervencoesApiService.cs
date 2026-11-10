@@ -57,6 +57,18 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
     public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Put, $"planeadas/{Uri.EscapeDataString(id)}/tecnico", new { tecno }, ct);
 
+    // 404 com "tecnico_invalido": um dos técnicos já não existe ou está inativo (diferente de a ficha não existir).
+    public async Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Put, $"planeadas/{Uri.EscapeDataString(id)}/tecnicos", new { tecnos }, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound)
+            throw new InvalidOperationException(await LerErroAsync(resposta, ct) == "tecnico_invalido"
+                ? "Um dos técnicos já não está disponível. Volte a abrir a lista."
+                : MensagensIntervencao.Mudou);
+        await VerificarAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<Intervencao>(ct) ?? throw new HttpRequestException();
+    }
+
     public async Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default)
     {
         using var resposta = await EnviarAsync(HttpMethod.Post, "planeadas/gerar", null, ct);
