@@ -1,7 +1,7 @@
 namespace GestorManutencao.Api;
 
 // Para desenvolvimento e testes. Segue as mesmas regras do repositório SQL (ver docs/ligacao-phc-intervencoes.md).
-public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigManutencao? configuracao = null) : IRepositorioIntervencoes
+public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigManutencao? configuracao = null) : IRepositorioIntervencoes
 {
     private sealed class Ficha
     {
@@ -13,12 +13,47 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         public List<(FotoDto Foto, byte[] Dados)> Fotos { get; } = [];
         public string Motivo { get; set; } = "";
         public string? OpId { get; set; }
+
+        // Campos da ficha completa. Antiga = ficha do PHC sem estado (D.Estado já vem como Validada ou Concluida).
+        public int Numero { get; set; }
+        public int Versao { get; set; }
+        public string TipoManut { get; set; } = RegrasManutencao.TipoInterna;
+        public string Periodo { get; set; } = "";
+        public bool Antiga { get; set; }
+        public bool Fechada { get; set; }
+        public bool Supervisao { get; set; }
+        public DateTime? HIni { get; set; }
+        public DateTime? HFim { get; set; }
+        public decimal HorasFrio { get; set; }
+        public decimal HorasConf { get; set; }
+        public string Obs { get; set; } = "";
+        public bool LimRem { get; set; }
+        public decimal NoFornec { get; set; }
+        public string NomeFornec { get; set; } = "";
+        public string DocExterno { get; set; } = "";
+        public decimal MoExterna { get; set; }
+        public decimal MatExterno { get; set; }
+        public List<TempoDto> Tempos { get; } = [];
+        public List<CompraLigadaDto> Compras { get; } = [];
     }
 
-    private sealed record Tarefa(string Id, string EquipamentoId, string Descricao, string Periodo, UnidadePeriodo Unidade, int Intervalo);
+    // Tarefa de uma instrução de manutenção; a unidade e o intervalo vêm da periodicidade (u_periocid), como no SQL.
+    private sealed class Tarefa(string id, string instrucaoId, string equipamentoId, string descricao, string periodo)
+    {
+        public string Id { get; } = id;
+        public string InstrucaoId { get; } = instrucaoId;
+        public string EquipamentoId { get; } = equipamentoId;
+        public string Descricao { get; set; } = descricao;
+        public string Periodo { get; set; } = periodo;
+        public string Responsabilidade { get; set; } = "";
+        public string Responsavel { get; set; } = "";
+        public string TipoManut { get; set; } = "";
+        public bool Ativa { get; set; } = true;
+        public int Versao { get; set; }
+    }
 
-    // UltimaIntervencao e FichasAbertas calculam-se a partir das fichas, como no SQL.
-    private static readonly EquipamentoDto[] Equipamentos =
+    // UltimaIntervencao e FichasAbertas calculam-se a partir das fichas, como no SQL. A lista é do repositório porque a gestão cria e edita equipamentos.
+    private readonly List<EquipamentoDto> Equipamentos =
     [
         new("E1", "Compressor de ar 02", "Produção", "CMP-02", 2, "Compressor", "Atlas Copco", "GA 30", "AC-77120"),
         new("E2", "Empilhador 05", "Armazém", "EMP-05", 5, "Empilhador", "Toyota", "8FBE15", "TY-30418"),
@@ -26,15 +61,24 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         new("E4", "Linha de embalagem", "Produção", "LE-01", 4, "Linha", "Cavanna", "LP-2", "CV-2231"),
         new("E5", "Balança 03", "Expedição", "BAL-03", 3, "Balança", "Mettler", "IND-570", "MT-8841"),
         new("E6", "Porta seccionada 07", "Armazém", "PRT-07", 7, "Portas", "Hormann", "SPU-40", "HR-5522", ForaDeServico: true),
-        new("E7", "Serra de fita antiga", "Produção", "SRF-01", 9, "Serra", "Bomar", "STG-280", "BM-0042", Obsoleto: true)
+        new("E7", "Serra de fita antiga", "Produção", "SRF-01", 9, "Serra", "Bomar", "STG-280", "BM-0042", Obsoleto: true),
+        // Viatura: fora do módulo (nunca aparece nem se gere), como no SQL.
+        new("E8", "Carrinha 01", "Armazém", "VT-01", 6, "Veículos", "Renault", "Master", "VT-1")
     ];
 
-    private static readonly Tarefa[] Tarefas =
+    private readonly List<Tarefa> Tarefas =
     [
-        new("TAREFA1", "E1", "Verificar o nível de óleo e os filtros", "Mensal", UnidadePeriodo.Meses, 1),
-        new("TAREFA2", "E1", "Drenar os condensados", "Semanal", UnidadePeriodo.Dias, 7),
-        new("TAREFA3", "E3", "Limpar os evaporadores", "Trimestral", UnidadePeriodo.Meses, 3)
+        new("TAREFA1", "I-E1", "E1", "Verificar o nível de óleo e os filtros", "Mensal"),
+        new("TAREFA2", "I-E1", "E1", "Drenar os condensados", "Semanal"),
+        new("TAREFA3", "I-E3", "E3", "Limpar os evaporadores", "Trimestral"),
+        new("TAREFA9", "I-E8", "E8", "Verificar os travões", "Mensal")
     ];
+
+    // Unidade e intervalo de uma tarefa: os da periodicidade (editáveis na gestão); sem periodicidade conhecida, não gera.
+    private (UnidadePeriodo Unidade, int Intervalo) Regra(Tarefa t) =>
+        Periodicidades_.FirstOrDefault(p => string.Equals(p.Periodo, t.Periodo, StringComparison.OrdinalIgnoreCase)) is { } p
+            ? (RegrasManutencao.LerUnidade(p.Unidade), p.Intervalo)
+            : (UnidadePeriodo.Nenhum, 0);
 
     private ConfigManutencao _cfg = configuracao ?? new ConfigManutencao(AvancaOrdem: true, ExtExigeDoc: false);
     private readonly object _trinco = new();
@@ -46,7 +90,14 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         string? anomalia = null, string? feito = null, TimeOnly? ini = null, TimeOnly? fim = null, string? tecnico = null, int tecno = 0) =>
         new(id, eq, zona, tipo, data, estado, anomalia, feito, ini, fim, tecnico, tecno);
 
-    private static List<Ficha> Inicial(DateOnly hoje) =>
+    private static List<Ficha> Inicial(DateOnly hoje)
+    {
+        var lista = InicialSemNumero(hoje);
+        for (var i = 0; i < lista.Count; i++) lista[i].Numero = i + 1;
+        return lista;
+    }
+
+    private static List<Ficha> InicialSemNumero(DateOnly hoje) =>
         [
             new() { D = Nova("F1", "Compressor de ar 02", "Produção", TipoIntervencao.Preventiva, hoje, EstadoIntervencao.Planeada), Tarefa = "TAREFA1" },
             new() { D = Nova("F2", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje, EstadoIntervencao.Planeada, tecnico: "Outra Pessoa", tecno: 999), Tecno = 999 },
@@ -117,7 +168,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
     {
         lock (Trinco())
             return Task.FromResult<IReadOnlyList<EquipamentoDto>>(Equipamentos
-                .Where(e => (filtro.Obsoletos || !e.Obsoleto)
+                .Where(e => !RegrasGestao.EhViatura(e.Tipo) && (filtro.Obsoletos || !e.Obsoleto)
                     && (filtro.Tipo.Length == 0 || string.Equals(e.Tipo, filtro.Tipo, StringComparison.OrdinalIgnoreCase))
                     && (filtro.Local.Length == 0 || string.Equals(e.Zona, filtro.Local, StringComparison.OrdinalIgnoreCase))
                     && (filtro.Texto.Length == 0 || Contem(e.Nome, filtro.Texto) || Contem(e.Ref, filtro.Texto) || Contem(e.Marca, filtro.Texto) || Contem(e.Modelo, filtro.Texto)))
@@ -126,7 +177,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
 
     public Task<IReadOnlyList<EquipamentoDto>> PesquisarEquipamentosAsync(string texto, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<EquipamentoDto>>(Equipamentos
-            .Where(e => !e.Obsoleto && (Contem(e.Nome, texto) || Contem(e.Ref, texto)))
+            .Where(e => !e.Obsoleto && !RegrasGestao.EhViatura(e.Tipo) && (Contem(e.Nome, texto) || Contem(e.Ref, texto)))
             .OrderBy(e => e.Nome, StringComparer.CurrentCultureIgnoreCase).Take(RegrasManutencao.MaxPesquisaAvaria)
             .Select(e => new EquipamentoDto(e.Id, e.Nome, e.Zona)).ToList());
 
@@ -134,16 +185,17 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
     {
         lock (Trinco())
         {
-            var e = Equipamentos.FirstOrDefault(x => x.Id == id);
+            var e = Equipamentos.FirstOrDefault(x => x.Id == id && !RegrasGestao.EhViatura(x.Tipo));
             if (e is null) return Task.FromResult<FichaEquipamentoDto?>(null);
 
-            var tarefas = Tarefas.Where(t => t.EquipamentoId == id).Select(t =>
+            var tarefas = Tarefas.Where(t => t.EquipamentoId == id && t.Ativa && !InstrucaoObsoleta(t.InstrucaoId)).Select(t =>
             {
+                var (unidade, intervalo) = Regra(t);
                 var fichas = _lista.Where(f => f.Tarefa == t.Id).ToList();
                 DateTime? Maior(Func<Ficha, bool> onde) => fichas.Where(onde).Select(f => (DateTime?)f.D.DataPlaneada.ToDateTime(TimeOnly.MinValue)).Max();
                 var feita = Maior(f => f.D.Estado is EstadoIntervencao.Concluida or EstadoIntervencao.Validada);
                 var aberta = fichas.Where(Aberta).Select(f => (DateTime?)f.D.DataPlaneada.ToDateTime(TimeOnly.MinValue)).Min();
-                var proxima = RegrasManutencao.ProximaDaTarefa(feita, Maior(f => f.D.Estado == EstadoIntervencao.Cancelada), null, t.Unidade, t.Intervalo, aberta);
+                var proxima = RegrasManutencao.ProximaDaTarefa(feita, Maior(f => f.D.Estado == EstadoIntervencao.Cancelada), null, unidade, intervalo, aberta);
                 return new TarefaPlaneadaDto(t.Id, t.Descricao, t.Periodo, feita.HasValue ? DateOnly.FromDateTime(feita.Value) : null,
                     proxima.HasValue ? DateOnly.FromDateTime(proxima.Value) : null);
             }).ToList();
@@ -159,15 +211,36 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
     {
         lock (Trinco())
         {
-            var todas = _lista
+            var filtradas = _lista
                 .Where(f => (filtro.Estado is null || f.D.Estado == filtro.Estado)
                     && (filtro.Desde is null || f.D.DataPlaneada >= filtro.Desde) && (filtro.Ate is null || f.D.DataPlaneada <= filtro.Ate)
                     && (filtro.Tecno == 0 || Pertence(f, filtro.Tecno))
-                    && (filtro.Texto.Length == 0 || Contem(f.D.Equipamento, filtro.Texto) || Contem(f.D.Anomalia, filtro.Texto) || Contem(f.D.Feito, filtro.Texto) || Contem(f.D.Tecnico, filtro.Texto)))
-                .OrderByDescending(f => f.D.DataPlaneada).ThenByDescending(f => f.D.Id)
-                .ToList();
+                    && (filtro.Situacao == SituacaoFichas.Todas
+                        || (filtro.Situacao == SituacaoFichas.Abertas ? !EstaFechada(f) && f.D.Estado != EstadoIntervencao.Cancelada : EstaFechada(f)))
+                    && (!filtro.SoPorSupervisionar || !Supervisionada(f))
+                    && (filtro.Tipo is null || f.D.Tipo == filtro.Tipo)
+                    && (filtro.Texto.Length == 0 || Contem(f.D.Equipamento, filtro.Texto) || Contem(f.D.Anomalia, filtro.Texto) || Contem(f.D.Feito, filtro.Texto) || Contem(f.D.Tecnico, filtro.Texto)
+                        || Contem(RefDe(f), filtro.Texto) || f.Numero.ToString() == filtro.Texto));
+            var sentido = filtro.Descendente ? -1 : 1;
+            int Comparar(Ficha a, Ficha b)
+            {
+                var c = filtro.Ordem switch
+                {
+                    OrdemFichas.Numero => a.Numero.CompareTo(b.Numero),
+                    OrdemFichas.Equipamento => string.Compare(a.D.Equipamento, b.D.Equipamento, StringComparison.CurrentCultureIgnoreCase),
+                    OrdemFichas.Tipo => a.D.Tipo.CompareTo(b.D.Tipo),
+                    OrdemFichas.Total => TotalDe(a).CompareTo(TotalDe(b)),
+                    _ => a.D.DataPlaneada.CompareTo(b.D.DataPlaneada)
+                };
+                return sentido * (c != 0 ? c : string.CompareOrdinal(a.D.Id, b.D.Id));
+            }
+            var todas = filtradas.OrderBy(f => f, Comparer<Ficha>.Create(Comparar)).ToList();
             var pagina = todas.Skip((filtro.Pagina - 1) * RegrasManutencao.FichasPorPagina).Take(RegrasManutencao.FichasPorPagina)
-                .Select(f => Ver(f) with { PodeAbrir = supervisor.Tecno > 0 && Minha(f, supervisor) }).ToList();
+                .Select(f => Ver(f) with
+                {
+                    PodeAbrir = supervisor.Tecno > 0 && Minha(f, supervisor), Numero = f.Numero, Total = TotalDe(f), Fechada = EstaFechada(f),
+                    PorSupervisionar = !Supervisionada(f), Antiga = f.Antiga
+                }).ToList();
             return Task.FromResult(new PaginaFichasDto(pagina, todas.Count > filtro.Pagina * RegrasManutencao.FichasPorPagina));
         }
     }
@@ -182,7 +255,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct, string? opId = null)
     {
-        var e = Equipamentos.FirstOrDefault(x => x.Id == equipamentoId && !x.Obsoleto);
+        var e = Equipamentos.FirstOrDefault(x => x.Id == equipamentoId && !x.Obsoleto && !RegrasGestao.EhViatura(x.Tipo));
         if (e is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
         var agora = relogio.GetLocalNow().DateTime;
         var nova = new Ficha
@@ -190,7 +263,8 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
             D = Nova(Guid.NewGuid().ToString("N")[..25], e.Nome, e.Zona, TipoIntervencao.Curativa, DateOnly.FromDateTime(agora), EstadoIntervencao.EmCurso,
                 anomalia, null, TimeOnly.FromDateTime(agora), null, tecnico.Nome, tecnico.Tecno),
             Tecno = tecnico.Tecno,
-            OpId = opId
+            OpId = opId,
+            Numero = ProximoNumero()
         };
         lock (Trinco())
         {
@@ -234,7 +308,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         {
             var f = _lista.FirstOrDefault(x => x.D.Id == id);
             if (f is null || !Minha(f, tecnico)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
-            if (f.D.Estado == EstadoIntervencao.Concluida && Pertence(f, tecnico.Tecno) && f.D.Feito == feito
+            if (f.D.Estado == EstadoIntervencao.Concluida && !f.Antiga && Pertence(f, tecnico.Tecno) && f.D.Feito == feito
                 && Segundos(f.D.HoraInicio) == Segundos(inicio) && Segundos(f.D.HoraFim) == Segundos(fim))
                 return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
             if (f.D.Estado != EstadoIntervencao.EmCurso) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
@@ -262,7 +336,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
     public Task<IReadOnlyList<IntervencaoDto>> ListarPorValidarAsync(TecnicoAtual supervisor, CancellationToken ct)
     {
         lock (Trinco())
-            return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista.Where(f => f.D.Estado == EstadoIntervencao.Concluida)
+            return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista.Where(f => f.D.Estado == EstadoIntervencao.Concluida && !f.Antiga)
                 .Select(f => Ver(f, _cfg.ValidarPropria || supervisor.Tecno <= 0 || !Pertence(f, supervisor.Tecno))).ToList());
     }
 
@@ -272,7 +346,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         {
             var f = _lista.FirstOrDefault(x => x.D.Id == id);
             if (f is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
-            if (f.D.Estado != EstadoIntervencao.Concluida) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
+            if (f.D.Estado != EstadoIntervencao.Concluida || f.Antiga) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
             if (!_cfg.ValidarPropria && Pertence(f, supervisor.Tecno)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Propria));
             f.D = f.D with { Estado = EstadoIntervencao.Validada };
             return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
@@ -285,7 +359,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
         {
             var f = _lista.FirstOrDefault(x => x.D.Id == id);
             if (f is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
-            if (f.D.Estado != EstadoIntervencao.Concluida) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
+            if (f.D.Estado != EstadoIntervencao.Concluida || f.Antiga) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
             // A seguinte ainda por tocar sai: volta a gerar-se quando esta for concluída outra vez.
             if (f.Tarefa != "") _lista.RemoveAll(x => x != f && x.Tarefa == f.Tarefa && x.D.Estado == EstadoIntervencao.Planeada && x.Tecno == 0 && x.Materiais.Count == 0);
             f.Motivo = motivo.Trim();
@@ -297,7 +371,7 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
     public Task<IReadOnlyList<IntervencaoDto>> ListarPlaneadasAsync(CancellationToken ct)
     {
         lock (Trinco())
-            return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista.Where(Aberta).OrderBy(f => f.D.DataPlaneada).Select(f => Ver(f)).ToList());
+            return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista.Where(Aberta).OrderBy(f => f.D.DataPlaneada).Select(f => Ver(f) with { DataPrevista = Prevista(f) }).ToList());
     }
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> AtribuirAsync(string id, int tecno, string nome, TecnicoAtual supervisor, CancellationToken ct)
@@ -344,27 +418,33 @@ public sealed class RepositorioIntervencoesMemoria(TimeProvider relogio, ConfigM
             return Task.FromResult(_lista.FirstOrDefault(x => x.D.Id == id && Minha(x, tecnico)) is { } f ? (IReadOnlyList<MaterialDto>?)f.Materiais.ToList() : null);
     }
 
-    public Task<(ResultadoIntervencao, MaterialDto?)> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, TecnicoAtual tecnico, CancellationToken ct)
+    // NaoExiste se não a vê, Conflito se já não se pode alterar (mesma regra do SQL).
+    private static ResultadoIntervencao? Acesso(Ficha? f, TecnicoAtual quem, bool supervisor) =>
+        f is null || (!supervisor && !Minha(f, quem)) ? ResultadoIntervencao.NaoExiste
+        : !RegrasFicha.PodeEditar(EstadoTexto(f), supervisor, Pertence(f, quem.Tecno)) ? ResultadoIntervencao.Conflito
+        : null;
+
+    private static string EstadoTexto(Ficha f) => f.Antiga ? EstadosFicha.Legado : f.D.Estado.ToString();
+
+    public Task<(ResultadoIntervencao, MaterialDto?)> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, TecnicoAtual tecnico, CancellationToken ct, bool supervisor = false)
     {
         lock (Trinco())
         {
-            var f = _lista.FirstOrDefault(x => x.D.Id == id && Minha(x, tecnico));
-            if (f is null) return Task.FromResult(Falha<MaterialDto>(ResultadoIntervencao.NaoExiste));
-            if (f.D.Estado != EstadoIntervencao.EmCurso || !Pertence(f, tecnico.Tecno)) return Task.FromResult(Falha<MaterialDto>(ResultadoIntervencao.Conflito));
+            var f = _lista.FirstOrDefault(x => x.D.Id == id);
+            if (Acesso(f, tecnico, supervisor) is { } negado) return Task.FromResult(Falha<MaterialDto>(negado));
             var m = new MaterialDto(Guid.NewGuid().ToString("N")[..25], RegrasManutencao.Cortar(design, RegrasManutencao.TamanhoDesignMaterial), qtt, epv, RegrasManutencao.CustoMaterial(qtt, epv));
-            f.Materiais.Add(m);
+            f!.Materiais.Add(m);
             return Task.FromResult<(ResultadoIntervencao, MaterialDto?)>((ResultadoIntervencao.Ok, m));
         }
     }
 
-    public Task<ResultadoIntervencao> ApagarMaterialAsync(string id, string materialId, TecnicoAtual tecnico, CancellationToken ct)
+    public Task<ResultadoIntervencao> ApagarMaterialAsync(string id, string materialId, TecnicoAtual tecnico, CancellationToken ct, bool supervisor = false)
     {
         lock (Trinco())
         {
-            var f = _lista.FirstOrDefault(x => x.D.Id == id && Minha(x, tecnico));
-            if (f is null) return Task.FromResult(ResultadoIntervencao.NaoExiste);
-            if (f.D.Estado != EstadoIntervencao.EmCurso || !Pertence(f, tecnico.Tecno)) return Task.FromResult(ResultadoIntervencao.Conflito);
-            return Task.FromResult(f.Materiais.RemoveAll(m => m.Id == materialId) > 0 ? ResultadoIntervencao.Ok : ResultadoIntervencao.NaoExiste);
+            var f = _lista.FirstOrDefault(x => x.D.Id == id);
+            if (Acesso(f, tecnico, supervisor) is { } negado) return Task.FromResult(negado);
+            return Task.FromResult(f!.Materiais.RemoveAll(m => m.Id == materialId) > 0 ? ResultadoIntervencao.Ok : ResultadoIntervencao.NaoExiste);
         }
     }
 

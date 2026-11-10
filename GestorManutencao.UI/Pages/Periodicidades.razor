@@ -1,0 +1,116 @@
+@page "/periodicidades"
+@inject IGestaoService Gestao
+@inject SessaoService Sessao
+
+<PageTitle>Periodicidades · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="mais"><Icone Nome="arrow-left" /><span>Mais</span></a>
+        <h1 tabindex="-1">Periodicidades</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_falhou is not null)
+    {
+        <div class="estado-lista" role="alert">
+            <p>@_falhou</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        <p class="ficha-texto">Aqui só se mudam a unidade, o intervalo e o aviso; as periodicidades não se criam nem se apagam.</p>
+        <p class="campo-erro" role="alert">@_erro</p>
+        <ul class="lista-intervencoes">
+            @foreach (var p in _lista)
+            {
+                <li class="intervencao">
+                    <span class="intervencao-titulo">@p.Periodo</span>
+                    <span class="intervencao-desc">@RegrasGestaoUi.TextoPeriodicidade(p)@(p.Aviso ? " · com aviso" : "")</span>
+                    @if (_editar?.Id == p.Id)
+                    {
+                        <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+                            <div class="campo">
+                                <label for="pe-unidade">Unidade</label>
+                                <select id="pe-unidade" @bind="_unidade">
+                                    <option value="dias">Dias</option>
+                                    <option value="meses">Meses</option>
+                                    <option value="nenhum">Nenhum</option>
+                                </select>
+                            </div>
+                            @if (_unidade != "nenhum")
+                            {
+                                <div class="campo">
+                                    <label for="pe-intervalo">Intervalo</label>
+                                    <input id="pe-intervalo" type="number" inputmode="numeric" min="1" max="@RegrasGestaoUi.MaxIntervalo" step="1" @bind="_intervalo" />
+                                </div>
+                            }
+                            <label class="opcao-caixa" for="pe-aviso"><input id="pe-aviso" type="checkbox" @bind="_aviso" /><span>Aviso</span></label>
+                            <button type="submit" class="btn btn-primario" disabled="@_ocupado"><Icone Nome="check" /><span>Guardar</span></button>
+                            <button type="button" class="btn-texto" @onclick="() => _editar = null">Deixar de editar</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => Editar(p)"><Icone Nome="wrench" /><span>Editar</span></button>
+                    }
+                </li>
+            }
+        </ul>
+        @if (_conflito) { <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Recarregar a lista</button> }
+    }
+</section>
+
+@code {
+    private IReadOnlyList<Periodicidade> _lista = [];
+    private Periodicidade? _editar;
+    private string _unidade = "dias", _erro = "";
+    private string? _falhou;
+    private int? _intervalo;
+    private bool _aviso, _a_carregar = true, _ocupado, _conflito;
+
+    protected override async Task OnInitializedAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        if (!Sessao.PodeSerSupervisor) { _a_carregar = false; return; }
+        _a_carregar = true; _falhou = null; _conflito = false; _erro = ""; _editar = null;
+        try { _lista = await Gestao.ListarPeriodicidadesAsync(); }
+        catch (Exception ex) { _falhou = MensagensGestao.Para(ex, "Não foi possível carregar as periodicidades."); }
+        finally { _a_carregar = false; }
+    }
+
+    private void Editar(Periodicidade p) { _editar = p; _unidade = p.Unidade; _intervalo = p.Intervalo == 0 ? null : p.Intervalo; _aviso = p.Aviso; _erro = ""; }
+
+    private async Task GuardarAsync()
+    {
+        if (_editar is null || _ocupado) return;
+        _erro = RegrasGestaoUi.ValidarPeriodicidade(_unidade, _intervalo) ?? "";
+        if (_erro.Length > 0) return;
+        _ocupado = true; _conflito = false;
+        try
+        {
+            await Gestao.GravarPeriodicidadeAsync(_editar.Id, new EdicaoPeriodicidade(_unidade, _unidade == "nenhum" ? 0 : _intervalo, _aviso, _editar.Concorrencia));
+            _editar = null;
+        }
+        catch (Exception ex)
+        {
+            _erro = MensagensGestao.Para(ex, "Não foi possível guardar. Tente outra vez.");
+            _conflito = ex.Message == MensagensIntervencao.Mudou;
+            _ocupado = false;
+            return;
+        }
+        // A gravação passou; se a lista não atualizar, só a lista falhou.
+        try { _lista = await Gestao.ListarPeriodicidadesAsync(); }
+        catch (Exception ex) { _erro = "A gravação foi feita, mas não foi possível atualizar a lista. " + MensagensGestao.Para(ex, "Volte a abrir o ecrã."); }
+        _ocupado = false;
+    }
+}

@@ -1,5 +1,6 @@
 @page "/equipamentos"
 @inject IEquipamentosService Servico
+@inject SessaoService Sessao
 
 <PageTitle>Equipamentos · Gestor de Manutenção</PageTitle>
 
@@ -26,6 +27,10 @@
     }
     else
     {
+        @if (Sessao.PodeSerSupervisor)
+        {
+            <a class="btn btn-primario" href="equipamentos/novo"><Icone Nome="plus" /><span>Novo equipamento</span></a>
+        }
         <form class="pesquisa" role="search" @onsubmit="PesquisarAsync" novalidate>
             <div class="pesquisa-linha">
                 <div class="campo">
@@ -61,18 +66,29 @@
         </form>
         <p id="eq-erro" class="campo-erro" role="alert">@_erro</p>
 
-        <ul class="contadores contadores-4" aria-label="Resumo dos equipamentos">
-            <li><div class="contador"><span class="led" aria-hidden="true"></span><span class="contador-num">@_base.Count</span><span class="contador-rot">Ativos</span></div></li>
-            <li><div class="contador"><span class="led" aria-hidden="true"></span><span class="contador-num">@_base.Count(e => e.FichasAbertas > 0)</span><span class="contador-rot">Com fichas abertas</span></div></li>
-            <li><div class="contador @(_base.Any(e => e.ForaDeServico) ? "alerta-led" : "")"><span class="led" aria-hidden="true"></span><span class="contador-num">@_base.Count(e => e.ForaDeServico)</span><span class="contador-rot">Fora de serviço</span></div></li>
-            <li><div class="contador @(_base.Any(e => e.SemIntervencaoHaUmAno(_hoje)) ? "alerta-led" : "")"><span class="led" aria-hidden="true"></span><span class="contador-num">@_base.Count(e => e.SemIntervencaoHaUmAno(_hoje))</span><span class="contador-rot">Sem intervenção +1 ano</span></div></li>
+        var totais = VistaEquipamentos.Contar(_base, _hoje);
+        <ul class="contadores contadores-4" aria-label="Resumo dos equipamentos (toque para filtrar)">
+            <li><button type="button" class="contador contador-btn @(_kpi == KpiEquipamentos.Ativos ? "contador-ativo" : "")" aria-pressed="@(_kpi == KpiEquipamentos.Ativos ? "true" : "false")" @onclick="() => Filtrar(KpiEquipamentos.Ativos)"><span class="led" aria-hidden="true"></span><span class="contador-num">@totais.Ativos</span><span class="contador-rot">Ativos</span></button></li>
+            <li><button type="button" class="contador contador-btn @(_kpi == KpiEquipamentos.ComFichasAbertas ? "contador-ativo" : "")" aria-pressed="@(_kpi == KpiEquipamentos.ComFichasAbertas ? "true" : "false")" @onclick="() => Filtrar(KpiEquipamentos.ComFichasAbertas)"><span class="led" aria-hidden="true"></span><span class="contador-num">@totais.ComFichasAbertas</span><span class="contador-rot">Com fichas abertas</span></button></li>
+            <li><button type="button" class="contador contador-btn @(totais.ForaDeServico > 0 ? "alerta-led" : "") @(_kpi == KpiEquipamentos.ForaDeServico ? "contador-ativo" : "")" aria-pressed="@(_kpi == KpiEquipamentos.ForaDeServico ? "true" : "false")" @onclick="() => Filtrar(KpiEquipamentos.ForaDeServico)"><span class="led" aria-hidden="true"></span><span class="contador-num">@totais.ForaDeServico</span><span class="contador-rot">Fora de serviço</span></button></li>
+            <li><button type="button" class="contador contador-btn @(totais.SemIntervencao > 0 ? "alerta-led" : "") @(_kpi == KpiEquipamentos.SemIntervencao ? "contador-ativo" : "")" aria-pressed="@(_kpi == KpiEquipamentos.SemIntervencao ? "true" : "false")" @onclick="() => Filtrar(KpiEquipamentos.SemIntervencao)"><span class="led" aria-hidden="true"></span><span class="contador-num">@totais.SemIntervencao</span><span class="contador-rot">Sem intervenção +1 ano</span></button></li>
         </ul>
+        <div class="filtros">
+            <div class="campo">
+                <label for="eq-ordem">Ordenar por</label>
+                <select id="eq-ordem" @bind="_ordem">
+                    @foreach (var o in Ordens) { <option value="@o">@VistaEquipamentos.Rotulo(o)</option> }
+                </select>
+            </div>
+            <label class="opcao-caixa" for="eq-desc"><input id="eq-desc" type="checkbox" @bind="_desc" /><span>Do maior para o menor</span></label>
+        </div>
+        var vista = VistaEquipamentos.Aplicar(_lista, _kpi, _ordem, _desc, _hoje);
         @if (_baseCortada)
         {
             <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>Mostrar só os primeiros @RegrasPesquisa.MaxEquipamentos; refine a pesquisa. Os totais acima estão incompletos.</span></p>
         }
 
-        @if (_lista.Count == 0)
+        @if (vista.Count == 0)
         {
             <p class="estado-lista" role="status">Não há equipamentos com estes filtros.</p>
         }
@@ -82,9 +98,9 @@
             {
                 <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>Mostrar só os primeiros @RegrasPesquisa.MaxEquipamentos; refine a pesquisa.</span></p>
             }
-            <p class="estado-lista" role="status">@_lista.Count equipamentos</p>
+            <p class="estado-lista" role="status">@vista.Count equipamentos@(_kpi != KpiEquipamentos.Nenhum ? " neste filtro" : "")</p>
             <ul class="lista-intervencoes">
-                @foreach (var e in _lista.Take(_limite))
+                @foreach (var e in vista.Take(_limite))
                 {
                     <li>
                         <a class="intervencao @(e.SemIntervencaoHaUmAno(_hoje) ? "atrasada" : "")" href="equipamentos/@e.Id">
@@ -100,9 +116,9 @@
                     </li>
                 }
             </ul>
-            @if (_lista.Count > _limite)
+            @if (vista.Count > _limite)
             {
-                <button type="button" class="btn btn-secundario" @onclick="() => _limite += PorPagina">Ver mais (@(_lista.Count - _limite))</button>
+                <button type="button" class="btn btn-secundario" @onclick="() => _limite += PorPagina">Ver mais (@(vista.Count - _limite))</button>
             }
         }
     }
@@ -110,6 +126,13 @@
 
 @code {
     private const int PorPagina = 20;
+    private static readonly OrdemEquipamentos[] Ordens = Enum.GetValues<OrdemEquipamentos>();
+    private KpiEquipamentos _kpi;
+    private OrdemEquipamentos _ordem = OrdemEquipamentos.Nome;
+    private bool _desc;
+
+    // Tocar outra vez no mesmo indicador tira o filtro.
+    private void Filtrar(KpiEquipamentos kpi) { _kpi = _kpi == kpi ? KpiEquipamentos.Nenhum : kpi; _limite = PorPagina; }
 
     private IReadOnlyList<Equipamento> _base = [], _lista = [];
     private IReadOnlyList<string> _tipos = [], _locais = [];

@@ -16,7 +16,8 @@ public sealed record IntervencaoDto(
     string? Anomalia = null, string? Feito = null, TimeOnly? HoraInicio = null, TimeOnly? HoraFim = null,
     string? Tecnico = null, int Tecno = 0, bool PodeValidar = true,
     DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null,
-    bool PodeAbrir = false, string? Motivo = null, IReadOnlyList<TecnicoFichaDto>? Adicionais = null);
+    bool PodeAbrir = false, string? Motivo = null, IReadOnlyList<TecnicoFichaDto>? Adicionais = null,
+    int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false);
 
 // Técnico adicional da intervenção: o número vem do memo tecnos da ficha e o nome resolve-se na API (nunca fica gravado na ficha).
 public sealed record TecnicoFichaDto(int Tecno, string Nome);
@@ -32,7 +33,15 @@ public sealed record FichaEquipamentoDto(EquipamentoDto Equipamento, IReadOnlyLi
 
 public sealed record FiltroEquipamentos(string Texto, string Tipo, string Local, bool Obsoletos);
 
-public sealed record FiltroFichas(EstadoIntervencao? Estado, DateOnly? Desde, DateOnly? Ate, string Texto, int Tecno, int Pagina);
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SituacaoFichas { Abertas, Fechadas, Todas }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum OrdemFichas { Numero, Data, Equipamento, Tipo, Total }
+
+// Abertas = não fechada e não cancelada; Fechadas = fechada; Todas = tudo (omissão, como antes). Sem ordem pedida: data, da mais recente para a mais antiga.
+public sealed record FiltroFichas(EstadoIntervencao? Estado, DateOnly? Desde, DateOnly? Ate, string Texto, int Tecno, int Pagina,
+    SituacaoFichas Situacao = SituacaoFichas.Todas, bool SoPorSupervisionar = false, TipoIntervencao? Tipo = null, OrdemFichas Ordem = OrdemFichas.Data, bool Descendente = true);
 
 public sealed record PaginaFichasDto(IReadOnlyList<IntervencaoDto> Itens, bool TemMais);
 
@@ -61,7 +70,7 @@ public sealed record PedidoAdicionais(IReadOnlyList<int>? Tecnos);
 
 public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros);
 
-public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, SemMaterial, LimiteFotos, TecnicoInvalido }
+public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, SemMaterial, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, Viatura, InstrucaoObsoleta }
 
 // O nome vai em tecnome (45); nas colunas de auditoria vai o código (30); a identidade da pessoa nas fichas é o Tecno.
 public sealed record TecnicoAtual(string Codigo, int Tecno, string Nome);
@@ -122,6 +131,13 @@ public static class RegrasIntervencao
         return i >= 0 && OpIdValido(t[(i + 5)..^1]) ? t[..i] : texto;
     }
 
+    // O marcador (se houver) que está no fim do texto lido da ficha, com o espaço inicial; vazio se não houver.
+    public static string ExtrairMarcador(string texto)
+    {
+        var semMarcador = SemMarcador(texto);
+        return ReferenceEquals(semMarcador, texto) || semMarcador.Length == texto.Length ? "" : texto.TrimEnd()[semMarcador.Length..];
+    }
+
     public static string? ValidarAvaria(string? equipamentoId, string? anomalia, string? opId = null) =>
         string.IsNullOrWhiteSpace(equipamentoId) || equipamentoId.Length > 25 ? "Equipamento em falta."
         : opId is not null && !OpIdValido(opId) ? "Identificador da operação inválido."
@@ -137,6 +153,7 @@ public static class RegrasIntervencao
         string.IsNullOrWhiteSpace(design) || design.Trim().Length > RegrasManutencao.TamanhoDesignMaterial ? "Material em falta ou com nome demasiado longo."
         : qtt is null or <= 0 or > 999_999 ? "Quantidade inválida."
         : epv is < 0 or > 999_999_999 ? "Preço inválido."
+        : qtt * (epv ?? 0) > 9_999_999_999_999m ? "O valor total do material é demasiado grande."
         : null;
 
     // Fotos da intervenção: JPEG (a app comprime antes de enviar), no máximo 10 por ficha e 3 MB cada.
@@ -190,8 +207,34 @@ public interface IRepositorioIntervencoes
 
     // Materiais usados (u_matinterv): só se vêem e mexem nas fichas do técnico; só se lançam com a ficha em curso.
     Task<IReadOnlyList<MaterialDto>?> ListarMateriaisAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
-    Task<(ResultadoIntervencao, MaterialDto?)> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, TecnicoAtual tecnico, CancellationToken ct);
-    Task<ResultadoIntervencao> ApagarMaterialAsync(string id, string materialId, TecnicoAtual tecnico, CancellationToken ct);
+    // Com supervisor = true vale a regra do supervisor: qualquer ficha que não seja final (Validada/Cancelada), tenha ou não o seu número.
+    Task<(ResultadoIntervencao, MaterialDto?)> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, TecnicoAtual tecnico, CancellationToken ct, bool supervisor = false);
+    Task<ResultadoIntervencao> ApagarMaterialAsync(string id, string materialId, TecnicoAtual tecnico, CancellationToken ct, bool supervisor = false);
+    Task<(ResultadoIntervencao, MaterialDto?)> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, TecnicoAtual quem, bool supervisor, CancellationToken ct);
+
+    // Ficha completa (para o supervisor qualquer uma; para o técnico só as suas ou sem dono), edição, cancelamento, ficha manual e fecho das fichas antigas.
+    // Edição: nomeTecnico só serve ao supervisor quando muda o técnico (o endpoint resolve-o); o estado nunca muda.
+    Task<FichaDetalheDto?> ObterDetalheAsync(string id, TecnicoAtual quem, bool supervisor, CancellationToken ct);
+    Task<(ResultadoIntervencao, FichaDetalheDto?)> GuardarFichaAsync(string id, PedidoFicha pedido, string? nomeTecnico, TecnicoAtual quem, bool supervisor, CancellationToken ct);
+    Task<(ResultadoIntervencao, IntervencaoDto?)> CancelarAsync(string id, string motivo, TecnicoAtual supervisor, CancellationToken ct);
+    // Nasce em curso, com o utilizador como técnico; com opId, repetir o pedido devolve a ficha já criada.
+    Task<(ResultadoIntervencao, IntervencaoDto?)> CriarFichaManualAsync(PedidoFichaManual pedido, TecnicoAtual tecnico, CancellationToken ct);
+    Task<(ResultadoIntervencao, FichaDetalheDto?)> FecharAntigaAsync(string id, bool supervisao, bool fechada, TecnicoAtual supervisor, CancellationToken ct);
+
+    // Mão de obra interna (u_tempinterv): custo = horas x custo/hora. Mesmas regras de acesso do material; o nome do técnico escolhido vem resolvido do endpoint.
+    Task<IReadOnlyList<TempoDto>?> ListarMaoDeObraAsync(string id, TecnicoAtual quem, bool supervisor, CancellationToken ct);
+    Task<(ResultadoIntervencao, TempoDto?)> AdicionarMaoDeObraAsync(string id, int tecno, string nome, decimal horas, decimal custoHora, TecnicoAtual quem, bool supervisor, CancellationToken ct);
+    Task<(ResultadoIntervencao, TempoDto?)> EditarMaoDeObraAsync(string id, string tempoId, int tecno, string nome, decimal horas, decimal custoHora, TecnicoAtual quem, bool supervisor, CancellationToken ct);
+    Task<ResultadoIntervencao> ApagarMaoDeObraAsync(string id, string tempoId, TecnicoAtual quem, bool supervisor, CancellationToken ct);
+    // Custo/hora do último registo do técnico (0 se não houver).
+    Task<decimal> CustoHoraSugeridoAsync(int tecno, CancellationToken ct);
+
+    // Compras ligadas à ficha (fn), só leitura; sem compras na configuração a lista vem vazia. Fornecedores (fl) para escolher na ficha.
+    Task<IReadOnlyList<CompraLigadaDto>?> ListarComprasAsync(string id, TecnicoAtual quem, bool supervisor, CancellationToken ct);
+    Task<IReadOnlyList<FornecedorDto>> PesquisarFornecedoresAsync(string texto, CancellationToken ct);
+
+    // Contadores do menu do supervisor: planeadas atrasadas (data passada ou fora de prazo, como o KPI do ecrã) e fichas por validar.
+    Task<ContadoresMenuDto> ContarMenuAsync(CancellationToken ct);
 
     // Fotos (anexos do PHC ligados à ficha): o técnico vê e mexe nas da sua ficha, só com a ficha em curso; o supervisor vê as de qualquer ficha (só leitura).
     Task<IReadOnlyList<FotoDto>?> ListarFotosAsync(string id, TecnicoAtual quem, bool supervisor, CancellationToken ct);
@@ -200,7 +243,7 @@ public interface IRepositorioIntervencoes
     Task<ResultadoIntervencao> ApagarFotoAsync(string id, string fotoId, TecnicoAtual tecnico, CancellationToken ct);
 }
 
-public static class EndpointsIntervencoes
+public static partial class EndpointsIntervencoes
 {
     public static void MapIntervencoes(this WebApplication app)
     {
@@ -210,7 +253,8 @@ public static class EndpointsIntervencoes
             var rotas = ctx.HttpContext.Request.RouteValues;
             if ((rotas.TryGetValue("id", out var id) && id?.ToString()?.Length > 25)
                 || (rotas.TryGetValue("materialId", out var mat) && mat?.ToString()?.Length > 25)
-                || (rotas.TryGetValue("fotoId", out var foto) && foto?.ToString()?.Length > 25)) return Results.NotFound();
+                || (rotas.TryGetValue("fotoId", out var foto) && foto?.ToString()?.Length > 25)
+                || (rotas.TryGetValue("tempoId", out var tempo) && tempo?.ToString()?.Length > 25)) return Results.NotFound();
             try { return await ComNomesAsync(await next(ctx), ctx.HttpContext); }
             catch (RepositorioIndisponivelException) { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
         });
@@ -251,9 +295,21 @@ public static class EndpointsIntervencoes
         });
 
         // Todas as fichas (supervisor): estado, intervalo de datas, texto e técnico (número do PHC); 20 por página.
+        // Também: situacao (abertas, fechadas, todas), porSupervisionar, tipo (preventiva, curativa), ordem (numero, data, equipamento, tipo, total) e desc.
         g.MapGet("/intervencoes/todas", async Task<IResult> (string? estado, DateOnly? desde, DateOnly? ate, string? q, int? tecno, int? pagina,
+            string? situacao, bool? porSupervisionar, string? tipo, string? ordem, bool? desc,
             ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
         {
+            var sit = SituacaoFichas.Todas;
+            var ord = OrdemFichas.Data;
+            TipoIntervencao? tipoFiltro = null;
+            if (!string.IsNullOrWhiteSpace(situacao) && (!Enum.TryParse(situacao.Trim(), true, out sit) || !Enum.IsDefined(sit))) return Results.BadRequest();
+            if (!string.IsNullOrWhiteSpace(ordem) && (!Enum.TryParse(ordem.Trim(), true, out ord) || !Enum.IsDefined(ord))) return Results.BadRequest();
+            if (!string.IsNullOrWhiteSpace(tipo))
+            {
+                if (!Enum.TryParse<TipoIntervencao>(tipo.Trim(), true, out var t) || !Enum.IsDefined(t)) return Results.BadRequest();
+                tipoFiltro = t;
+            }
             EstadoIntervencao? estadoFiltro = null;
             if (!string.IsNullOrWhiteSpace(estado))
             {
@@ -266,7 +322,7 @@ public static class EndpointsIntervencoes
                 return Results.Json(new { erro = "pedido_invalido", mensagem = "As datas têm de estar entre 01/01/1900 e 31/12/2999." }, statusCode: StatusCodes.Status400BadRequest);
 
             return await ComoSupervisor(eu, utilizadores, ct, async s =>
-                Results.Ok(await repo.ListarTodasAsync(new FiltroFichas(estadoFiltro, desde, ate, texto, tecno ?? 0, pagina ?? 1), s, ct)));
+                Results.Ok(await repo.ListarTodasAsync(new FiltroFichas(estadoFiltro, desde, ate, texto, tecno ?? 0, pagina ?? 1, sit, porSupervisionar ?? false, tipoFiltro, ord, desc ?? true), s, ct)));
         }).RequireAuthorization("Supervisor");
 
         g.MapGet("/configuracao", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
@@ -307,12 +363,96 @@ public static class EndpointsIntervencoes
         g.MapPost("/intervencoes/{id}/materiais", (string id, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             RegrasIntervencao.ValidarMaterial(p.Design, p.Qtt, p.Epv) is not null
                 ? Task.FromResult(Results.BadRequest())
-                : ComoTecnico(eu, utilizadores, ct, async t => Resposta(await repo.AdicionarMaterialAsync(id, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, ct))));
+                : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) => Resposta(await repo.AdicionarMaterialAsync(id, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, ct, sup))));
+
+        g.MapPut("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            RegrasIntervencao.ValidarMaterial(p.Design, p.Qtt, p.Epv) is not null
+                ? Task.FromResult(Results.BadRequest())
+                : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) => Resposta(await repo.EditarMaterialAsync(id, materialId, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, sup, ct))));
 
         g.MapDelete("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
-            ComoTecnico(eu, utilizadores, ct, async t => await repo.ApagarMaterialAsync(id, materialId, t, ct) is var r && r == ResultadoIntervencao.Ok
+            ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) => await repo.ApagarMaterialAsync(id, materialId, t, ct, sup) is var r && r == ResultadoIntervencao.Ok
                 ? Results.NoContent()
                 : Resposta<object>((r, null))));
+
+        // Ficha manual (operador e supervisor com número de técnico), ficha completa, edição, cancelamento e fecho das fichas antigas.
+        g.MapPost("/intervencoes", (PedidoFichaManual p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            RegrasFicha.ValidarFichaManual(p) is { } erro
+                ? Task.FromResult(PedidoInvalido(erro))
+                : ComoTecnico(eu, utilizadores, ct, async t => Resposta(await repo.CriarFichaManualAsync(p, t, ct))));
+
+        g.MapGet("/intervencoes/contadores", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoSupervisor(eu, utilizadores, ct, async _ => Results.Ok(await repo.ContarMenuAsync(ct)))).RequireAuthorization("Supervisor");
+
+        g.MapGet("/intervencoes/{id}/detalhe", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (q, sup) => await repo.ObterDetalheAsync(id, q, sup, ct) is { } d ? Results.Ok(d) : Results.NotFound()));
+
+        g.MapPut("/intervencoes/{id}", async Task<IResult> (string id, PedidoFicha p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        {
+            if (RegrasFicha.ValidarPedido(p) is { } erro) return PedidoInvalido(erro);
+            return await ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (q, sup) =>
+            {
+                // Sem nome (técnico inexistente ou inativo) o repositório só recusa se o técnico mudar de facto.
+                var nome = sup && p.Tecno is { } tecno ? await NomeTecnicoAtivoAsync(utilizadores, tecno, ct) : null;
+                return Resposta(await repo.GuardarFichaAsync(id, p, nome, q, sup, ct));
+            });
+        });
+
+        g.MapPost("/intervencoes/{id}/cancelar", (string id, PedidoCancelamento p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            RegrasFicha.ValidarCancelamento(p.Motivo) is { } erro
+                ? Task.FromResult(PedidoInvalido(erro))
+                : ComoSupervisor(eu, utilizadores, ct, async s => Resposta(await repo.CancelarAsync(id, p.Motivo!.Trim(), s, ct)))).RequireAuthorization("Supervisor");
+
+        g.MapPut("/intervencoes/{id}/antiga", (string id, PedidoFechoAntiga p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            p.Supervisao is null || p.Fechada is null
+                ? Task.FromResult(PedidoInvalido("Indique se está supervisionada e se está fechada."))
+                : ComoSupervisor(eu, utilizadores, ct, async s => Resposta(await repo.FecharAntigaAsync(id, p.Supervisao.Value, p.Fechada.Value, s, ct)))).RequireAuthorization("Supervisor");
+
+        // Mão de obra interna: técnico e horas obrigatórios; o custo é horas x custo/hora.
+        g.MapGet("/intervencoes/{id}/mao-de-obra", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (q, sup) => await repo.ListarMaoDeObraAsync(id, q, sup, ct) is { } l ? Results.Ok(RegrasFicha.OcultarCustos(l, sup, q.Tecno)) : Results.NotFound()));
+
+        g.MapPost("/intervencoes/{id}/mao-de-obra", async Task<IResult> (string id, PedidoTempo p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        {
+            if (RegrasFicha.ValidarTempo(p.Tecno, p.Horas, p.CustoHora) is { } erro) return PedidoInvalido(erro);
+            return await ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (q, sup) =>
+                await NomeTecnicoAtivoAsync(utilizadores, p.Tecno!.Value, ct) is not { } nome
+                    ? Resposta<TempoDto>((ResultadoIntervencao.TecnicoInvalido, null))
+                    : Resposta(Esconder(await repo.AdicionarMaoDeObraAsync(id, p.Tecno.Value, nome, p.Horas!.Value, p.CustoHora ?? 0, q, sup, ct), sup, q.Tecno)));
+        });
+
+        g.MapPut("/intervencoes/{id}/mao-de-obra/{tempoId}", async Task<IResult> (string id, string tempoId, PedidoTempo p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        {
+            if (RegrasFicha.ValidarTempo(p.Tecno, p.Horas, p.CustoHora) is { } erro) return PedidoInvalido(erro);
+            return await ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (q, sup) =>
+                await NomeTecnicoAtivoAsync(utilizadores, p.Tecno!.Value, ct) is not { } nome
+                    ? Resposta<TempoDto>((ResultadoIntervencao.TecnicoInvalido, null))
+                    : Resposta(Esconder(await repo.EditarMaoDeObraAsync(id, tempoId, p.Tecno.Value, nome, p.Horas!.Value, p.CustoHora ?? 0, q, sup, ct), sup, q.Tecno)));
+        });
+
+        g.MapDelete("/intervencoes/{id}/mao-de-obra/{tempoId}", (string id, string tempoId, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (q, sup) => await repo.ApagarMaoDeObraAsync(id, tempoId, q, sup, ct) is var r && r == ResultadoIntervencao.Ok
+                ? Results.NoContent()
+                : Resposta<object>((r, null))));
+
+        g.MapGet("/tecnicos/{tecno:int}/custo-hora", async Task<IResult> (int tecno, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        {
+            if (await Ativo(eu, utilizadores, ct) is not { } u) return Results.Forbid();
+            if (tecno is < 1 or > RegrasIntervencao.MaxTecnoPhc) return Results.BadRequest();
+            // Só o próprio técnico e o supervisor vêem o custo/hora de alguém; para os outros é 0.
+            return Results.Ok(u.Perfil == Perfil.Supervisor || u.Tecno == tecno ? await repo.CustoHoraSugeridoAsync(tecno, ct) : 0m);
+        });
+
+        // Compras ligadas à ficha (só leitura, só supervisor) e pesquisa de fornecedores (2 letras no mínimo).
+        g.MapGet("/intervencoes/{id}/compras", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoSupervisor(eu, utilizadores, ct, async s => await repo.ListarComprasAsync(id, s, true, ct) is { } l ? Results.Ok(l) : Results.NotFound())).RequireAuthorization("Supervisor");
+
+        g.MapGet("/fornecedores", async Task<IResult> (string? q, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        {
+            if (await Ativo(eu, utilizadores, ct) is null) return Results.Forbid();
+            var texto = (q ?? "").Trim();
+            return texto.Length is < 2 or > RegrasManutencao.MaxTextoPesquisa ? Results.Ok(Array.Empty<FornecedorDto>()) : Results.Ok(await repo.PesquisarFornecedoresAsync(texto, ct));
+        });
 
         // Fotos: a lista e cada foto servem o técnico da ficha e qualquer supervisor; juntar e apagar só o técnico, com a ficha em curso.
         g.MapGet("/intervencoes/{id}/fotos", async Task<IResult> (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
@@ -398,6 +538,7 @@ public static class EndpointsIntervencoes
             IReadOnlyList<IntervencaoDto> l => l.Any(Tem),
             PaginaFichasDto pg => pg.Itens.Any(Tem),
             FichaEquipamentoDto f => f.Historico.Any(Tem),
+            FichaDetalheDto d => d.Adicionais is { Count: > 0 },
             _ => false
         };
         if (!precisa) return resultado;
@@ -412,9 +553,20 @@ public static class EndpointsIntervencoes
             IReadOnlyList<IntervencaoDto> l => Results.Ok((IReadOnlyList<IntervencaoDto>)l.Select(N).ToList()),
             PaginaFichasDto pg => Results.Ok(pg with { Itens = pg.Itens.Select(N).ToList() }),
             FichaEquipamentoDto f => Results.Ok(f with { Historico = f.Historico.Select(N).ToList() }),
+            FichaDetalheDto d => Results.Ok(d with { Adicionais = d.Adicionais!.Select(a => a with { Nome = nomes.GetValueOrDefault(a.Tecno, "PHC " + a.Tecno) }).ToList() }),
             _ => resultado
         };
     }
+
+    // Só técnicos ativos com número do PHC podem ser escolhidos numa ficha ou na mão de obra.
+    private static async Task<string?> NomeTecnicoAtivoAsync(IRepositorioUtilizadores utilizadores, int tecno, CancellationToken ct) =>
+        (await utilizadores.ListarAsync(ct)).FirstOrDefault(u => u.Ativo && u.Tecno == tecno) is { } alvo ? Truncar(alvo.Nome) : null;
+
+    private static (ResultadoIntervencao, TempoDto?) Esconder((ResultadoIntervencao Resultado, TempoDto? Tempo) r, bool supervisor, int tecno) =>
+        (r.Resultado, r.Tempo is { } t ? RegrasFicha.OcultarCusto(t, supervisor, tecno) : null);
+
+    private static IResult PedidoInvalido(string mensagem) =>
+        Results.Json(new { erro = "pedido_invalido", mensagem }, statusCode: StatusCodes.Status400BadRequest);
 
     private static async Task<UtilizadorApp?> Ativo(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct)
     {
@@ -451,7 +603,7 @@ public static class EndpointsIntervencoes
     // Pressuposto: o operador só vê o conteúdo (problema, o que foi feito, técnico, horas) das fichas suas; nas dos outros só data, tipo e estado.
     // O supervisor vê tudo. PodeAbrir já vem calculado do repositório e o número do técnico sai, para não identificar ninguém.
     internal static FichaEquipamentoDto RestringirHistorico(FichaEquipamentoDto ficha, int tecno, bool supervisor) =>
-        supervisor ? ficha : ficha with
+        supervisor ? ficha with { Historico = ficha.Historico.Select(h => h with { PodeAbrir = true }).ToList() } : ficha with
         {
             Historico = ficha.Historico.Select(h => RegrasIntervencao.Envolve(h, tecno)
                 ? h
@@ -473,6 +625,15 @@ public static class EndpointsIntervencoes
         ResultadoIntervencao.Propria => Conflito("propria"),
         ResultadoIntervencao.SemMaterial => Conflito("sem_material"),
         ResultadoIntervencao.LimiteFotos => Conflito("limite_fotos"),
+        ResultadoIntervencao.SemPermissao => Results.Json(new { erro = "sem_permissao" }, statusCode: StatusCodes.Status403Forbidden),
+        ResultadoIntervencao.Invalido => Results.Json(new { erro = "pedido_invalido", mensagem = "Algum dos valores indicados não é válido." }, statusCode: StatusCodes.Status400BadRequest),
+        ResultadoIntervencao.ProblemaLongo => Results.Json(new { erro = "problema_longo", mensagem = "O problema é demasiado longo para esta ficha (leva um identificador da operação)." }, statusCode: StatusCodes.Status400BadRequest),
+        ResultadoIntervencao.RefDuplicada => Conflito("ref_duplicada"),
+        ResultadoIntervencao.PlaneadasMudaram => Conflito("planeadas_mudaram"),
+        ResultadoIntervencao.TarefaComFichas => Conflito("tarefa_com_fichas"),
+        ResultadoIntervencao.InstrucaoObsoleta => Conflito("instrucao_obsoleta"),
+        ResultadoIntervencao.Viatura => Results.Json(new { erro = "pedido_invalido", mensagem = "As viaturas não são geridas neste módulo." }, statusCode: StatusCodes.Status400BadRequest),
+        ResultadoIntervencao.PeriodicidadeInvalida => Results.Json(new { erro = "periodicidade_invalida", mensagem = "Essa periodicidade não existe neste equipamento." }, statusCode: StatusCodes.Status400BadRequest),
         _ => Conflito("conflito")
     };
 }

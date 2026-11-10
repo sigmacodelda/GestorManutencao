@@ -57,6 +57,42 @@ public static class RegrasManutencao
 
     public static decimal CustoMaterial(decimal qtt, decimal precoUnitario) => Math.Round(qtt * precoUnitario, 3);
 
+    public static decimal CustoTempo(decimal horas, decimal custoHora) => Math.Round(horas * custoHora, 3);
+
+    // Tamanhos das colunas de u_fichaint e u_tempinterv (os mesmos da LandeiroMaui).
+    public const int TamanhoPeriodo = 20, TamanhoTipoFicha = 20, TamanhoProblema = 200, TamanhoResolucao = 254, TamanhoDocExterno = 25, TamanhoNomeFornecedor = 55,
+        TamanhoRefFicha = 20, TamanhoDesignFicha = 45, TamanhoObs = 4000, TamanhoMotivoCancelamento = 240;
+
+    public const decimal MaxHoras = 999.99m, MaxValor = 999_999_999m, MaxCustoHora = 99_999m;
+
+    public const string TipoInterna = "Interna", TipoExterna = "Externa";
+
+    // Tipo das linhas de compra (fn.u_tpint) que contam para os totais externos da ficha.
+    public const string CompraMaoObra = "Mão de Obra", CompraPecas = "Peças";
+
+    // No PHC há valores "-----------" a fazer de vazio: para mostrar, contam como vazio.
+    public static string Visivel(string? texto)
+    {
+        var t = (texto ?? "").Trim();
+        return t.TrimStart('-').Trim().Length == 0 ? "" : t;
+    }
+
+    // Datas vazias do PHC (1900) passam a null.
+    public static DateTime? DataOuNula(DateTime? data) => data is null || data.Value.Year <= 1900 ? null : data;
+
+    // Total M.O. = interna + externa; total peças = materiais internos + externos.
+    public static (decimal TotMo, decimal TotRef) Totais(decimal moInterna, decimal moExterna, decimal matInterno, decimal matExterno) =>
+        (moInterna + moExterna, matInterno + matExterno);
+
+    // Externos: só vêm das compras quando a configuração as usa e há linhas ligadas; senão ficam os valores à mão.
+    public static (decimal MoExterna, decimal MatExterno) Externos(bool usaCompras, IReadOnlyCollection<CompraLigadaDto> compras, decimal moManual, decimal matManual) =>
+        !usaCompras || compras.Count == 0
+            ? (moManual, matManual)
+            : (compras.Where(c => c.Tipo == CompraMaoObra).Sum(c => c.Valor), compras.Where(c => c.Tipo == CompraPecas).Sum(c => c.Valor));
+
+    // Mesma regra do KPI "Atrasadas" do ecrã de planeadas: data passada ou fora de prazo (prevista passada).
+    public static bool EmAtraso(DateOnly data, DateOnly? prevista, DateOnly hoje) => data < hoje || (prevista is { } p && p < hoje);
+
     // Limites da pesquisa de equipamentos e fichas; tamanhos das colunas u_equip.tipo e u_equip.local.
     public const int MaxTextoPesquisa = 60, TamanhoTipo = 30, TamanhoLocal = 65, FichasPorPagina = 20, FichasNoHistorico = 50, MaxEquipamentos = 500, MaxPesquisaAvaria = 20;
 

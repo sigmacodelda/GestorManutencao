@@ -15,7 +15,7 @@ else
         <a class="mosaico mosaico-link" href="@Href">
             <span class="mosaico-icone"><Icone Nome="@Icone" /></span>
             <span class="mosaico-texto">
-                <span class="mosaico-titulo">@Titulo @if (Contagem > 0) {<span class="contagem">@Contagem<span class="so-leitor"> por ler</span></span>}</span>
+                <span class="mosaico-titulo">@Titulo @if (Contagem > 0) {<span class="contagem">@Contagem<span class="so-leitor"> @RotuloContagem</span></span>}</span>
                 <span class="mosaico-desc">@Descricao</span>
             </span>
         </a>
@@ -28,4 +28,5 @@ else
     [Parameter] public string Descricao { get; set; } = "";
     [Parameter] public string? Href { get; set; }
     [Parameter] public int Contagem { get; set; }
+    [Parameter] public string RotuloContagem { get; set; } = "por ler";
 }

@@ -1,0 +1,147 @@
+@page "/nova-ficha"
+@using NovaFichaModelo = GestorManutencao.UI.Modelos.NovaFicha
+@inject IIntervencoesService Intervencoes
+@inject IEquipamentosService Equipamentos
+@inject NavigationManager Nav
+
+<PageTitle>Nova ficha de intervenção · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Nova ficha de intervenção</h1>
+    </div>
+
+    <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+        <div class="campo">
+            <label for="nf-equipamento">Equipamento</label>
+            <input id="nf-equipamento" type="search" autocomplete="off" placeholder="Escreva o nome" value="@_texto" @oninput="PesquisarAsync" aria-describedby="nf-erro" />
+            @if (_escolhido is not null)
+            {
+                <p class="escolhido"><Icone Nome="check" /><span>@_escolhido.Nome · @_escolhido.Zona</span></p>
+            }
+            else if (_opcoes.Count > 0)
+            {
+                <ul class="opcoes" aria-label="Equipamentos encontrados">
+                    @foreach (var e in _opcoes)
+                    {
+                        <li><button type="button" class="opcao" @onclick="() => EscolherAsync(e)">@e.Nome <span class="opcao-zona">@e.Zona</span></button></li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div class="filtros">
+            <div class="campo">
+                <label for="nf-tipo">Tipo</label>
+                <select id="nf-tipo" @bind="_tipo">
+                    <option value="@TipoIntervencao.Preventiva">Preventiva</option>
+                    <option value="@TipoIntervencao.Curativa">Curativa (avaria)</option>
+                </select>
+            </div>
+            <div class="campo">
+                <label for="nf-manut">Manutenção</label>
+                <select id="nf-manut" @bind="_tipoManut">
+                    <option value="Interna">Interna</option>
+                    <option value="Externa">Externa</option>
+                </select>
+            </div>
+            <div class="campo">
+                <label for="nf-periodo">Periodicidade (se houver)</label>
+                <select id="nf-periodo" @bind="_periodo" disabled="@(_escolhido is null)">
+                    <option value="">Nenhuma</option>
+                    @foreach (var p in _periodos) { <option value="@p">@p</option> }
+                </select>
+            </div>
+        </div>
+
+        <div class="campo">
+            <label for="nf-problema">Problema (se houver)</label>
+            <textarea id="nf-problema" rows="4" maxlength="@Max" @bind="_problema" @bind:event="oninput"></textarea>
+            <span class="campo-contador @(_problema.Length >= Max ? "no-limite" : "")" aria-live="polite">@_problema.Length de @Max letras</span>
+            <Microfone @bind-Texto="_problema" MaxLength="Max" />
+        </div>
+
+        <p id="nf-erro" class="campo-erro" role="alert">@_erro</p>
+        <button type="submit" class="btn btn-primario" disabled="@_a_guardar">@(_a_guardar ? "A guardar…" : "Criar ficha")</button>
+    </form>
+</section>
+
+@code {
+    // Com o identificador da operação o texto tem este limite.
+    private const int Max = RegrasIntervencao.MaxAnomaliaComOpId;
+
+    [SupplyParameterFromQuery(Name = "equipamento")] public string? EquipamentoId { get; set; }
+
+    private string _texto = "", _problema = "", _erro = "", _tipoManut = "Interna", _periodo = "";
+    private TipoIntervencao _tipo = TipoIntervencao.Preventiva;
+    private IReadOnlyList<Equipamento> _opcoes = [];
+    private IReadOnlyList<string> _periodos = [];
+    private Equipamento? _escolhido;
+    private bool _a_guardar;
+    // Um por formulário: repetir o envio depois de uma falha a meio não cria outra ficha.
+    private readonly string _opId = ClassificacaoErros.NovoOpId();
+    private CancellationTokenSource? _espera;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(EquipamentoId)) return;
+        try
+        {
+            if (await Equipamentos.ObterFichaAsync(EquipamentoId) is { } ficha)
+            {
+                _escolhido = ficha.Equipamento; _texto = ficha.Equipamento.Nome;
+                _periodos = Periodos(ficha);
+            }
+        }
+        catch (Exception) { /* escolhe-se à mão */ }
+    }
+
+    private static IReadOnlyList<string> Periodos(FichaEquipamento f) =>
+        f.Tarefas.Select(t => t.Periodicidade).Where(p => p.Length > 0).Distinct().Order().ToList();
+
+    private async Task PesquisarAsync(ChangeEventArgs e)
+    {
+        _texto = e.Value?.ToString() ?? "";
+        _escolhido = null; _periodos = []; _periodo = ""; _erro = "";
+        _espera?.Cancel();
+        _espera = new CancellationTokenSource();
+        var cancelamento = _espera.Token;
+        if (_texto.Trim().Length == 0) { _opcoes = []; return; }
+        try
+        {
+            await Task.Delay(300, cancelamento);
+            var encontrados = await Equipamentos.PesquisarAsync(_texto, cancelamento);
+            if (!cancelamento.IsCancellationRequested) _opcoes = encontrados;
+        }
+        catch (OperationCanceledException) { /* veio outra tecla */ }
+        catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
+        catch (Exception) { _erro = "Não foi possível pesquisar. Tente outra vez."; }
+    }
+
+    private async Task EscolherAsync(Equipamento e)
+    {
+        _espera?.Cancel();
+        _escolhido = e; _texto = e.Nome; _opcoes = []; _erro = ""; _periodo = "";
+        try { _periodos = await Equipamentos.ObterFichaAsync(e.Id) is { } f ? Periodos(f) : []; }
+        catch (Exception) { _periodos = []; }
+    }
+
+    private async Task GuardarAsync()
+    {
+        var ficha = new NovaFichaModelo(_escolhido?.Id ?? "", _tipo, _tipoManut, _periodo, _problema.Trim(), _opId);
+        _erro = RegrasFichaDetalhe.ValidarNova(ficha) ?? "";
+        if (_erro.Length > 0) return;
+        _a_guardar = true;
+        try
+        {
+            var criada = await Intervencoes.CriarFichaManualAsync(ficha);
+            Nav.NavigateTo($"intervencoes/{Uri.EscapeDataString(criada.Id)}");
+        }
+        catch (InvalidOperationException ex) { _erro = ex.Message; }
+        catch (SemNumeroTecnicoException) { _erro = "Ainda não tem o número de técnico. Fale com o supervisor."; }
+        catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
+        catch (Exception) { _erro = "Não foi possível criar a ficha. Tente outra vez."; }
+        finally { _a_guardar = false; }
+    }
+}

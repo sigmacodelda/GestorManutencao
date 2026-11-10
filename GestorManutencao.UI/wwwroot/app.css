@@ -576,6 +576,9 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 .contadores-4 .contador { min-height: 72px; padding: var(--esp-2) var(--esp-3); }
 .contadores-4 .contador-num { font-size: 1.75rem; }
 .contadores-4 .contador-rot { font-size: .75rem; }
+/* Indicadores que filtram a lista: botão com o aspeto do contador; o ativo ganha contorno da cor primária. */
+.contador-btn { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; min-height: var(--alvo); }
+.contador-ativo { outline: 3px solid var(--primario); outline-offset: 2px; }
 .filtros { display: grid; gap: var(--esp-3); grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: end; }
 .filtros .filtro-texto { grid-column: 1 / -1; }
 .filtros input[type="search"], .filtros input[type="date"], .filtros select {

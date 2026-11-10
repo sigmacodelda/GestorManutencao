@@ -155,7 +155,7 @@ public sealed class OfflineIntervencoesService(
             {
                 var criada = await remoto.RegistarAvariaAsync(equipamentoId, texto, opId, ct);
                 var guardada = await mc.GuardarFichaServidorAsync(criada);
-                EscritaOnline?.Invoke();
+                AvisarEscrita();
                 return guardada;
             }
             catch (Exception e) when (FalhaDeRede(e, ct)) { }
@@ -183,7 +183,7 @@ public sealed class OfflineIntervencoesService(
             try
             {
                 var ficha = await mc.GuardarFichaServidorAsync(await remoto.IniciarAsync(id, ct));
-                EscritaOnline?.Invoke();
+                AvisarEscrita();
                 return ficha;
             }
             catch (Exception e) when (FalhaDeRede(e, ct)) { }
@@ -205,7 +205,7 @@ public sealed class OfflineIntervencoesService(
             try
             {
                 var ficha = await mc.GuardarFichaServidorAsync(await remoto.ConcluirAsync(id, feito, inicio, fim, ct));
-                EscritaOnline?.Invoke();
+                AvisarEscrita();
                 return ficha;
             }
             catch (Exception e) when (FalhaDeRede(e, ct)) { }
@@ -244,7 +244,7 @@ public sealed class OfflineIntervencoesService(
                 {
                     if (await Cache.LerMateriaisAsync(id) is { } lista && lista.All(m => m.Id != criado.Id)) await Cache.GuardarMateriaisAsync(id, [.. lista, criado]);
                 });
-                EscritaOnline?.Invoke();
+                AvisarEscrita();
                 return criado;
             }
             // Sem resposta o servidor pode já ter gravado: a operação fica Incerta e verifica-se antes de reenviar.
@@ -280,7 +280,7 @@ public sealed class OfflineIntervencoesService(
                 {
                     if (await Cache.LerMateriaisAsync(id) is { } lista) await Cache.GuardarMateriaisAsync(id, lista.Where(m => m.Id != materialId).ToList());
                 });
-                EscritaOnline?.Invoke();
+                AvisarEscrita();
                 return;
             }
             catch (Exception e) when (FalhaDeRede(e, ct)) { }
@@ -334,7 +334,7 @@ public sealed class OfflineIntervencoesService(
                     if (await Cache.LerFotosAsync(id) is { } lista && lista.All(f => f.Id != criada.Id)) await Cache.GuardarFotosAsync(id, [.. lista, criada]);
                     if (await Cache.ObterFichaAsync(id) is { PorFazer: true }) await Cache.GuardarFotoBytesAsync(id, criada.Id, jpeg);
                 });
-                EscritaOnline?.Invoke();
+                AvisarEscrita();
                 return criada;
             }
             catch (Exception e) when (FalhaDeRede(e, ct)) { incerta = true; }
@@ -371,7 +371,7 @@ public sealed class OfflineIntervencoesService(
                 {
                     if (await Cache.LerFotosAsync(id) is { } lista) await Cache.GuardarFotosAsync(id, lista.Where(f => f.Id != fotoId).ToList());
                 });
-                EscritaOnline?.Invoke();
+                AvisarEscrita();
                 return;
             }
             catch (Exception e) when (FalhaDeRede(e, ct)) { }
@@ -453,16 +453,115 @@ public sealed class OfflineIntervencoesService(
 
     // ---- Só online (supervisor) ----
 
+    // Depois de uma escrita de gestão que pode ter cancelado planeadas (equipamento obsoleto, instrução, tarefa): contadores limpos e cópia local das fichas atualizada.
+    public async Task AposEscritaDeGestaoAsync()
+    {
+        _contadores = null;
+        try { await ListarMinhasAsync(); }
+        catch (Exception) { /* sem rede ou com erro, a cópia refresca-se na próxima leitura */ }
+    }
+
+    // Os contadores do menu deixam de valer com qualquer escrita remota.
+    private void AvisarEscrita() { _contadores = null; EscritaOnline?.Invoke(); }
+
+    private async Task<T> EscritaRemotaAsync<T>(Func<Task<T>> acao)
+    {
+        var r = await acao();
+        _contadores = null;
+        return r;
+    }
+
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => remoto.ListarPorValidarAsync(ct);
-    public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => remoto.ValidarAsync(id, ct);
-    public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => remoto.DevolverAsync(id, motivo, ct);
+    public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => EscritaRemotaAsync(() => remoto.ValidarAsync(id, ct));
+    public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => EscritaRemotaAsync(() => remoto.DevolverAsync(id, motivo, ct));
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => remoto.ListarPlaneadasAsync(ct);
-    public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) => remoto.AtribuirAsync(id, tecno, ct);
-    public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) => remoto.DefinirAdicionaisAsync(id, tecnos, ct);
-    public Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default) => remoto.GerarPlaneadasAsync(ct);
+    public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) => EscritaRemotaAsync(() => remoto.AtribuirAsync(id, tecno, ct));
+    public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) => EscritaRemotaAsync(() => remoto.DefinirAdicionaisAsync(id, tecnos, ct));
+    public Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default) => EscritaRemotaAsync(() => remoto.GerarPlaneadasAsync(ct));
     public Task<PaginaFichas> ListarTodasAsync(FiltroFichas filtro, int pagina, CancellationToken ct = default) => remoto.ListarTodasAsync(filtro, pagina, ct);
     public Task<ConfiguracaoManutencao> ObterConfiguracaoAsync(CancellationToken ct = default) => remoto.ObterConfiguracaoAsync(ct);
     public Task<ConfiguracaoManutencao> GuardarConfiguracaoAsync(ConfiguracaoManutencao configuracao, CancellationToken ct = default) => remoto.GuardarConfiguracaoAsync(configuracao, ct);
+
+    // ---- Ficha completa e ações novas: só online, nunca vão para a fila ----
+
+    // Sem rede, ou com a rede a falhar a meio, a ação não se faz e a mensagem é clara. As escritas numa ficha com operações por enviar
+    // (ou que ainda só existe no telemóvel) também não passam: a ordem das alterações perdia-se.
+    // O id local (ficha criada sem rede) passa ao id real se já foi enviada; a ação recebe o id resolvido. Em criações (POST) uma falha a meio
+    // pode ter gravado mesmo assim: a mensagem avisa para confirmar antes de repetir.
+    private async Task<T> SoOnlineAsync<T>(string? fichaId, Func<string, Task<T>> acao, bool escrita = false, bool criacao = false, CancellationToken ct = default)
+    {
+        if (!rede.Disponivel) throw new InvalidOperationException(MensagensIntervencao.SemRede);
+        var id = fichaId is null ? "" : await mc.ResolverIdAsync(fichaId);
+        if (escrita && id.Length > 0 && (IdLocal(id) || (await mc.GarantirDonoAsync() is { } dono && await TemOperacoesAsync(dono, id))))
+            throw new InvalidOperationException(MensagensIntervencao.ComPendentes);
+        T resultado;
+        try { resultado = await acao(id); }
+        catch (Exception e) when (FalhaDeRede(e, ct)) { throw new InvalidOperationException(criacao ? MensagensIntervencao.SemRedeAMeio : MensagensIntervencao.SemRede); }
+        if (escrita) { AvisarEscrita(); _contadores = null; }
+        return resultado;
+    }
+
+    private Task<bool> SoOnlineSemResultadoAsync(string fichaId, Func<string, Task> acao, CancellationToken ct) =>
+        SoOnlineAsync(fichaId, async i => { await acao(i); return true; }, true, false, ct);
+
+    // Contadores do menu: 30 segundos em memória; qualquer escrita online deita-os fora.
+    private (ContadoresMenu Valor, DateTimeOffset Quando)? _contadores;
+
+    // Depois de cancelar ou guardar online, a cópia local da ficha acompanha o servidor (falhar aqui nunca desfaz a ação).
+    private async Task AtualizarCacheAsync(string id, Func<Intervencao, Intervencao> mudar)
+    {
+        try
+        {
+            if (await Cache.ObterFichaAsync(id) is { } atual) await mc.ComTrincoAsync(() => Cache.GuardarFichasAsync([mudar(atual)]));
+        }
+        catch (Exception) { /* a cache refresca-se na próxima leitura */ }
+    }
+
+    public Task<FichaDetalhe?> ObterDetalheAsync(string id, CancellationToken ct = default) => SoOnlineAsync(id, i => remoto.ObterDetalheAsync(i, ct), ct: ct);
+
+    public async Task<FichaDetalhe> GuardarFichaAsync(string id, EdicaoFicha edicao, CancellationToken ct = default)
+    {
+        var d = await SoOnlineAsync(id, i => remoto.GuardarFichaAsync(i, edicao, ct), true, ct: ct);
+        await AtualizarCacheAsync(d.Id, f => f with
+        {
+            Anomalia = string.IsNullOrWhiteSpace(d.Problema) ? null : d.Problema, Feito = string.IsNullOrWhiteSpace(d.Resolucao) ? null : d.Resolucao,
+            HoraInicio = d.HoraInicio is { } i ? TimeOnly.FromDateTime(i) : null, HoraFim = d.HoraFim is { } fim ? TimeOnly.FromDateTime(fim) : null,
+            DataPlaneada = d.Data, Tipo = d.Tipo, Tecno = d.Tecno, Tecnico = d.Tecnico
+        });
+        return d;
+    }
+
+    public async Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default)
+    {
+        var cancelada = await SoOnlineAsync(id, i => remoto.CancelarAsync(i, motivo, ct), true, ct: ct);
+        await AtualizarCacheAsync(cancelada.Id, f => f with { Estado = EstadoIntervencao.Cancelada, Motivo = null, Pendente = false });
+        return cancelada;
+    }
+
+    public Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default) =>
+        SoOnlineAsync(null, _ => remoto.CriarFichaManualAsync(ficha.OpId is null ? ficha with { OpId = NovoOpId() } : ficha, ct), true, true, ct);
+
+    public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
+        SoOnlineAsync(id, i => remoto.FecharFichaAntigaAsync(i, supervisao, fechada, ct), true, ct: ct);
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default) =>
+        SoOnlineAsync(id, i => remoto.EditarMaterialAsync(i, materialId, design, qtt, epv, ct), true, ct: ct);
+    public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) => SoOnlineAsync(id, i => remoto.ListarMaoDeObraAsync(i, ct), ct: ct);
+    public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) =>
+        SoOnlineAsync(id, i => remoto.AdicionarMaoDeObraAsync(i, tecno, horas, custoHora, ct), true, true, ct);
+    public Task<TempoMaoDeObra> EditarMaoDeObraAsync(string id, string tempoId, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) =>
+        SoOnlineAsync(id, i => remoto.EditarMaoDeObraAsync(i, tempoId, tecno, horas, custoHora, ct), true, ct: ct);
+    public Task ApagarMaoDeObraAsync(string id, string tempoId, CancellationToken ct = default) => SoOnlineSemResultadoAsync(id, i => remoto.ApagarMaoDeObraAsync(i, tempoId, ct), ct);
+    public Task<decimal> CustoHoraSugeridoAsync(int tecno, CancellationToken ct = default) => SoOnlineAsync(null, _ => remoto.CustoHoraSugeridoAsync(tecno, ct), ct: ct);
+    public Task<IReadOnlyList<CompraLigada>> ListarComprasAsync(string id, CancellationToken ct = default) => SoOnlineAsync(id, i => remoto.ListarComprasAsync(i, ct), ct: ct);
+    public Task<IReadOnlyList<Fornecedor>> PesquisarFornecedoresAsync(string texto, CancellationToken ct = default) => SoOnlineAsync(null, _ => remoto.PesquisarFornecedoresAsync(texto, ct), ct: ct);
+
+    public async Task<ContadoresMenu> ObterContadoresAsync(CancellationToken ct = default)
+    {
+        if (_contadores is { } c && tempo.GetUtcNow() - c.Quando < TimeSpan.FromSeconds(30)) return c.Valor;
+        var novo = await SoOnlineAsync(null, _ => remoto.ObterContadoresAsync(ct), ct: ct);
+        _contadores = (novo, tempo.GetUtcNow());
+        return novo;
+    }
 }
 
 internal static class TextoPesquisa

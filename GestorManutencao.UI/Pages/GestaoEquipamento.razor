@@ -1,0 +1,311 @@
+@page "/equipamentos/novo"
+@page "/equipamentos/{Id}/editar"
+@inject IGestaoService Gestao
+@inject SessaoService Sessao
+@inject NavigationManager Nav
+
+<PageTitle>@(Id is null ? "Novo equipamento" : "Editar equipamento") · Gestor de Manutenção</PageTitle>
+
+<NavigationLock OnBeforeInternalNavigation="AoNavegar" />
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="@(Id is null ? "equipamentos" : $"equipamentos/{Id}")"><Icone Nome="arrow-left" /><span>@(Id is null ? "Equipamentos" : "Equipamento")</span></a>
+        <h1 tabindex="-1">@(Id is null ? "Novo equipamento" : "Editar equipamento")</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_falhou is not null)
+    {
+        <div class="estado-lista" role="alert">
+            <p>@_falhou</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        <ol class="passos" aria-label="Passos">
+            @for (var i = 0; i < PassosEquipamento.Titulos.Length; i++)
+            {
+                var n = i;
+                <li><button type="button" class="segmento" aria-current="@(_passo == n ? "step" : null)" @onclick="() => _passo = n">@(n + 1). @PassosEquipamento.Titulos[n]</button></li>
+            }
+        </ol>
+
+        <form class="formulario" @onsubmit="SeguinteOuGuardarAsync" novalidate>
+            @if (_passo == 0)
+            {
+                <div class="campo">
+                    <label for="eq-ref">Nº da infraestrutura</label>
+                    <input id="eq-ref" type="text" maxlength="@RegrasGestaoUi.MaxRef" autocomplete="off" @bind="_form.Ref" @bind:event="oninput" />
+                </div>
+                <div class="campo">
+                    <label for="eq-design">Designação</label>
+                    <input id="eq-design" type="text" maxlength="@RegrasGestaoUi.MaxDesign" autocomplete="off" @bind="_form.Design" @bind:event="oninput" />
+                </div>
+                <div class="campo">
+                    <label for="eq-tipo">Tipo</label>
+                    <input id="eq-tipo" type="text" list="eq-tipos" maxlength="@RegrasGestaoUi.MaxTipo" autocomplete="off" @bind="_form.Tipo" />
+                    <datalist id="eq-tipos">@foreach (var t in _opcoes.Tipos) { <option value="@t"></option> }</datalist>
+                </div>
+                <div class="campo">
+                    <label for="eq-marca">Marca</label>
+                    <input id="eq-marca" type="text" list="eq-marcas" maxlength="@RegrasGestaoUi.MaxMarca" autocomplete="off" @bind="_form.Marca" />
+                    <datalist id="eq-marcas">@foreach (var m in _opcoes.Marcas) { <option value="@m"></option> }</datalist>
+                </div>
+                <div class="campo">
+                    <label for="eq-modelo">Modelo</label>
+                    <input id="eq-modelo" type="text" maxlength="@RegrasGestaoUi.MaxModelo" autocomplete="off" @bind="_form.Modelo" />
+                </div>
+                <div class="campo">
+                    <label for="eq-serie">Nº de série</label>
+                    <input id="eq-serie" type="text" maxlength="@RegrasGestaoUi.MaxSerie" autocomplete="off" @bind="_form.Serie" />
+                </div>
+                <div class="campo">
+                    <label for="eq-local">Local</label>
+                    <input id="eq-local" type="text" list="eq-locais" maxlength="@RegrasGestaoUi.MaxLocal" autocomplete="off" @bind="_form.Local" />
+                    <datalist id="eq-locais">@foreach (var l in _opcoes.Locais) { <option value="@l"></option> }</datalist>
+                </div>
+            }
+            else if (_passo == 1)
+            {
+                <p class="ficha-texto">Fornecedor: <strong>@(string.IsNullOrWhiteSpace(_form.NomeFornecedor) ? "sem fornecedor" : _form.NomeFornecedor)</strong></p>
+                <div class="campo">
+                    <label for="eq-fornecedor">Procurar fornecedor</label>
+                    <input id="eq-fornecedor" type="search" autocomplete="off" placeholder="Pelo menos 2 letras" value="@_textoFornecedor" @oninput="ProcurarFornecedorAsync" />
+                    @if (_fornecedores.Count > 0)
+                    {
+                        <ul class="opcoes" aria-label="Fornecedores encontrados">
+                            @foreach (var f in _fornecedores)
+                            {
+                                <li><button type="button" class="opcao" @onclick="() => EscolherFornecedor(f)">@f.Nome <span class="opcao-zona">@f.No</span></button></li>
+                            }
+                        </ul>
+                    }
+                    @if (_form.NoFornecedor > 0) { <button type="button" class="btn-texto" @onclick="TirarFornecedor">Tirar fornecedor</button> }
+                </div>
+                <div class="filtros">
+                    <div class="campo">
+                        <label for="eq-ano">Ano de aquisição</label>
+                        <input id="eq-ano" type="number" inputmode="numeric" min="0" max="9999" step="1" @bind="_form.Ano" />
+                    </div>
+                    <div class="campo">
+                        <label for="eq-valor">Valor de aquisição (€)</label>
+                        <input id="eq-valor" type="number" inputmode="decimal" min="0" step="0.01" @bind="_form.Valor" />
+                    </div>
+                    <div class="campo">
+                        <label for="eq-data">Data</label>
+                        <input id="eq-data" type="date" min="1900-01-01" max="2999-12-31" @bind="_form.Data" />
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="campo">
+                    <label for="eq-estado">Estado</label>
+                    <select id="eq-estado" @bind="_form.Estado">
+                        @if (_form.Estado.Length == 0) { <option value="">Sem estado (equipamento antigo)</option> }
+                        @foreach (var e in RegrasGestaoUi.Estados) { <option value="@e">@e</option> }
+                    </select>
+                </div>
+                <div class="campo">
+                    <label for="eq-manual">Manual (ficheiro PDF)</label>
+                    <input id="eq-manual" type="text" maxlength="@RegrasGestaoUi.MaxManual" autocomplete="off" @bind="_form.ManualPdf" />
+                </div>
+                <div class="campo">
+                    <label for="eq-email">E-mail de alerta</label>
+                    <input id="eq-email" type="email" inputmode="email" maxlength="@RegrasGestaoUi.MaxEmail" autocomplete="off" @bind="_form.Email" />
+                </div>
+                <label class="opcao-caixa" for="eq-obsoleto">
+                    <input id="eq-obsoleto" type="checkbox" @bind="_form.Obsoleto" />
+                    <span>Obsoleto (deixa de gerar planeadas)</span>
+                </label>
+                <dl class="ficha">
+                    <dt>Nº</dt><dd>@_form.Ref</dd>
+                    <dt>Designação</dt><dd>@_form.Design</dd>
+                    <dt>Tipo</dt><dd>@(string.IsNullOrWhiteSpace(_form.Tipo) ? "—" : _form.Tipo)</dd>
+                    <dt>Local</dt><dd>@(string.IsNullOrWhiteSpace(_form.Local) ? "—" : _form.Local)</dd>
+                </dl>
+            }
+
+            <p class="campo-erro" role="alert">@_erro</p>
+            @if (_conflito)
+            {
+                @if (_confirmarRecarga)
+                {
+                    <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu neste formulário. Continuar?</span></p>
+                    <button type="button" class="btn btn-primario" disabled="@_a_guardar" @onclick="CarregarAsync">Descartar e recarregar</button>
+                    <button type="button" class="btn btn-secundario" disabled="@_a_guardar" @onclick="() => _confirmarRecarga = false">Voltar</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-secundario" disabled="@_a_guardar" @onclick="PedirRecarga"><Icone Nome="refresh-cw" /><span>Recarregar o equipamento</span></button>
+                }
+            }
+
+            @if (_planeadasAConfirmar is { } planeadas)
+            {
+                <div class="alerta alerta-pin" role="alert">
+                    <Icone Nome="triangle-alert" />
+                    <div>
+                        <strong>Marcar como obsoleto?</strong>
+                        <p>@PassosEquipamento.TextoConfirmacaoObsoleto(planeadas)</p>
+                        <button type="button" class="btn btn-primario" disabled="@_a_guardar" @onclick="() => GuardarAsync(planeadas)">Confirmar e guardar</button>
+                        <button type="button" class="btn btn-secundario" disabled="@_a_guardar" @onclick="() => _planeadasAConfirmar = null">Voltar</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="dialogo-acoes">
+                    @if (_passo < PassosEquipamento.Titulos.Length - 1)
+                    {
+                        <button type="submit" class="btn btn-primario">Seguinte</button>
+                    }
+                    else
+                    {
+                        <button type="submit" class="btn btn-primario" disabled="@_a_guardar"><Icone Nome="check" /><span>@(_a_guardar ? "A guardar…" : "Guardar equipamento")</span></button>
+                    }
+                    @if (_passo > 0) { <button type="button" class="btn btn-secundario" @onclick="() => _passo--">Anterior</button> }
+                </div>
+            }
+        </form>
+    }
+</section>
+
+@if (_pedirSaida)
+{
+    <ConfirmaSaida Titulo="Sair sem guardar?" Texto="Tem alterações por guardar neste equipamento. Se sair agora, perde-as." TextoSair="Sair sem guardar" Sair="SairSemGuardar" Ficar="() => _pedirSaida = false" />
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private EquipamentoGestao? _original;
+    private FormEquipamento _form = new();
+    private OpcoesEquipamento _opcoes = new([], [], [], RegrasGestaoUi.Estados);
+    private IReadOnlyList<Fornecedor> _fornecedores = [];
+    private string _textoFornecedor = "", _erro = "", _destino = "";
+    private string? _falhou;
+    private int _passo;
+    private int? _planeadasAConfirmar;
+    private bool _a_carregar = true, _a_guardar, _conflito, _pedirSaida, _guardado, _confirmarRecarga;
+
+    // O formulário não se perde sem avisar: com alterações por guardar pede confirmação antes de recarregar.
+    private async Task PedirRecarga()
+    {
+        if (TemAlteracoes) { _confirmarRecarga = true; return; }
+        await CarregarAsync();
+    }
+    private CancellationTokenSource? _espera;
+
+    private bool TemAlteracoes => !_guardado && _form.TemAlteracoes(_original);
+
+    protected override async Task OnParametersSetAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        if (!Sessao.PodeSerSupervisor) { _a_carregar = false; return; }
+        _a_carregar = true; _falhou = null; _conflito = false; _confirmarRecarga = false; _erro = ""; _planeadasAConfirmar = null;
+        try
+        {
+            try { _opcoes = await Gestao.ObterOpcoesAsync(); } catch (InvalidOperationException) { throw; } catch (Exception) { /* sem sugestões a lista fica vazia */ }
+            _original = Id is null ? null : await Gestao.ObterEquipamentoAsync(Id) ?? throw new InvalidOperationException("Este equipamento já não existe.");
+            _form = _original is null ? new FormEquipamento() : FormEquipamento.De(_original);
+        }
+        catch (Exception ex) { _falhou = MensagensGestao.Para(ex, "Não foi possível carregar o equipamento."); }
+        finally { _a_carregar = false; }
+    }
+
+    private async Task SeguinteOuGuardarAsync()
+    {
+        _erro = PassosEquipamento.Validar(_passo, _form) ?? "";
+        if (_erro.Length > 0) return;
+        if (_passo < PassosEquipamento.Titulos.Length - 1) { _passo++; return; }
+        await GuardarAsync();
+    }
+
+    private async Task GuardarAsync(int? planeadasConfirmadas = null)
+    {
+        if (_a_guardar) return;
+        _erro = ""; _conflito = false; _confirmarRecarga = false;
+        var primeiro = PassosEquipamento.PrimeiroComErro(_form);
+        if (primeiro >= 0) { _passo = primeiro; _erro = PassosEquipamento.Validar(primeiro, _form) ?? ""; return; }
+        _a_guardar = true;
+        try
+        {
+            // Marcar obsoleto: mostra primeiro quantas planeadas ficam canceladas e só grava com essa confirmação.
+            if (Id is not null && _form.PedeConfirmacaoDeObsoleto(_original) && planeadasConfirmadas is null)
+            {
+                _planeadasAConfirmar = await Gestao.ContarPlaneadasAsync(Id);
+                return;
+            }
+            var edicao = _form.ParaEdicao(_original);
+            if (edicao is null) { _guardado = true; Nav.NavigateTo($"equipamentos/{Id}"); return; }
+            if (planeadasConfirmadas is not null) edicao = edicao with { PlaneadasConfirmadas = planeadasConfirmadas };
+            var gravado = await Gestao.GravarEquipamentoAsync(Id, edicao);
+            _guardado = true;
+            Nav.NavigateTo($"equipamentos/{gravado.Id}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _erro = ex.Message;
+            _conflito = ex.Message == MensagensIntervencao.Mudou;
+            // O nº de planeadas mudou entretanto: volta a pedir confirmação com o nº certo.
+            if (ex.Message == MensagensIntervencao.Para("planeadas_mudaram") && Id is not null)
+                try { _planeadasAConfirmar = await Gestao.ContarPlaneadasAsync(Id); } catch (Exception) { _planeadasAConfirmar = null; }
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException) { _erro = MensagensGestao.Para(ex, "Não foi possível guardar. Tente outra vez."); }
+        finally { _a_guardar = false; }
+    }
+
+    private async Task ProcurarFornecedorAsync(ChangeEventArgs e)
+    {
+        _textoFornecedor = e.Value?.ToString() ?? "";
+        _espera?.Cancel();
+        _espera = new CancellationTokenSource();
+        var cancelamento = _espera.Token;
+        if (_textoFornecedor.Trim().Length < 2) { _fornecedores = []; return; }
+        try
+        {
+            await Task.Delay(300, cancelamento);
+            var encontrados = await Gestao.PesquisarFornecedoresAsync(_textoFornecedor.Trim(), cancelamento);
+            if (!cancelamento.IsCancellationRequested) _fornecedores = encontrados;
+        }
+        catch (OperationCanceledException) { /* veio outra tecla */ }
+        catch (InvalidOperationException ex) { _erro = ex.Message; }
+        catch (Exception) { _erro = "Não foi possível procurar fornecedores."; }
+    }
+
+    private void EscolherFornecedor(Fornecedor f)
+    {
+        (_form.NoFornecedor, _form.NomeFornecedor) = SeccoesFicha.Fornecedor(f);
+        _fornecedores = [];
+        _textoFornecedor = "";
+    }
+
+    private void TirarFornecedor() { _form.NoFornecedor = 0; _form.NomeFornecedor = ""; }
+
+    private async Task AoNavegar(LocationChangingContext contexto)
+    {
+        if (!TemAlteracoes) return;
+        contexto.PreventNavigation();
+        _destino = contexto.TargetLocation;
+        _pedirSaida = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SairSemGuardar()
+    {
+        _pedirSaida = false;
+        _guardado = true;
+        if (_destino.Length > 0) Nav.NavigateTo(_destino);
+    }
+}

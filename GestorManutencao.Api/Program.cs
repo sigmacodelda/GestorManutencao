@@ -65,6 +65,8 @@ else
     builder.Services.AddSingleton<IRepositorioUtilizadores, SqlRepositorioUtilizadores>();
     builder.Services.AddSingleton<IRepositorioIntervencoes, SqlRepositorioIntervencoes>();
 }
+// O mesmo repositório (SQL ou memória) serve a gestão: cancelar planeadas e gerar a seguinte usam a mesma numeração e as mesmas regras.
+builder.Services.AddSingleton<IRepositorioGestao>(sp => (IRepositorioGestao)sp.GetRequiredService<IRepositorioIntervencoes>());
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -175,6 +177,7 @@ static IResult RegistarPinEmUso(ILogger log, HttpContext http)
 }
 
 app.MapIntervencoes();
+app.MapGestao();
 
 app.MapGet("/saude", () => Results.Ok(new { estado = "ok" }));
 

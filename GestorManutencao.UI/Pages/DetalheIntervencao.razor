@@ -4,12 +4,13 @@
 @inject IGestorOffline Offline
 @inject NavigationManager Nav
 @inject ICamara Camara
+@inject SessaoService Sessao
 
 <PageTitle>Intervenção · Gestor de Manutenção</PageTitle>
 
 <section class="conteudo">
     <div class="boas-vindas">
-        <a class="voltar" href="intervencoes"><Icone Nome="arrow-left" /><span>As minhas intervenções</span></a>
+        <a class="voltar" href="@(Sessao.Modo == ModoTrabalho.Supervisor ? "fichas" : "intervencoes")"><Icone Nome="arrow-left" /><span>@(Sessao.Modo == ModoTrabalho.Supervisor ? "Todas as fichas" : "As minhas intervenções")</span></a>
         <h1 tabindex="-1">@(_i?.Equipamento ?? "Intervenção")</h1>
     </div>
 
@@ -57,6 +58,8 @@
             @if (!string.IsNullOrWhiteSpace(_i.Anomalia)) { <dt>Problema</dt><dd>@_i.Anomalia</dd> }
         </dl>
 
+        <FichaCompleta Detalhe="_d" Aviso="_avisoOnline" OnMudou="RecarregarAsync" />
+
         @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
         {
             <section class="materiais" aria-labelledby="titulo-materiais">
@@ -75,6 +78,10 @@
                                 <br />
                                 <span class="intervencao-desc">@m.Qtt.ToString("0.###") × @m.Epv.ToString("0.00") € = @m.Custo.ToString("0.00") €</span>
                             </span>
+                            @if (_d is { PodeEditar: true } && !ClassificacaoErros.IdLocal(m.Id))
+                            {
+                                <button type="button" class="btn-texto" aria-label="Editar @m.Design" disabled="@_a_gravar" @onclick="() => EditarMaterial(m)"><Icone Nome="wrench" /></button>
+                            }
                             @if (_i.Estado == EstadoIntervencao.EmCurso)
                             {
                                 <button type="button" class="btn-texto" aria-label="Tirar @m.Design" disabled="@_a_gravar" @onclick="() => ApagarMaterialAsync(m)"><Icone Nome="trash" /></button>
@@ -82,6 +89,28 @@
                         </li>
                     }
                 </ul>
+                @if (_matEditId is not null)
+                {
+                    <form class="formulario" @onsubmit="GuardarMaterialEditadoAsync" novalidate>
+                        <div class="material-novo">
+                            <div class="campo">
+                                <label for="e-material">Material</label>
+                                <input id="e-material" type="text" maxlength="35" autocomplete="off" @bind="_eDesign" @bind:event="oninput" />
+                            </div>
+                            <div class="campo">
+                                <label for="e-qtt">Quantidade</label>
+                                <input id="e-qtt" type="number" inputmode="decimal" step="any" min="0" @bind="_eQtt" />
+                            </div>
+                            <div class="campo">
+                                <label for="e-epv">Preço (€)</label>
+                                <input id="e-epv" type="number" inputmode="decimal" step="any" min="0" @bind="_eEpv" />
+                            </div>
+                        </div>
+                        <p class="campo-erro" role="alert">@_erroMaterial</p>
+                        <button type="submit" class="btn btn-secundario" disabled="@_a_gravar"><Icone Nome="check" /><span>Guardar material</span></button>
+                        <button type="button" class="btn-texto" @onclick="() => _matEditId = null">Deixar de editar</button>
+                    </form>
+                }
                 @if (_i.Estado == EstadoIntervencao.EmCurso)
                 {
                     <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
@@ -127,14 +156,14 @@
                             {
                                 <span class="chip chip-pendente foto-pendente">Por enviar</span>
                             }
-                            @if (_i.Estado == EstadoIntervencao.EmCurso)
+                            @if (_i.Estado == EstadoIntervencao.EmCurso && !_viaDetalhe)
                             {
                                 <button type="button" class="btn-texto foto-apagar" aria-label="Tirar a foto @f.Nome" disabled="@_a_gravar" @onclick="() => ApagarFotoAsync(f)"><Icone Nome="trash" /></button>
                             }
                         </li>
                     }
                 </ul>
-                @if (_i.Estado == EstadoIntervencao.EmCurso && _fotos.Count < RegrasFoto.Max)
+                @if (_i.Estado == EstadoIntervencao.EmCurso && !_viaDetalhe && _fotos.Count < RegrasFoto.Max)
                 {
                     @if (Camara.Disponivel)
                     {
@@ -156,7 +185,11 @@
             </section>
         }
 
-        @if (_i.Estado == EstadoIntervencao.Planeada)
+        @if (_viaDetalhe)
+        {
+            @* Ficha de outra pessoa: o supervisor trata dela na ficha completa (acima). *@
+        }
+        else if (_i.Estado == EstadoIntervencao.Planeada)
         {
             <button type="button" class="btn btn-primario btn-grande" disabled="@_a_gravar" @onclick="IniciarAsync"><Icone Nome="play" /><span>Começar</span></button>
         }
@@ -187,7 +220,7 @@
         {
             <div class="sucesso" role="status">
                 <span class="sucesso-icone"><Icone Nome="circle-check" /></span>
-                <p class="sucesso-titulo">@(_i.Estado == EstadoIntervencao.Concluida ? "Feito! Obrigado." : "Já está fechada.")</p>
+                <p class="sucesso-titulo">@(_i.Estado == EstadoIntervencao.Concluida ? "Feito! Obrigado." : _i.Estado == EstadoIntervencao.Cancelada ? "Foi cancelada." : "Já está fechada.")</p>
                 @if (_i.Estado == EstadoIntervencao.Concluida) { <p class="sucesso-desc">O supervisor vai ver e confirmar.</p> }
                 <a class="btn btn-primario btn-grande" href="intervencoes"><span>Ver as minhas intervenções</span></a>
             </div>
@@ -207,6 +240,11 @@
     private string _erroFoto = "";
     private TimeOnly? _inicio, _fim;
     private bool _a_carregar = true, _a_gravar, _indisponivel;
+    private FichaDetalhe? _d;
+    // A ficha veio só do detalhe do supervisor: não é do utilizador, por isso não se começa nem se conclui aqui.
+    private bool _viaDetalhe;
+    private string? _avisoOnline, _matEditId, _eDesign;
+    private decimal? _eQtt, _eEpv;
 
     protected override void OnInitialized() => Offline.Mudou += AoMudarOffline;
 
@@ -240,24 +278,79 @@
     {
         try { if (await Intervencoes.ObterAsync(Id) is { } ficha) _i = ficha; }
         catch (Exception) { /* mantém a ficha que já tem */ }
+        // Ficha de outra pessoa: o material vem do detalhe, que se relê para mostrar o que acabou de ser gravado.
+        if (_viaDetalhe) await CarregarDetalheAsync();
     }
 
     protected override async Task OnParametersSetAsync()
     {
         _a_carregar = true;
+        _d = null; _feito = "";
         try
         {
             if (await IrParaIdRealAsync()) return;
-            Usar(await Intervencoes.ObterAsync(Id)); await CarregarMateriaisAsync(); await CarregarFotosAsync();
+            // O supervisor sem número de técnico não tem fichas suas: segue para o detalhe, que é de qualquer ficha.
+            try { Usar(await Intervencoes.ObterAsync(Id)); }
+            catch (SemNumeroTecnicoException) when (Sessao.PodeSerSupervisor) { Usar(null); }
+            await CarregarDetalheAsync();
+            // O supervisor abre qualquer ficha: se não é sua, a ficha vem do detalhe.
+            _viaDetalhe = false;
+            if (_i is null && _d is not null) { Usar(SeccoesFicha.ParaIntervencao(_d)); _viaDetalhe = true; }
+            await CarregarMateriaisAsync(); await CarregarFotosAsync();
         }
         catch (NotSupportedException) { _indisponivel = true; }
         catch (Exception) { _erro = "Não foi possível carregar."; }
         finally { _a_carregar = false; }
     }
 
+    // A ficha completa só existe online; sem rede ou com a ficha por enviar, fica o aviso e o resto do ecrã funciona como antes.
+    // Troca a ficha completa só quando a nova chega (sem passar por "nada"), para o ecrã não piscar nem perder o que está a escrever.
+    private async Task CarregarDetalheAsync()
+    {
+        if (ClassificacaoErros.IdLocal(Id) || _i is { Pendente: true }) { _d = null; _avisoOnline = "A ficha completa fica disponível depois de a intervenção ser enviada."; return; }
+        try
+        {
+            _d = await Intervencoes.ObterDetalheAsync(Id); _avisoOnline = null;
+            // "O que fez?" parte do que já está gravado na resolução e nunca o apaga se o utilizador não escrever.
+            if (string.IsNullOrWhiteSpace(_feito) && _d is { Resolucao.Length: > 0 }) _feito = _d.Resolucao;
+        }
+        catch (InvalidOperationException ex) { _avisoOnline = ex.Message == MensagensIntervencao.SemRede ? "Sem ligação: a ficha completa só se vê com rede." : ex.Message; }
+        catch (NotSupportedException) { _d = null; _avisoOnline = null; }
+        catch (Exception) { _avisoOnline = "Não foi possível carregar a ficha completa."; }
+    }
+
+    private async Task RecarregarAsync()
+    {
+        await RefrescarFichaAsync();
+        await CarregarDetalheAsync();
+        if (_i is null && _d is not null) Usar(SeccoesFicha.ParaIntervencao(_d));
+        else if (_i is not null && _d is not null) Usar(_i with { Estado = _d.Estado, Motivo = _d.Motivo ?? _i.Motivo });
+        await CarregarMateriaisAsync();
+        StateHasChanged();
+    }
+
+    private void EditarMaterial(Material m) { _matEditId = m.Id; _eDesign = m.Design; _eQtt = m.Qtt; _eEpv = m.Epv; _erroMaterial = ""; }
+
+    private async Task GuardarMaterialEditadoAsync()
+    {
+        _erroMaterial = RegrasMaterial.Validar(_eDesign, _eQtt, _eEpv) ?? "";
+        if (_erroMaterial.Length > 0 || _matEditId is null) return;
+        _a_gravar = true;
+        try
+        {
+            await Intervencoes.EditarMaterialAsync(Id, _matEditId, _eDesign!.Trim(), _eQtt!.Value, _eEpv ?? 0);
+            _matEditId = null;
+            await RecarregarAsync();
+        }
+        catch (InvalidOperationException ex) { _erroMaterial = ex.Message; }
+        catch (Exception) { _erroMaterial = "Não foi possível guardar. Tente outra vez."; }
+        finally { _a_gravar = false; }
+    }
+
     private void Usar(Intervencao? i)
     {
         _i = i;
+        if (string.IsNullOrWhiteSpace(_feito) && !string.IsNullOrWhiteSpace(i?.Feito)) _feito = i!.Feito!;
         _inicio = i?.HoraInicio;
         _fim = i?.HoraFim ?? TimeOnly.FromDateTime(DateTime.Now);
     }
@@ -266,6 +359,7 @@
     {
         _materiais = [];
         if (_i is not { Estado: EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida }) return;
+        if (_viaDetalhe && _d is not null) { _materiais = _d.ListaMateriais; return; }
         try { _materiais = await Intervencoes.ListarMateriaisAsync(Id); }
         catch (Exception) { _materiais = []; }
     }
@@ -361,7 +455,7 @@
     private async Task Gravar(Func<Task<Intervencao>> operacao)
     {
         _a_gravar = true; _erro = "";
-        try { Usar(await operacao()); await CarregarMateriaisAsync(); await CarregarFotosAsync(); }
+        try { Usar(await operacao()); await CarregarDetalheAsync(); await CarregarMateriaisAsync(); await CarregarFotosAsync(); }
         catch (InvalidOperationException ex) { _erro = ex.Message; }
         catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
         finally { _a_gravar = false; }
