@@ -92,7 +92,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
     private static readonly string SelTarefa =
         $"""
         select l.u_itmanutlistamp, l.u_itmanutstamp, isnull(l.periodo, ''), isnull(l.responsabilidade, ''), isnull(l.responsavel, ''),
-               isnull(cast(l.descricao as varchar(max)), ''), isnull(l.tipomanut, ''), l.ativo, {ConcorrenciaL}
+               isnull(cast(l.descricao as varchar(max)), ''), isnull(l.tipomanut, ''), {ConcorrenciaL}
         from u_itmanutli l with (nolock)
         join u_itmanut i with (nolock) on i.u_itmanutstamp = l.u_itmanutstamp
         join u_equip e with (nolock) on e.u_equipstamp = i.u_equipstamp
@@ -105,16 +105,16 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
 
     private const string SqlNovaTarefa =
         """
-        insert into u_itmanutli (u_itmanutlistamp, u_itmanutstamp, periodo, responsabilidade, responsavel, descricao, ref, design, no, tipomanut, ativo,
+        insert into u_itmanutli (u_itmanutlistamp, u_itmanutstamp, periodo, responsabilidade, responsavel, descricao, ref, design, no, tipomanut,
                                  ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        select @id, i.u_itmanutstamp, @periodo, @responsabilidade, @responsavel, @descricao, i.ref, i.design, 0, @tipomanut, @ativo, @codigo, @dia, @hora, @codigo, @dia, @hora
+        select @id, i.u_itmanutstamp, @periodo, @responsabilidade, @responsavel, @descricao, i.ref, i.design, 0, @tipomanut, @codigo, @dia, @hora, @codigo, @dia, @hora
         from u_itmanut i where i.u_itmanutstamp = @instrucao and i.obsoleto = 0
         """;
 
     private static readonly string SqlEditarTarefa =
         $"""
         update u_itmanutli set periodo = @periodo, responsabilidade = @responsabilidade, responsavel = @responsavel, descricao = @descricao, tipomanut = @tipomanut,
-               ativo = @ativo, usrinis = @codigo, usrdata = @dia, usrhora = @hora
+               usrinis = @codigo, usrdata = @dia, usrhora = @hora
         from u_itmanutli l
         where l.u_itmanutlistamp = @id and (@versao = '' or {ConcorrenciaL} = @versao)
         """;
@@ -204,7 +204,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
         return lista;
     });
 
-    // Planeadas (nunca as em curso) deixam de fazer sentido: equipamento obsoleto, instrução obsoleta, tarefa desligada ou apagada.
+    // Planeadas (nunca as em curso) deixam de fazer sentido: equipamento obsoleto, instrução obsoleta, tarefa apagada.
     private static async Task<int> CancelarPlaneadasAsync(SqlConnection conn, SqlTransaction tx, string onde, string alvo, string motivo, string codigo, Momento agora, CancellationToken ct)
     {
         await using var cmd = new SqlCommand("update u_fichaint set estado = 'Cancelada', valobs = @motivo, usrinis = @codigo, usrdata = @dia, usrhora = @hora where " + onde + " and estado = 'Planeada'", conn, tx);
@@ -420,7 +420,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
         var lista = new List<TarefaGestaoDto>();
         while (await r.ReadAsync(ct))
             lista.Add(new TarefaGestaoDto(r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim(), r.GetString(3).Trim(), r.GetString(4).Trim(),
-                r.GetString(5).Trim(), r.GetString(6).Trim(), Bool(r, 7), r.IsDBNull(8) ? "" : r.GetString(8)));
+                r.GetString(5).Trim(), r.GetString(6).Trim(), r.IsDBNull(7) ? "" : r.GetString(7)));
         return lista;
     }
 
@@ -452,7 +452,6 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
             var responsavel = pedido.Responsavel is null ? atual?.Responsavel ?? "" : pedido.Responsavel.Trim();
             var descricao = pedido.Descricao is null ? atual?.Descricao ?? "" : pedido.Descricao.Trim();
             var tipoManut = pedido.TipoManut is null ? atual?.TipoManut ?? "" : RegrasFicha.NormalizarTipoManut(pedido.TipoManut) ?? "";
-            var ativa = pedido.Ativa ?? atual?.Ativa ?? true;
             var stamp = id ?? NovoStampGestao();
 
             await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
@@ -465,25 +464,20 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
                 Texto(cmd, "@responsavel", RegrasGestao.Responsavel, responsavel);
                 cmd.Parameters.Add("@descricao", SqlDbType.VarChar, -1).Value = descricao;
                 Texto(cmd, "@tipomanut", RegrasGestao.TipoManut, tipoManut);
-                cmd.Parameters.Add("@ativo", SqlDbType.Bit).Value = ativa;
                 Auditoria(cmd, supervisor.Codigo, agora);
                 if (id is null) Texto(cmd, "@instrucao", 25, instrucaoId!);
                 else Texto(cmd, "@versao", 20, pedido.Concorrencia ?? "");
                 if (await cmd.ExecuteNonQueryAsync(ct) == 0) { await tx.RollbackAsync(ct); return (ResultadoIntervencao.Conflito, null); }
-                if (id is not null && !ativa) await CancelarPlaneadasAsync(conn, tx, OndeTarefa, stamp, RegrasGestao.MotivoTarefaDesligada, supervisor.Codigo, agora, ct);
                 await tx.CommitAsync(ct);
             }
             catch { await RollbackSemEsconderAsync(tx); throw; }
 
-            // Tarefa ativa: gera já a planeada (se a configuração gera e não há uma em aberto); a falha não desfaz a gravação.
+            // Gera já a planeada (se a configuração gera e não há uma em aberto); a falha não desfaz a gravação.
             // Com a instrução ou o equipamento obsoletos fica gravada mas não gera, e diz-se.
             string? aviso = null;
-            if (ativa)
-            {
-                var (instrucaoObsoleta, equipamentoObsoleto) = await ObsoletosDaTarefaAsync(conn, stamp, ct);
-                if (instrucaoObsoleta || equipamentoObsoleto) aviso = instrucaoObsoleta ? RegrasGestao.AvisoInstrucaoObsoleta : RegrasGestao.AvisoEquipamentoObsoleto;
-                else await GerarSeguinteAsync(conn, stamp, supervisor.Codigo, ct);
-            }
+            var (instrucaoObsoleta, equipamentoObsoleto) = await ObsoletosDaTarefaAsync(conn, stamp, ct);
+            if (instrucaoObsoleta || equipamentoObsoleto) aviso = instrucaoObsoleta ? RegrasGestao.AvisoInstrucaoObsoleta : RegrasGestao.AvisoEquipamentoObsoleto;
+            else await GerarSeguinteAsync(conn, stamp, supervisor.Codigo, ct);
             var lida = (await LerTarefasAsync(conn, SqlTarefaUma, stamp, ct)).FirstOrDefault();
             return lida is null ? (ResultadoIntervencao.Conflito, null) : (ResultadoIntervencao.Ok, lida with { Aviso = aviso });
         });
@@ -495,7 +489,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
         try
         {
-            // Com intervenções feitas a tarefa guarda o histórico da "última feita": não se apaga, desliga-se.
+            // Com intervenções feitas a tarefa guarda o histórico da "última feita": não se apaga.
             if (await ContarAsync(conn, tx, SqlFichasFeitasDaTarefa, c => Texto(c, "@id", 25, id), ct) > 0) { await tx.RollbackAsync(ct); return ResultadoIntervencao.TarefaComFichas; }
             await CancelarPlaneadasAsync(conn, tx, OndeTarefa, id, RegrasGestao.MotivoTarefaApagada, supervisor.Codigo, agora, ct);
             await using var cmd = new SqlCommand(SqlApagarTarefa, conn, tx);

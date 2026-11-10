@@ -20,7 +20,7 @@ public interface IGestaoService
     // id null = nova versão do equipamento; marcar obsoleta cancela as planeadas das tarefas dessa versão.
     Task<InstrucaoManutencao> GravarInstrucaoAsync(string? equipamentoId, string? id, EdicaoInstrucao edicao, CancellationToken ct = default);
     Task<IReadOnlyList<TarefaManutencao>> ListarTarefasAsync(string instrucaoId, CancellationToken ct = default);
-    // Desligar cancela as planeadas; gravar uma tarefa ativa gera a planeada.
+    // Gravar uma tarefa gera a planeada.
     Task<TarefaManutencao> GravarTarefaAsync(string? instrucaoId, string? id, EdicaoTarefa edicao, CancellationToken ct = default);
     Task ApagarTarefaAsync(string id, CancellationToken ct = default);
     Task<IReadOnlyList<Periodicidade>> ListarPeriodicidadesAsync(CancellationToken ct = default);
@@ -183,7 +183,7 @@ public sealed class GestaoDevService : IGestaoService
     ];
     private readonly Dictionary<string, List<HistoricoEstado>> _historico = [];
     private readonly List<InstrucaoManutencao> _instrucoes = [new("I-E1", "E1", "", new DateOnly(2019, 3, 1), false, "", 1, "0"), new("I-E2", "E2", "", new DateOnly(2021, 6, 1), false, "", 0, "0")];
-    private readonly List<TarefaManutencao> _tarefas = [new("T-E1-1", "I-E1", "Mensal", "Equipa interna", "", "Verificar o nível de óleo e os filtros", "Interna", true, "0")];
+    private readonly List<TarefaManutencao> _tarefas = [new("T-E1-1", "I-E1", "Mensal", "Equipa interna", "", "Verificar o nível de óleo e os filtros", "Interna", "0")];
     private readonly List<Periodicidade> _periodicidades = [new("P1", "Semanal", "dias", 7, false, "0"), new("P2", "Mensal", "meses", 1, false, "0"), new("P3", "Regular", "nenhum", 0, false, "0")];
     private int _planeadasE1 = 2;
 
@@ -285,7 +285,7 @@ public sealed class GestaoDevService : IGestaoService
                 throw new InvalidOperationException(MensagensIntervencao.Para("periodicidade_invalida"));
             var nova = new TarefaManutencao(id ?? Guid.NewGuid().ToString("N")[..25], anterior?.InstrucaoId ?? instrucaoId ?? "", (e.Periodo ?? anterior?.Periodo ?? "").Trim(),
                 (e.Responsabilidade ?? anterior?.Responsabilidade ?? "").Trim(), (e.Responsavel ?? anterior?.Responsavel ?? "").Trim(), descricao.Trim(),
-                e.TipoManut ?? anterior?.TipoManut ?? "", e.Ativa ?? anterior?.Ativa ?? true, anterior is null ? "0" : (int.Parse(anterior.Concorrencia) + 1).ToString());
+                e.TipoManut ?? anterior?.TipoManut ?? "", anterior is null ? "0" : (int.Parse(anterior.Concorrencia) + 1).ToString());
             if (anterior is null) _tarefas.Add(nova); else _tarefas[_tarefas.IndexOf(anterior)] = nova;
             return Task.FromResult(nova);
         }

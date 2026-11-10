@@ -263,7 +263,6 @@ public class GestaoApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
         var t = await Ler<TarefaGestaoDto>(r);
         Assert.Equal("Externa", t.TipoManut);
-        Assert.True(t.Ativa);
         Assert.Equal(2, (await Ler<List<TarefaGestaoDto>>(await chefe.GetAsync("/gestao/instrucoes/I-E3/tarefas"))).Count);
         Assert.Contains(await Ler<List<IntervencaoDto>>(await chefe.GetAsync("/planeadas")), p => p.Anomalia == "Revisão geral do frio" && p.Estado == EstadoIntervencao.Planeada);
 
@@ -274,24 +273,6 @@ public class GestaoApiTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, (await chefe.PostAsJsonAsync("/gestao/instrucoes/I-E3/tarefas", new PedidoTarefa(Periodo: "Mensal", Descricao: "x", TipoManut: "Mista"))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await chefe.PostAsJsonAsync("/gestao/instrucoes/I-E3/tarefas", new PedidoTarefa(Periodo: new string('p', 21), Descricao: "x"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await chefe.PostAsJsonAsync("/gestao/instrucoes/NAOEXISTE/tarefas", new PedidoTarefa(Periodo: "Mensal", Descricao: "x"))).StatusCode);
-    }
-
-    [Fact]
-    public async Task Desligar_a_tarefa_cancela_as_planeadas_e_voltar_a_ligar_gera_outra()
-    {
-        var chefe = await ComoAsync(PinChefe);
-        var antes = (await Ler<List<TarefaGestaoDto>>(await chefe.GetAsync("/gestao/instrucoes/I-E1/tarefas"))).Single(t => t.Id == "TAREFA1");
-
-        var desligada = await Ler<TarefaGestaoDto>(await chefe.PutAsJsonAsync("/gestao/tarefas/TAREFA1", new PedidoTarefa(Ativa: false, Concorrencia: antes.Concorrencia)));
-
-        Assert.False(desligada.Ativa);
-        var f1 = await Ler<FichaDetalheDto>(await chefe.GetAsync("/intervencoes/F1/detalhe"));
-        Assert.Equal(EstadoIntervencao.Cancelada, f1.Estado);
-        Assert.Equal("Tarefa desligada", f1.Motivo);
-        Assert.DoesNotContain(await Ler<List<IntervencaoDto>>(await chefe.GetAsync("/planeadas")), p => p.Equipamento == "Compressor de ar 02" && p.Id != "F1" && p.Anomalia == "Verificar o nível de óleo e os filtros");
-
-        await chefe.PutAsJsonAsync("/gestao/tarefas/TAREFA1", new PedidoTarefa(Ativa: true, Concorrencia: desligada.Concorrencia));
-        Assert.Contains(await Ler<List<IntervencaoDto>>(await chefe.GetAsync("/planeadas")), p => p.Anomalia == "Verificar o nível de óleo e os filtros" && p.Id != "F1");
     }
 
     [Fact]

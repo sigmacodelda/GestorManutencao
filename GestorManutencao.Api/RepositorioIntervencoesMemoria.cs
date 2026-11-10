@@ -48,7 +48,6 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
         public string Responsabilidade { get; set; } = "";
         public string Responsavel { get; set; } = "";
         public string TipoManut { get; set; } = "";
-        public bool Ativa { get; set; } = true;
         public int Versao { get; set; }
     }
 
@@ -188,7 +187,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
             var e = Equipamentos.FirstOrDefault(x => x.Id == id && !RegrasGestao.EhViatura(x.Tipo));
             if (e is null) return Task.FromResult<FichaEquipamentoDto?>(null);
 
-            var tarefas = Tarefas.Where(t => t.EquipamentoId == id && t.Ativa && !InstrucaoObsoleta(t.InstrucaoId)).Select(t =>
+            var tarefas = Tarefas.Where(t => t.EquipamentoId == id && !InstrucaoObsoleta(t.InstrucaoId)).Select(t =>
             {
                 var (unidade, intervalo) = Regra(t);
                 var fichas = _lista.Where(f => f.Tarefa == t.Id).ToList();

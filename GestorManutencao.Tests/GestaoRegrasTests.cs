@@ -216,7 +216,7 @@ public class RegrasGestaoTests
     {
         Assert.NotNull(RegrasGestao.ValidarTarefa(new PedidoTarefa(Periodo: "Mensal"), true));
         Assert.Null(RegrasGestao.ValidarTarefa(new PedidoTarefa(Descricao: "x"), true));
-        Assert.Null(RegrasGestao.ValidarTarefa(new PedidoTarefa(Ativa: false), false));
+        Assert.Null(RegrasGestao.ValidarTarefa(new PedidoTarefa(), false));
         Assert.NotNull(RegrasGestao.ValidarTarefa(new PedidoTarefa(Descricao: "  "), false));
         Assert.NotNull(RegrasGestao.ValidarTarefa(new PedidoTarefa(Descricao: "x", TipoManut: "Mista"), true));
         Assert.Null(RegrasGestao.ValidarTarefa(new PedidoTarefa(Descricao: "x", TipoManut: "externa"), true));

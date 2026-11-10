@@ -21,9 +21,9 @@ public sealed record InstrucaoManutencao(string Id, string EquipamentoId, string
 
 public sealed record EdicaoInstrucao(string? Versao = null, DateOnly? Data = null, bool? Obsoleta = null, string? Obs = null, string? Concorrencia = null);
 
-public sealed record TarefaManutencao(string Id, string InstrucaoId, string Periodo, string Responsabilidade, string Responsavel, string Descricao, string TipoManut, bool Ativa, string Concorrencia, string? Aviso = null);
+public sealed record TarefaManutencao(string Id, string InstrucaoId, string Periodo, string Responsabilidade, string Responsavel, string Descricao, string TipoManut, string Concorrencia, string? Aviso = null);
 
-public sealed record EdicaoTarefa(string? Periodo = null, string? Responsabilidade = null, string? Responsavel = null, string? Descricao = null, string? TipoManut = null, bool? Ativa = null, string? Concorrencia = null);
+public sealed record EdicaoTarefa(string? Periodo = null, string? Responsabilidade = null, string? Responsavel = null, string? Descricao = null, string? TipoManut = null, string? Concorrencia = null);
 
 public sealed record Periodicidade(string Id, string Periodo, string Unidade, int Intervalo, bool Aviso, string Concorrencia);
 

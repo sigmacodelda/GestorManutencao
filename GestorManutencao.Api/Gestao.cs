@@ -25,9 +25,9 @@ public sealed record InstrucaoDto(string Id, string EquipamentoId, string Versao
 
 public sealed record PedidoInstrucao(string? Versao = null, DateOnly? Data = null, bool? Obsoleta = null, string? Obs = null, string? Concorrencia = null);
 
-public sealed record TarefaGestaoDto(string Id, string InstrucaoId, string Periodo, string Responsabilidade, string Responsavel, string Descricao, string TipoManut, bool Ativa, string Concorrencia, string? Aviso = null);
+public sealed record TarefaGestaoDto(string Id, string InstrucaoId, string Periodo, string Responsabilidade, string Responsavel, string Descricao, string TipoManut, string Concorrencia, string? Aviso = null);
 
-public sealed record PedidoTarefa(string? Periodo = null, string? Responsabilidade = null, string? Responsavel = null, string? Descricao = null, string? TipoManut = null, bool? Ativa = null, string? Concorrencia = null);
+public sealed record PedidoTarefa(string? Periodo = null, string? Responsabilidade = null, string? Responsavel = null, string? Descricao = null, string? TipoManut = null, string? Concorrencia = null);
 
 public sealed record PeriodicidadeDto(string Id, string Periodo, string Unidade, int Intervalo, bool Aviso, string Concorrencia);
 
@@ -49,7 +49,7 @@ public interface IRepositorioGestao
     Task<(ResultadoIntervencao, InstrucaoDto?)> GravarInstrucaoAsync(string? equipamentoId, string? id, PedidoInstrucao pedido, TecnicoAtual supervisor, CancellationToken ct);
 
     Task<IReadOnlyList<TarefaGestaoDto>?> ListarTarefasAsync(string instrucaoId, CancellationToken ct);
-    // Desligar cancela as planeadas; gravar uma tarefa ativa gera a planeada (se a configuração gera planeadas).
+    // Gravar uma tarefa gera a planeada (se a configuração gera planeadas).
     Task<(ResultadoIntervencao, TarefaGestaoDto?)> GravarTarefaAsync(string? instrucaoId, string? id, PedidoTarefa pedido, TecnicoAtual supervisor, CancellationToken ct);
     // Só se não houver fichas fora de Planeada e Cancelada (TarefaComFichas); as planeadas ficam canceladas.
     Task<ResultadoIntervencao> ApagarTarefaAsync(string id, TecnicoAtual supervisor, CancellationToken ct);
@@ -68,7 +68,7 @@ public static class RegrasGestao
     public static readonly string[] Estados = ["Em Serviço", "Fora de Serviço"];
 
     public const string MotivoObsoleto = "Equipamento obsoleto", MotivoInstrucaoObsoleta = "Instrução de manutenção obsoleta",
-        MotivoTarefaDesligada = "Tarefa desligada", MotivoTarefaApagada = "Tarefa apagada";
+        MotivoTarefaApagada = "Tarefa apagada";
 
     public const string AvisoInstrucaoObsoleta = "A tarefa ficou gravada, mas esta versão da instrução está obsoleta e não gera planeadas.",
         AvisoEquipamentoObsoleto = "A tarefa ficou gravada, mas o equipamento está obsoleto e não gera planeadas.";

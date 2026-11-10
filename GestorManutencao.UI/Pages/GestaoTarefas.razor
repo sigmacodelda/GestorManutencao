@@ -38,7 +38,6 @@
                     <span class="intervencao-titulo">@(string.IsNullOrWhiteSpace(t.Periodo) ? "Sem periodicidade" : t.Periodo)</span>
                     <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(t.Responsabilidade) ? "Sem responsabilidade" : t.Responsabilidade)@(string.IsNullOrWhiteSpace(t.Responsavel) ? "" : " · " + t.Responsavel)</span>
                     <span class="chips">
-                        @if (!t.Ativa) { <span class="chip chip-erro">Desligada</span> } else { <span class="chip chip-ok">Ativa</span> }
                         @if (t.TipoManut.Length > 0) { <span class="chip">@t.TipoManut</span> }
                     </span>
                     <TextoLongo Texto="@t.Descricao" Classe="ficha-texto" />
@@ -89,7 +88,6 @@
                 <textarea id="ta-descricao" rows="4" @bind="_descricao" @bind:event="oninput"></textarea>
                 <Microfone @bind-Texto="_descricao" MaxLength="4000" />
             </div>
-            <label class="opcao-caixa" for="ta-ativa"><input id="ta-ativa" type="checkbox" @bind="_ativa" /><span>Ativa (desligar cancela as planeadas)</span></label>
             <p class="campo-erro" role="alert">@_erro</p>
             @if (_conflito)
             {
@@ -121,7 +119,7 @@
     private TarefaManutencao? _editar;
     private string _periodo = "", _responsabilidade = "", _responsavel = "", _tipoManut = "", _descricao = "", _erro = "";
     private string? _falhou, _apagar, _aviso, _avisoGeracao, _erroLista;
-    private bool _ativa = true, _a_carregar = true, _ocupado, _conflito, _confirmarRecarga;
+    private bool _a_carregar = true, _ocupado, _conflito, _confirmarRecarga;
 
     private bool TemFormulario => _editar is not null || _descricao.Length + _periodo.Length + _responsabilidade.Length + _responsavel.Length > 0;
 
@@ -153,13 +151,13 @@
     private void Editar(TarefaManutencao t)
     {
         _editar = t; _periodo = RegrasGestaoUi.Cortar(t.Periodo, RegrasGestaoUi.MaxPeriodo); _responsabilidade = t.Responsabilidade; _responsavel = t.Responsavel; _tipoManut = t.TipoManut;
-        _descricao = t.Descricao; _ativa = t.Ativa;
+        _descricao = t.Descricao;
         _erro = ""; _conflito = false; _aviso = null; _avisoGeracao = null;
     }
 
     private void Limpar()
     {
-        _editar = null; _periodo = _responsabilidade = _responsavel = _tipoManut = _descricao = ""; _ativa = true; _erro = "";
+        _editar = null; _periodo = _responsabilidade = _responsavel = _tipoManut = _descricao = ""; _erro = "";
     }
 
     // Gravar e atualizar a lista são coisas diferentes: se a gravação passou, diz-se; a falha da lista é só da lista.
@@ -181,7 +179,7 @@
         try { _tarefas = await Gestao.ListarTarefasAsync(Id); }
         catch (Exception ex) { _erroLista = "A gravação foi feita, mas não foi possível atualizar a lista. " + MensagensGestao.Para(ex, "Volte a abrir o ecrã."); }
         _ocupado = false;
-        return gravada ?? new TarefaManutencao("", Id, "", "", "", "", "", true, "");
+        return gravada ?? new TarefaManutencao("", Id, "", "", "", "", "", "");
     }
 
     private async Task GuardarAsync()
@@ -190,7 +188,7 @@
         _erro = RegrasGestaoUi.ValidarTarefa(_descricao, _periodo, _responsabilidade, _responsavel) ?? "";
         if (_erro.Length > 0) return;
         var editar = _editar;
-        var edicao = new EdicaoTarefa(_periodo.Trim(), _responsabilidade.Trim(), _responsavel.Trim(), _descricao.Trim(), _tipoManut, _ativa, editar?.Concorrencia);
+        var edicao = new EdicaoTarefa(_periodo.Trim(), _responsabilidade.Trim(), _responsavel.Trim(), _descricao.Trim(), _tipoManut, editar?.Concorrencia);
         if (await GravarAsync(async () => await Gestao.GravarTarefaAsync(Id, editar?.Id, edicao), editar is null ? "Tarefa criada." : "Tarefa guardada.") is not null) Limpar();
     }
 

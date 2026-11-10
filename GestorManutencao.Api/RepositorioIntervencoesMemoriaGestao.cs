@@ -229,7 +229,7 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
         }
     }
 
-    private TarefaGestaoDto ParaDto(Tarefa t) => new(t.Id, t.InstrucaoId, t.Periodo, t.Responsabilidade, t.Responsavel, t.Descricao, t.TipoManut, t.Ativa, t.Versao.ToString());
+    private TarefaGestaoDto ParaDto(Tarefa t) => new(t.Id, t.InstrucaoId, t.Periodo, t.Responsabilidade, t.Responsavel, t.Descricao, t.TipoManut, t.Versao.ToString());
 
     public Task<IReadOnlyList<TarefaGestaoDto>?> ListarTarefasAsync(string instrucaoId, CancellationToken ct)
     {
@@ -245,7 +245,7 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
     private bool PeriodoConhecido(string periodo) =>
         Periodicidades_.Any(p => string.Equals(p.Periodo, periodo, StringComparison.OrdinalIgnoreCase)) || Tarefas.Any(t => string.Equals(t.Periodo, periodo, StringComparison.OrdinalIgnoreCase));
 
-    // Tarefa ativa gera a planeada (se a configuração gera, não há uma aberta, o equipamento e a instrução estão ativos e a periodicidade gera).
+    // A tarefa gera a planeada (se a configuração gera, não há uma aberta, o equipamento e a instrução estão ativos e a periodicidade gera).
     private void GerarDaTarefa(Tarefa t)
     {
         var (unidade, intervalo) = Regra(t);
@@ -304,17 +304,12 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
             if (pedido.Responsabilidade is not null) t.Responsabilidade = pedido.Responsabilidade.Trim();
             if (pedido.Responsavel is not null) t.Responsavel = pedido.Responsavel.Trim();
             if (pedido.TipoManut is not null) t.TipoManut = RegrasFicha.NormalizarTipoManut(pedido.TipoManut) ?? "";
-            t.Ativa = pedido.Ativa ?? t.Ativa;
 
-            if (id is not null && !t.Ativa) CancelarPlaneadas(f => f.Tarefa == t.Id, RegrasGestao.MotivoTarefaDesligada);
             // Com a instrução ou o equipamento obsoletos fica gravada mas não gera, e diz-se.
             string? aviso = null;
-            if (t.Ativa)
-            {
-                if (InstrucaoObsoleta(t.InstrucaoId)) aviso = RegrasGestao.AvisoInstrucaoObsoleta;
-                else if (Equipamentos.FirstOrDefault(x => x.Id == t.EquipamentoId)?.Obsoleto == true) aviso = RegrasGestao.AvisoEquipamentoObsoleto;
-                else GerarDaTarefa(t);
-            }
+            if (InstrucaoObsoleta(t.InstrucaoId)) aviso = RegrasGestao.AvisoInstrucaoObsoleta;
+            else if (Equipamentos.FirstOrDefault(x => x.Id == t.EquipamentoId)?.Obsoleto == true) aviso = RegrasGestao.AvisoEquipamentoObsoleto;
+            else GerarDaTarefa(t);
             return Task.FromResult<(ResultadoIntervencao, TarefaGestaoDto?)>((ResultadoIntervencao.Ok, ParaDto(t) with { Aviso = aviso }));
         }
     }

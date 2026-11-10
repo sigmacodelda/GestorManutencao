@@ -173,7 +173,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         left join (select ltrim(rtrim(periodo)) as periodo, max(data) as ultima
                    from u_fichaint with (nolock) where u_equipstamp = @id and estado = '' and obsoleto = 0 and data <= getdate() and ltrim(rtrim(periodo)) <> ''
                    group by ltrim(rtrim(periodo))) lg on lg.periodo = ltrim(rtrim(l.periodo))
-        where i.u_equipstamp = @id and l.ativo = 1 and i.obsoleto = 0
+        where i.u_equipstamp = @id and i.obsoleto = 0
         order by ltrim(rtrim(l.periodo)), l.u_itmanutlistamp
         """;
 
@@ -383,7 +383,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         left join (select u_equipstamp, ltrim(rtrim(periodo)) as periodo, max(data) as ultima
                    from u_fichaint with (nolock) where estado = '' and obsoleto = 0 and data <= getdate() and ltrim(rtrim(periodo)) <> ''
                    group by u_equipstamp, ltrim(rtrim(periodo))) lg on lg.u_equipstamp = i.u_equipstamp and lg.periodo = ltrim(rtrim(l.periodo))
-        where l.ativo = 1 and i.obsoleto = 0 and e.obsoleto = 0 and e.tipo <> @veiculos and (@tarefa = '' or l.u_itmanutlistamp = @tarefa)
+        where i.obsoleto = 0 and e.obsoleto = 0 and e.tipo <> @veiculos and (@tarefa = '' or l.u_itmanutlistamp = @tarefa)
         """;
 
     // Se outra pessoa gerou entretanto, não duplica. Sem nolock de propósito: é a verificação que protege a escrita. Revalida no insert que o equipamento,
@@ -396,7 +396,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
                'Planeada', @tarefa, @codigo, @dia, @hora, @codigo, @dia, @hora
         where not exists (select 1 from u_fichaint where uitmanutlistamp = @tarefa and estado in ('Planeada', 'EmCurso'))
           and exists (select 1 from u_equip where u_equipstamp = @equip and obsoleto = 0)
-          and exists (select 1 from u_itmanutli l join u_itmanut i on i.u_itmanutstamp = l.u_itmanutstamp where l.u_itmanutlistamp = @tarefa and l.ativo = 1 and i.obsoleto = 0)
+          and exists (select 1 from u_itmanutli l join u_itmanut i on i.u_itmanutstamp = l.u_itmanutstamp where l.u_itmanutlistamp = @tarefa and i.obsoleto = 0)
         """;
 
     private sealed record Atual(string Estado, string Tarefa, string TipoManut, decimal NoFornecedor, string DocExterno, decimal Tecno, string Local, DateTime Hini, string Tecnos);
