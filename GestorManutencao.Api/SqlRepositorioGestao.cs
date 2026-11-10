@@ -21,9 +21,9 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
         where e.u_equipstamp = @id and isnull(e.tipo, '') <> @veiculos
         """;
 
-    private const string SqlRefRepetida = "select count(*) from u_equip with (updlock, holdlock) where ref = @ref and u_equipstamp <> @id";
+    private const string SqlRefRepetida = "select count(*) from u_equip with (nolock) where ref = @ref and u_equipstamp <> @id";
 
-    private const string SqlProximoNoInterno = "select isnull(max(nointerno), 0) + 1 from u_equip with (updlock, holdlock)";
+    private const string SqlProximoNoInterno = "select isnull(max(nointerno), 0) + 1 from u_equip with (nolock)";
 
     private const string SqlNovoEquip =
         """

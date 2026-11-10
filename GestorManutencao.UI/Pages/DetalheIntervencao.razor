@@ -58,7 +58,11 @@
             @if (!string.IsNullOrWhiteSpace(_i.Anomalia)) { <dt>Problema</dt><dd>@_i.Anomalia</dd> }
         </dl>
 
-        <FichaCompleta Detalhe="_d" Aviso="_avisoOnline" OnMudou="RecarregarAsync" />
+        @* A ficha completa (horas, mão de obra, externos, dados de gestão) é do supervisor; o técnico só vê o essencial. *@
+        @if (Sessao.Modo == ModoTrabalho.Supervisor)
+        {
+            <FichaCompleta Detalhe="_d" Aviso="_avisoOnline" OnMudou="RecarregarAsync" />
+        }
 
         @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
         {
@@ -201,17 +205,20 @@
                     <textarea id="feito" rows="4" maxlength="254" @bind="_feito" @bind:event="oninput"></textarea>
                     <Microfone @bind-Texto="_feito" MaxLength="254" />
                 </div>
-                <div class="horas">
-                    <div class="campo">
-                        <label for="inicio">Hora de início</label>
-                        <input id="inicio" type="time" @bind="_inicio" />
+                @if (Sessao.Modo == ModoTrabalho.Supervisor)
+                {
+                    <div class="horas">
+                        <div class="campo">
+                            <label for="inicio">Hora de início</label>
+                            <input id="inicio" type="time" @bind="_inicio" />
+                        </div>
+                        <div class="campo">
+                            <label for="fim">Hora de fim</label>
+                            <input id="fim" type="time" @bind="_fim" />
+                            <button type="button" class="btn-texto" @onclick="() => _fim = TimeOnly.FromDateTime(DateTime.Now)">Agora</button>
+                        </div>
                     </div>
-                    <div class="campo">
-                        <label for="fim">Hora de fim</label>
-                        <input id="fim" type="time" @bind="_fim" />
-                        <button type="button" class="btn-texto" @onclick="() => _fim = TimeOnly.FromDateTime(DateTime.Now)">Agora</button>
-                    </div>
-                </div>
+                }
                 <p class="campo-erro" role="alert">@_erro</p>
                 <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_gravar"><Icone Nome="check" /><span>@(_a_gravar ? "A guardar…" : "Feito")</span></button>
             </form>
@@ -447,6 +454,13 @@
 
     private async Task ConcluirAsync()
     {
+        // Técnico: as horas são automáticas (início gravado ao começar, fim agora; nunca fim antes do início).
+        if (Sessao.Modo != ModoTrabalho.Supervisor)
+        {
+            var agora = TimeOnly.FromDateTime(DateTime.Now);
+            _inicio ??= agora;
+            _fim = agora < _inicio ? _inicio : agora;
+        }
         _erro = RegrasIntervencao.ValidarConclusao(_feito, _inicio, _fim) ?? "";
         if (_erro.Length > 0) return;
         await Gravar(() => Intervencoes.ConcluirAsync(Id, _feito, _inicio!.Value, _fim!.Value));

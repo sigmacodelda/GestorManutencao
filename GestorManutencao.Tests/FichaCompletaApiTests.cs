@@ -128,19 +128,57 @@ public class FichaCompletaApiTests : IDisposable
     // ---------------------------------------------------------------- Ficha manual
 
     [Fact]
-    public async Task Ficha_manual_nasce_em_curso_com_o_tecnico_que_a_cria()
+    public async Task Tecnico_so_cria_avarias_curativas_internas_e_sem_periodicidade()
     {
         var ana = await ComoAsync(Criar(), PinAna);
 
-        var r = await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", TipoIntervencao.Curativa, "Externa", "Mensal", "Fuga de óleo"));
+        // Mesmo que peça Externa, Mensal ou nada, a ficha do técnico nasce curativa, interna e sem periodicidade.
+        var r = await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E3", null, "Externa", "Trimestral", "Fuga de óleo"));
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var ficha = await Ler<IntervencaoDto>(r);
+        Assert.Equal(TipoIntervencao.Curativa, ficha.Tipo);
+        Assert.Equal(101, ficha.Tecno);
+        var d = await DetalheDe(ana, ficha.Id);
+        Assert.Equal("Interna", d.TipoManut);
+        Assert.Equal("", d.Periodicidade);
+    }
+
+    [Fact]
+    public async Task Tecnico_nao_cria_preventivas()
+    {
+        var ana = await ComoAsync(Criar(), PinAna);
+
+        var r = await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", TipoIntervencao.Preventiva));
+
+        Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode);
+        Assert.Equal("tipo_nao_permitido", await Erro(r));
+    }
+
+    [Fact]
+    public async Task Avaria_do_tecnico_e_sempre_curativa()
+    {
+        var ana = await ComoAsync(Criar(), PinAna);
+
+        var ficha = await Ler<IntervencaoDto>(await ana.PostAsJsonAsync("/intervencoes/avaria", new PedidoAvaria("E1", "Ruído estranho")));
+
+        Assert.Equal(TipoIntervencao.Curativa, ficha.Tipo);
+        Assert.Equal(EstadoIntervencao.EmCurso, ficha.Estado);
+    }
+
+    [Fact]
+    public async Task Supervisor_cria_ficha_manual_completa_em_curso_com_o_seu_numero()
+    {
+        var chefe = await ComoAsync(Criar(), PinChefe);
+
+        var r = await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", TipoIntervencao.Curativa, "Externa", "Mensal", "Fuga de óleo"));
 
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
         var ficha = await Ler<IntervencaoDto>(r);
         Assert.Equal(EstadoIntervencao.EmCurso, ficha.Estado);
-        Assert.Equal(101, ficha.Tecno);
+        Assert.Equal(100, ficha.Tecno);
         Assert.Equal(TipoIntervencao.Curativa, ficha.Tipo);
         Assert.NotNull(ficha.HoraInicio);
-        var d = await DetalheDe(ana, ficha.Id);
+        var d = await DetalheDe(chefe, ficha.Id);
         Assert.Equal("Externa", d.TipoManut);
         Assert.Equal("Mensal", d.Periodicidade);
         Assert.Equal("Fuga de óleo", d.Problema);
@@ -149,34 +187,34 @@ public class FichaCompletaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Ficha_manual_omissoes_preventiva_e_interna()
+    public async Task Supervisor_ficha_manual_omissoes_preventiva_e_interna()
     {
-        var ana = await ComoAsync(Criar(), PinAna);
+        var chefe = await ComoAsync(Criar(), PinChefe);
 
-        var ficha = await Ler<IntervencaoDto>(await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E2")));
+        var ficha = await Ler<IntervencaoDto>(await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E2")));
 
         Assert.Equal(TipoIntervencao.Preventiva, ficha.Tipo);
-        var d = await DetalheDe(ana, ficha.Id);
+        var d = await DetalheDe(chefe, ficha.Id);
         Assert.Equal("Interna", d.TipoManut);
         Assert.Equal("", d.Periodicidade);
     }
 
     [Fact]
-    public async Task Ficha_manual_recusa_equipamento_invalido_periodicidade_alheia_e_texto_longo()
+    public async Task Supervisor_ficha_manual_recusa_equipamento_invalido_periodicidade_alheia_e_texto_longo()
     {
         var fabrica = Criar();
-        var ana = await ComoAsync(fabrica, PinAna);
+        var chefe = await ComoAsync(fabrica, PinChefe);
 
-        Assert.Equal(HttpStatusCode.NotFound, (await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E7"))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("NAOEXISTE"))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual(""))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", TipoManut: "Mista"))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", Problema: new string('a', 201)))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E7"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("NAOEXISTE"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual(""))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", TipoManut: "Mista"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", Problema: new string('a', 201)))).StatusCode);
 
-        var alheia = await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", Periodicidade: "Trimestral"));
+        var alheia = await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E1", Periodicidade: "Trimestral"));
         Assert.Equal(HttpStatusCode.BadRequest, alheia.StatusCode);
         Assert.Equal("periodicidade_invalida", await Erro(alheia));
-        Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E3", Periodicidade: "Trimestral"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await chefe.PostAsJsonAsync("/intervencoes", new PedidoFichaManual("E3", Periodicidade: "Trimestral"))).StatusCode);
     }
 
     [Fact]

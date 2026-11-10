@@ -378,7 +378,14 @@ public static partial class EndpointsIntervencoes
         g.MapPost("/intervencoes", (PedidoFichaManual p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             RegrasFicha.ValidarFichaManual(p) is { } erro
                 ? Task.FromResult(PedidoInvalido(erro))
-                : ComoTecnico(eu, utilizadores, ct, async t => Resposta(await repo.CriarFichaManualAsync(p, t, ct))));
+                : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, supervisor) =>
+                {
+                    if (t.Tecno <= 0) return Results.Json(new { erro = "sem_tecno" }, statusCode: StatusCodes.Status403Forbidden);
+                    // O técnico só abre avarias (curativas, internas, sem periodicidade): as preventivas nascem da geração e são do supervisor.
+                    if (!supervisor && p.Tipo == TipoIntervencao.Preventiva) return Results.Json(new { erro = "tipo_nao_permitido" }, statusCode: StatusCodes.Status403Forbidden);
+                    var pedido = supervisor ? p : p with { Tipo = TipoIntervencao.Curativa, TipoManut = "Interna", Periodicidade = "" };
+                    return Resposta(await repo.CriarFichaManualAsync(pedido, t, ct));
+                }));
 
         g.MapGet("/intervencoes/contadores", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             ComoSupervisor(eu, utilizadores, ct, async _ => Results.Ok(await repo.ContarMenuAsync(ct)))).RequireAuthorization("Supervisor");

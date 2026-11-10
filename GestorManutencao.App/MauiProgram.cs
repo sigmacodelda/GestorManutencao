@@ -38,6 +38,18 @@ public static class MauiProgram
 
 		var apiUrl = ApiUrl;
 		HttpMessageHandler? manipulador = null;
+#if DEBUG && WINDOWS
+		// Circuito de testes (Playwright): GESTOR_API_URL aponta à API local; só aceita o certificado de desenvolvimento para localhost.
+		if (Environment.GetEnvironmentVariable("GESTOR_API_URL") is { Length: > 0 } apiTeste && Uri.TryCreate(apiTeste, UriKind.Absolute, out var uriTeste) && uriTeste.IsLoopback)
+		{
+			apiUrl = apiTeste;
+			manipulador = new HttpClientHandler
+			{
+				ServerCertificateCustomValidationCallback = (pedido, _, _, erros) =>
+					erros == System.Net.Security.SslPolicyErrors.None || pedido.RequestUri?.IsLoopback == true
+			};
+		}
+#endif
 #if DEBUG && ANDROID
 		// Telemóvel em depuração: chega à API deste computador por "adb reverse tcp:7257 tcp:7257" e aceita o certificado de desenvolvimento só para localhost.
 		if (string.IsNullOrWhiteSpace(apiUrl))

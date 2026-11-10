@@ -10,3 +10,7 @@
 | sqlite-net-pcl | 1.11.285 | GestorManutencao.Armazenamento (usado pela App) | Base SQLite local (cache e fila de envio) para o modo offline. Traz SQLitePCLRaw 3.0.3 e SourceGear.sqlite3 3.53.3 (SQLite atual); a 1.9.172 foi posta de parte porque o SQLitePCLRaw.lib.e_sqlite3 2.1.x traz um SQLite com a vulnerabilidade CVE-2025-6965 (GHSA-2m69-gcr7-jv3q) | Microsoft.Data.Sqlite (mais pesada em MAUI); ficheiros JSON (sem consultas nem transações) | MIT (SQLitePCLRaw: Apache-2.0; SQLite: domínio público) |
 
 Fontes (OFL): Exo 2 e Open Sans, em `GestorManutencao.UI/wwwroot/fonts`, para funcionarem sem internet.
+
+## Testes-Circuito (apenas desenvolvimento)
+
+- `playwright-core` 1.65.0 (npm): liga-se ao WebView2 da app Windows por CDP para carregar nos botões. Só testes; não entra na app nem na API. Licença Apache-2.0.

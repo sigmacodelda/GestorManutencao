@@ -245,8 +245,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         """
         set xact_abort on;
         begin transaction;
-        -- UPDLOCK + HOLDLOCK: duas gravações em simultâneo não criam duas linhas.
-        if exists (select 1 from u_configman with (updlock, holdlock))
+        if exists (select 1 from u_configman with (nolock))
             update u_configman set antecedencia = @antecedencia, gerarplaneadas = @gerar, avancaordem = @avanca, validarpropria = @propria,
                    extexigedoc = @ext, comprasfichaint = @compras, usrinis = @codigo, usrdata = @dia, usrhora = @hora;
         else
