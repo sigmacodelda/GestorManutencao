@@ -1,0 +1,197 @@
+@page "/instrucoes/{Id}/tarefas"
+@inject IGestaoService Gestao
+@inject SessaoService Sessao
+
+<PageTitle>Tarefas de manutenção · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="@(string.IsNullOrWhiteSpace(EquipamentoId) ? "equipamentos" : $"equipamentos/{Uri.EscapeDataString(EquipamentoId)}/instrucoes")"><Icone Nome="arrow-left" /><span>@(string.IsNullOrWhiteSpace(EquipamentoId) ? "Equipamentos" : "Instruções")</span></a>
+        <h1 tabindex="-1">Tarefas de manutenção</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_falhou is not null)
+    {
+        <div class="estado-lista" role="alert">
+            <p>@_falhou</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        @if (_aviso is not null) { <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p> }
+        @if (_avisoGeracao is not null) { <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>@_avisoGeracao</span></p> }
+        @if (_erroLista is not null) { <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>@_erroLista</span></p> }
+        @if (_tarefas.Count == 0) { <p class="estado-lista" role="status">Esta versão ainda não tem tarefas.</p> }
+        <ul class="lista-intervencoes">
+            @foreach (var t in _tarefas)
+            {
+                <li class="intervencao">
+                    <span class="intervencao-titulo">@(string.IsNullOrWhiteSpace(t.Periodo) ? "Sem periodicidade" : t.Periodo)</span>
+                    <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(t.Responsabilidade) ? "Sem responsabilidade" : t.Responsabilidade)@(string.IsNullOrWhiteSpace(t.Responsavel) ? "" : " · " + t.Responsavel)</span>
+                    <span class="chips">
+                        @if (t.TipoManut.Length > 0) { <span class="chip">@t.TipoManut</span> }
+                    </span>
+                    <TextoLongo Texto="@t.Descricao" Classe="ficha-texto" />
+                    <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => Editar(t)"><Icone Nome="wrench" /><span>Editar</span></button>
+                    @if (_apagar == t.Id)
+                    {
+                        <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Apagar a tarefa? As fichas planeadas dela ficam canceladas.</span></p>
+                        <button type="button" class="btn btn-primario" disabled="@_ocupado" @onclick="() => ApagarAsync(t)">Apagar</button>
+                        <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _apagar = null">Voltar</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn-texto" disabled="@_ocupado" @onclick="() => _apagar = t.Id"><Icone Nome="trash" /><span>Apagar</span></button>
+                    }
+                </li>
+            }
+        </ul>
+
+        <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+            <h2 class="titulo-grupo"><Icone Nome="@(_editar is null ? "plus" : "wrench")" /> @(_editar is null ? "Nova tarefa" : "Editar tarefa")</h2>
+            <div class="campo">
+                <label for="ta-periodo">Periodicidade</label>
+                <select id="ta-periodo" @bind="_periodo">
+                    <option value="">Escolha</option>
+                    @foreach (var p in _periodos) { <option value="@p">@p</option> }
+                    @if (_periodo.Length > 0 && !_periodos.Contains(_periodo, StringComparer.OrdinalIgnoreCase)) { <option value="@_periodo">@_periodo</option> }
+                </select>
+            </div>
+            <div class="campo">
+                <label for="ta-resp">Responsabilidade</label>
+                <input id="ta-resp" type="text" list="ta-resps" maxlength="@RegrasGestaoUi.MaxResponsabilidade" autocomplete="off" @bind="_responsabilidade" />
+                <datalist id="ta-resps"><option value="Empresa Externa"></option><option value="Equipa interna"></option></datalist>
+            </div>
+            <div class="campo">
+                <label for="ta-responsavel">Responsável</label>
+                <input id="ta-responsavel" type="text" maxlength="@RegrasGestaoUi.MaxResponsavel" autocomplete="off" @bind="_responsavel" />
+            </div>
+            <div class="campo">
+                <label for="ta-tipo">Manutenção</label>
+                <select id="ta-tipo" @bind="_tipoManut">
+                    <option value="">Pela responsabilidade</option>
+                    <option value="Interna">Interna</option>
+                    <option value="Externa">Externa</option>
+                </select>
+            </div>
+            <div class="campo">
+                <label for="ta-descricao">Descrição</label>
+                <textarea id="ta-descricao" rows="4" @bind="_descricao" @bind:event="oninput"></textarea>
+                <Microfone @bind-Texto="_descricao" MaxLength="4000" />
+            </div>
+            <p class="campo-erro" role="alert">@_erro</p>
+            @if (_conflito)
+            {
+                @if (TemFormulario && _confirmarRecarga)
+                {
+                    <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu no formulário. Continuar?</span></p>
+                    <button type="button" class="btn btn-primario" @onclick="CarregarAsync">Descartar e recarregar</button>
+                    <button type="button" class="btn btn-secundario" @onclick="() => _confirmarRecarga = false">Voltar</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-secundario" @onclick="PedirRecargaAsync"><Icone Nome="refresh-cw" /><span>Recarregar as tarefas</span></button>
+                }
+            }
+            <button type="submit" class="btn btn-primario" disabled="@_ocupado"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Guardar tarefa")</span></button>
+            @if (_editar is not null) { <button type="button" class="btn-texto" @onclick="Limpar">Deixar de editar</button> }
+        </form>
+    }
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    // Vem do ecrã das instruções, para o botão de voltar levar de volta a elas.
+    [SupplyParameterFromQuery(Name = "equipamento")] public string? EquipamentoId { get; set; }
+
+    private IReadOnlyList<TarefaManutencao> _tarefas = [];
+    private IReadOnlyList<string> _periodos = [];
+    private TarefaManutencao? _editar;
+    private string _periodo = "", _responsabilidade = "", _responsavel = "", _tipoManut = "", _descricao = "", _erro = "";
+    private string? _falhou, _apagar, _aviso, _avisoGeracao, _erroLista;
+    private bool _a_carregar = true, _ocupado, _conflito, _confirmarRecarga;
+
+    private bool TemFormulario => _editar is not null || _descricao.Length + _periodo.Length + _responsabilidade.Length + _responsavel.Length > 0;
+
+    protected override async Task OnParametersSetAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        if (!Sessao.PodeSerSupervisor) { _a_carregar = false; return; }
+        _a_carregar = true; _falhou = null; _conflito = false; _confirmarRecarga = false; _erro = ""; _erroLista = null;
+        try
+        {
+            _tarefas = await Gestao.ListarTarefasAsync(Id);
+            try { _periodos = RegrasGestaoUi.PeriodosParaEscolher(await Gestao.ListarPeriodicidadesAsync()); }
+            catch (InvalidOperationException) { throw; }
+            catch (Exception) { _periodos = []; }
+            Limpar();
+        }
+        catch (Exception ex) { _falhou = MensagensGestao.Para(ex, "Não foi possível carregar as tarefas."); }
+        finally { _a_carregar = false; }
+    }
+
+    // O formulário não se perde sem avisar: com texto escrito pede confirmação antes de recarregar.
+    private async Task PedirRecargaAsync()
+    {
+        if (TemFormulario) { _confirmarRecarga = true; return; }
+        await CarregarAsync();
+    }
+
+    private void Editar(TarefaManutencao t)
+    {
+        _editar = t; _periodo = RegrasGestaoUi.Cortar(t.Periodo, RegrasGestaoUi.MaxPeriodo); _responsabilidade = t.Responsabilidade; _responsavel = t.Responsavel; _tipoManut = t.TipoManut;
+        _descricao = t.Descricao;
+        _erro = ""; _conflito = false; _aviso = null; _avisoGeracao = null;
+    }
+
+    private void Limpar()
+    {
+        _editar = null; _periodo = _responsabilidade = _responsavel = _tipoManut = _descricao = ""; _erro = "";
+    }
+
+    // Gravar e atualizar a lista são coisas diferentes: se a gravação passou, diz-se; a falha da lista é só da lista.
+    private async Task<TarefaManutencao?> GravarAsync(Func<Task<TarefaManutencao?>> acao, string sucesso)
+    {
+        if (_ocupado) return null;
+        _ocupado = true; _erro = ""; _aviso = null; _avisoGeracao = null; _erroLista = null; _conflito = false; _confirmarRecarga = false;
+        TarefaManutencao? gravada;
+        try { gravada = await acao(); }
+        catch (Exception ex)
+        {
+            _erro = MensagensGestao.Para(ex, "Não foi possível guardar. Tente outra vez.");
+            _conflito = ex.Message == MensagensIntervencao.Mudou;
+            _ocupado = false;
+            return null;
+        }
+        _aviso = sucesso;
+        _avisoGeracao = gravada?.Aviso;
+        try { _tarefas = await Gestao.ListarTarefasAsync(Id); }
+        catch (Exception ex) { _erroLista = "A gravação foi feita, mas não foi possível atualizar a lista. " + MensagensGestao.Para(ex, "Volte a abrir o ecrã."); }
+        _ocupado = false;
+        return gravada ?? new TarefaManutencao("", Id, "", "", "", "", "", "");
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_ocupado) return;
+        _erro = RegrasGestaoUi.ValidarTarefa(_descricao, _periodo, _responsabilidade, _responsavel) ?? "";
+        if (_erro.Length > 0) return;
+        var editar = _editar;
+        var edicao = new EdicaoTarefa(_periodo.Trim(), _responsabilidade.Trim(), _responsavel.Trim(), _descricao.Trim(), _tipoManut, editar?.Concorrencia);
+        if (await GravarAsync(async () => await Gestao.GravarTarefaAsync(Id, editar?.Id, edicao), editar is null ? "Tarefa criada." : "Tarefa guardada.") is not null) Limpar();
+    }
+
+    private async Task ApagarAsync(TarefaManutencao t) =>
+        await GravarAsync(async () => { await Gestao.ApagarTarefaAsync(t.Id); _apagar = null; return null; }, "Tarefa apagada.");
+}

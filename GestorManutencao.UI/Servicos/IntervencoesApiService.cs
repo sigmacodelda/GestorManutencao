@@ -174,6 +174,11 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
         if (filtro.Ate is { } ate) partes.Add($"ate={ate:yyyy-MM-dd}");
         if (!string.IsNullOrWhiteSpace(filtro.Texto)) partes.Add($"q={Uri.EscapeDataString(filtro.Texto.Trim())}");
         if (filtro.Tecno > 0) partes.Add($"tecno={filtro.Tecno}");
+        if (filtro.Situacao != SituacaoFichas.Todas) partes.Add($"situacao={filtro.Situacao}");
+        if (filtro.SoPorSupervisionar) partes.Add("porSupervisionar=true");
+        if (filtro.Tipo is { } tipo) partes.Add($"tipo={tipo}");
+        if (filtro.Ordem != OrdemFichas.Data) partes.Add($"ordem={filtro.Ordem}");
+        if (!filtro.Descendente) partes.Add("desc=false");
         using var resposta = await EnviarAsync(HttpMethod.Get, "intervencoes/todas?" + string.Join('&', partes), null, ct);
         resposta.EnsureSuccessStatusCode();
         return await resposta.Content.ReadFromJsonAsync<PaginaFichas>(ct) ?? new PaginaFichas([], false);
@@ -194,6 +199,93 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
             throw new InvalidOperationException(await LerMensagemAsync(resposta, ct) ?? "Valores inválidos. Reveja a configuração.");
         resposta.EnsureSuccessStatusCode();
         return await resposta.Content.ReadFromJsonAsync<ConfiguracaoManutencao>(ct) ?? throw new HttpRequestException();
+    }
+
+    // ---- Ficha completa e ações novas: 404 = a ficha mudou (ou o técnico já não existe), 400 traz a mensagem do servidor, 403 = sem permissão. ----
+
+    public async Task<FichaDetalhe?> ObterDetalheAsync(string id, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"intervencoes/{Uri.EscapeDataString(id)}/detalhe", null, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return null;
+        await VerificarNovoAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<FichaDetalhe>(ct);
+    }
+
+    public Task<FichaDetalhe> GuardarFichaAsync(string id, EdicaoFicha edicao, CancellationToken ct = default) =>
+        JsonAsync<FichaDetalhe>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}", edicao, ct);
+
+    public Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default) =>
+        JsonAsync<Intervencao>(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/cancelar", new { motivo }, ct);
+
+    public Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default) =>
+        JsonAsync<Intervencao>(HttpMethod.Post, "intervencoes", ficha.OpId is null ? ficha with { OpId = Guid.NewGuid().ToString("N")[..22] } : ficha, ct);
+
+    public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
+        JsonAsync<FichaDetalhe>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/antiga", new { supervisao, fechada }, ct);
+
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default) =>
+        JsonAsync<Material>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}", new { design, qtt, epv }, ct);
+
+    public async Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"intervencoes/{Uri.EscapeDataString(id)}/mao-de-obra", null, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return [];
+        await VerificarNovoAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<List<TempoMaoDeObra>>(ct) ?? [];
+    }
+
+    public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) =>
+        JsonAsync<TempoMaoDeObra>(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/mao-de-obra", new { tecno, horas, custoHora }, ct);
+
+    public Task<TempoMaoDeObra> EditarMaoDeObraAsync(string id, string tempoId, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) =>
+        JsonAsync<TempoMaoDeObra>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/mao-de-obra/{Uri.EscapeDataString(tempoId)}", new { tecno, horas, custoHora }, ct);
+
+    public async Task ApagarMaoDeObraAsync(string id, string tempoId, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Delete, $"intervencoes/{Uri.EscapeDataString(id)}/mao-de-obra/{Uri.EscapeDataString(tempoId)}", null, ct);
+        if (resposta.StatusCode != HttpStatusCode.NotFound) await VerificarNovoAsync(resposta, ct);
+    }
+
+    public Task<decimal> CustoHoraSugeridoAsync(int tecno, CancellationToken ct = default) =>
+        JsonAsync<decimal>(HttpMethod.Get, $"tecnicos/{tecno}/custo-hora", null, ct);
+
+    public async Task<IReadOnlyList<CompraLigada>> ListarComprasAsync(string id, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"intervencoes/{Uri.EscapeDataString(id)}/compras", null, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return [];
+        await VerificarNovoAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<List<CompraLigada>>(ct) ?? [];
+    }
+
+    public async Task<IReadOnlyList<Fornecedor>> PesquisarFornecedoresAsync(string texto, CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, $"fornecedores?q={Uri.EscapeDataString(texto ?? "")}", null, ct);
+        await VerificarNovoAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<List<Fornecedor>>(ct) ?? [];
+    }
+
+    public Task<ContadoresMenu> ObterContadoresAsync(CancellationToken ct = default) =>
+        JsonAsync<ContadoresMenu>(HttpMethod.Get, "intervencoes/contadores", null, ct);
+
+    private async Task<T> JsonAsync<T>(HttpMethod metodo, string url, object? corpo, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(metodo, url, corpo, ct);
+        await VerificarNovoAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<T>(ct) ?? throw new HttpRequestException();
+    }
+
+    private static async Task VerificarNovoAsync(HttpResponseMessage resposta, CancellationToken ct)
+    {
+        switch (resposta.StatusCode)
+        {
+            case HttpStatusCode.NotFound:
+                throw new InvalidOperationException(await LerErroAsync(resposta, ct) == "tecnico_invalido" ? "Esse técnico já não está disponível." : MensagensIntervencao.Mudou);
+            case HttpStatusCode.BadRequest:
+                throw new InvalidOperationException(await LerMensagemAsync(resposta, ct) ?? MensagensIntervencao.Para("pedido_invalido"));
+            case HttpStatusCode.Forbidden when await LerErroAsync(resposta, ct) != "sem_tecno":
+                throw new InvalidOperationException(MensagensIntervencao.Para("sem_permissao"));
+        }
+        await VerificarAsync(resposta, ct);
     }
 
     private sealed record CorpoMensagem(string? Mensagem);

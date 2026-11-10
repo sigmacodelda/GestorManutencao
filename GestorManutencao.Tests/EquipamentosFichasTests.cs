@@ -198,7 +198,8 @@ public class EquipamentosFichasTests : IDisposable
         var semDono = (await ana.GetFromJsonAsync<FichaEquipamentoDto>("/equipamentos/E3"))!.Historico.Single(h => h.Id == "H3");
 
         Assert.True(daAna.PodeAbrir);
-        Assert.False(doChefe.PodeAbrir);
+        // O supervisor abre qualquer ficha do histórico (o detalhe também lha dá).
+        Assert.True(doChefe.PodeAbrir);
         Assert.True(semDono.PodeAbrir);
     }
 

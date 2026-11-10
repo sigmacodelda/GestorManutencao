@@ -1,0 +1,168 @@
+@page "/equipamentos/{Id}/instrucoes"
+@inject IGestaoService Gestao
+@inject SessaoService Sessao
+
+<PageTitle>Instruções de manutenção · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="equipamentos/@Id"><Icone Nome="arrow-left" /><span>Equipamento</span></a>
+        <h1 tabindex="-1">Instruções de manutenção</h1>
+    </div>
+
+    @if (!Sessao.PodeSerSupervisor)
+    {
+        <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_falhou is not null)
+    {
+        <div class="estado-lista" role="alert">
+            <p>@_falhou</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        <p class="campo-erro" role="alert">@_erro</p>
+        @if (_aviso is not null) { <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p> }
+        @if (_erroLista is not null) { <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>@_erroLista</span></p> }
+        @if (_conflito)
+        {
+            @if (TemFormulario && _confirmarRecarga)
+            {
+                <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu no formulário. Continuar?</span></p>
+                <button type="button" class="btn btn-primario" @onclick="RecarregarDescartandoAsync">Descartar e recarregar</button>
+                <button type="button" class="btn btn-secundario" @onclick="() => _confirmarRecarga = false">Voltar</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-secundario" @onclick="PedirRecargaAsync"><Icone Nome="refresh-cw" /><span>Recarregar as instruções</span></button>
+            }
+        }
+        <ul class="lista-intervencoes">
+            @foreach (var i in _instrucoes)
+            {
+                <li class="intervencao">
+                    <span class="intervencao-titulo">Versão @(string.IsNullOrWhiteSpace(i.Versao) ? "inicial" : i.Versao)</span>
+                    <span class="intervencao-desc">@i.NumTarefas @(i.NumTarefas == 1 ? "tarefa" : "tarefas") · @i.Data.ToString("dd/MM/yyyy")</span>
+                    <span class="chips">@if (i.Obsoleta) { <span class="chip chip-erro">Obsoleta</span> } else { <span class="chip chip-ok">Em uso</span> }</span>
+                    @if (!string.IsNullOrWhiteSpace(i.Obs)) { <TextoLongo Texto="@i.Obs" Classe="ficha-texto" /> }
+                    <a class="btn btn-secundario" href="instrucoes/@i.Id/tarefas?equipamento=@Uri.EscapeDataString(Id)"><Icone Nome="list" /><span>Ver tarefas</span></a>
+                    <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => Editar(i)"><Icone Nome="wrench" /><span>Editar versão</span></button>
+                    @if (i.Obsoleta)
+                    {
+                        <button type="button" class="btn-texto" disabled="@_ocupado" @onclick="() => ReativarAsync(i)">Reativar esta versão</button>
+                    }
+                    else if (_confirmar == i.Id)
+                    {
+                        <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Ao marcar como obsoleta, ficam canceladas as fichas planeadas das tarefas desta versão (as em curso não). Continuar?</span></p>
+                        <button type="button" class="btn btn-primario" disabled="@_ocupado" @onclick="() => MarcarObsoletaAsync(i)">Marcar obsoleta</button>
+                        <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _confirmar = null">Voltar</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn-texto" disabled="@_ocupado" @onclick="() => _confirmar = i.Id">Marcar como obsoleta</button>
+                    }
+                </li>
+            }
+        </ul>
+        <p class="ficha-texto">Reativar uma versão não volta a gerar as fichas planeadas que foram canceladas; as tarefas geram de novo quando forem gravadas.</p>
+
+        <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+            <h2 class="titulo-grupo"><Icone Nome="@(_editar is null ? "plus" : "wrench")" /> @(_editar is null ? "Nova versão" : "Editar versão")</h2>
+            <div class="campo">
+                <label for="iv-versao">Versão</label>
+                <input id="iv-versao" type="text" maxlength="@RegrasGestaoUi.MaxVersao" autocomplete="off" @bind="_versao" />
+            </div>
+            <div class="campo">
+                <label for="iv-data">Data</label>
+                <input id="iv-data" type="date" min="1900-01-01" max="2999-12-31" @bind="_data" />
+            </div>
+            <div class="campo">
+                <label for="iv-obs">Observações</label>
+                <textarea id="iv-obs" rows="3" @bind="_obs" @bind:event="oninput"></textarea>
+                <Microfone @bind-Texto="_obs" MaxLength="4000" />
+            </div>
+            <button type="submit" class="btn btn-secundario" disabled="@_ocupado"><Icone Nome="@(_editar is null ? "plus" : "check")" /><span>@(_editar is null ? "Criar versão" : "Guardar versão")</span></button>
+            @if (_editar is not null) { <button type="button" class="btn-texto" @onclick="Limpar">Deixar de editar</button> }
+        </form>
+    }
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private IReadOnlyList<InstrucaoManutencao> _instrucoes = [];
+    private InstrucaoManutencao? _editar;
+    private string _versao = "", _obs = "", _erro = "";
+    private string? _falhou, _confirmar, _aviso, _erroLista;
+    private DateOnly? _data;
+    private bool _a_carregar = true, _ocupado, _conflito, _confirmarRecarga;
+
+    private bool TemFormulario => _editar is not null || _versao.Length > 0 || _obs.Length > 0;
+
+    protected override async Task OnParametersSetAsync() => await CarregarAsync();
+
+    private async Task CarregarAsync()
+    {
+        if (!Sessao.PodeSerSupervisor) { _a_carregar = false; return; }
+        _a_carregar = true; _falhou = null; _conflito = false; _confirmarRecarga = false; _erro = ""; _erroLista = null;
+        try { _instrucoes = await Gestao.ListarInstrucoesAsync(Id); Limpar(); }
+        catch (Exception ex) { _falhou = MensagensGestao.Para(ex, "Não foi possível carregar as instruções."); }
+        finally { _a_carregar = false; }
+    }
+
+    // O formulário não se perde sem avisar: com texto escrito pede confirmação antes de recarregar.
+    private async Task PedirRecargaAsync()
+    {
+        if (TemFormulario) { _confirmarRecarga = true; return; }
+        await CarregarAsync();
+    }
+
+    private Task RecarregarDescartandoAsync() => CarregarAsync();
+
+    private void Editar(InstrucaoManutencao i) { _editar = i; _versao = i.Versao; _obs = i.Obs; _data = i.Data; _erro = ""; _aviso = null; }
+
+    private void Limpar() { _editar = null; _versao = _obs = ""; _data = null; }
+
+    // Gravar e atualizar a lista são coisas diferentes: se a gravação passou, diz-se; a falha da lista é só da lista.
+    private async Task<bool> GravarAsync(Func<Task> acao, string sucesso)
+    {
+        if (_ocupado) return false;
+        _ocupado = true; _erro = ""; _aviso = null; _erroLista = null; _conflito = false;
+        try { await acao(); }
+        catch (Exception ex)
+        {
+            _erro = MensagensGestao.Para(ex, "Não foi possível guardar. Tente outra vez.");
+            _conflito = ex.Message == MensagensIntervencao.Mudou;
+            _ocupado = false;
+            return false;
+        }
+        _aviso = sucesso;
+        try { _instrucoes = await Gestao.ListarInstrucoesAsync(Id); }
+        catch (Exception ex) { _erroLista = "A gravação foi feita, mas não foi possível atualizar a lista. " + MensagensGestao.Para(ex, "Volte a abrir o ecrã."); }
+        _ocupado = false;
+        return true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_ocupado) return;
+        if (_versao.Trim().Length > RegrasGestaoUi.MaxVersao) { _erro = $"A versão pode ter no máximo {RegrasGestaoUi.MaxVersao} letras."; return; }
+        var edicao = _editar is null
+            ? new EdicaoInstrucao(Versao: _versao.Trim(), Data: _data, Obs: _obs.Trim())
+            : new EdicaoInstrucao(Versao: _versao.Trim(), Data: _data, Obs: _obs.Trim(), Concorrencia: _editar.Concorrencia);
+        var editar = _editar;
+        if (await GravarAsync(() => Gestao.GravarInstrucaoAsync(editar is null ? Id : null, editar?.Id, edicao), editar is null ? "Versão criada." : "Versão guardada.")) Limpar();
+    }
+
+    private Task MarcarObsoletaAsync(InstrucaoManutencao i) =>
+        GravarAsync(async () => { await Gestao.GravarInstrucaoAsync(null, i.Id, new EdicaoInstrucao(Obsoleta: true, Concorrencia: i.Concorrencia)); _confirmar = null; }, "Versão marcada como obsoleta.");
+
+    private Task ReativarAsync(InstrucaoManutencao i) =>
+        GravarAsync(() => Gestao.GravarInstrucaoAsync(null, i.Id, new EdicaoInstrucao(Obsoleta: false, Concorrencia: i.Concorrencia)), "Versão reativada.");
+}

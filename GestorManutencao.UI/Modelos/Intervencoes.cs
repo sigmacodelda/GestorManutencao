@@ -27,7 +27,8 @@ public sealed record Intervencao(
     DateOnly? DataPrevista = null,
     bool PodeAbrir = false, string? Motivo = null,
     bool Pendente = false,
-    IReadOnlyList<TecnicoFicha>? Adicionais = null)
+    IReadOnlyList<TecnicoFicha>? Adicionais = null,
+    int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
@@ -65,13 +66,21 @@ public sealed record FichaEquipamento(Equipamento Equipamento, IReadOnlyList<Tar
 
 public sealed record FiltroEquipamentos(string Texto = "", string Tipo = "", string Local = "", bool Obsoletos = false);
 
-public sealed record FiltroFichas(EstadoIntervencao? Estado = null, DateOnly? Desde = null, DateOnly? Ate = null, string Texto = "", int Tecno = 0);
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SituacaoFichas { Abertas, Fechadas, Todas }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum OrdemFichas { Numero, Data, Equipamento, Tipo, Total }
+
+// Abertas = não fechada e não cancelada; Fechadas = fechada. Sem ordem pedida: data, da mais recente para a mais antiga.
+public sealed record FiltroFichas(
+    EstadoIntervencao? Estado = null, DateOnly? Desde = null, DateOnly? Ate = null, string Texto = "", int Tecno = 0,
+    SituacaoFichas Situacao = SituacaoFichas.Todas, bool SoPorSupervisionar = false, TipoIntervencao? Tipo = null, OrdemFichas Ordem = OrdemFichas.Data, bool Descendente = true);
 
 public sealed record PaginaFichas(IReadOnlyList<Intervencao> Itens, bool TemMais);
 
 public sealed record ConfiguracaoManutencao(
-    int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false, bool ExtExigeDoc = true, bool ComprasFichaInt = true,
-    bool ExigeMaterial = false);
+    int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false, bool ExtExigeDoc = true, bool ComprasFichaInt = true);
 
 public static class RegrasConfiguracao
 {

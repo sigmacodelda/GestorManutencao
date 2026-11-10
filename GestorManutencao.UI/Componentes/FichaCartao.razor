@@ -10,8 +10,14 @@
             <span class="intervencao-titulo">@Titulo</span>
         }
         <span class="intervencao-desc">@(MostrarEquipamento ? ApresentacaoIntervencao.Tipo(Ficha.Tipo) + " · " : "")@(string.IsNullOrWhiteSpace(Ficha.Tecnico) ? "Sem técnico" : Ficha.Tecnico)</span>
-        <span class="chips"><span class="chip @ApresentacaoIntervencao.ClasseChip(Ficha.Estado)">@ApresentacaoIntervencao.Estado(Ficha.Estado)</span></span>
-        <span class="intervencao-data">@Ficha.DataPlaneada.ToString("dd/MM/yyyy")</span>
+        <span class="chips">
+            @if (Detalhada)
+            {
+                @foreach (var chip in VistaFichas.Chips(Ficha, Hoje)) { <span class="chip @chip.Classe">@chip.Texto</span> }
+            }
+            else { <span class="chip @ApresentacaoIntervencao.ClasseChip(Ficha.Estado)">@ApresentacaoIntervencao.Estado(Ficha.Estado)</span> }
+        </span>
+        <span class="intervencao-data">@(Detalhada && Ficha.Numero > 0 ? $"Nº {Ficha.Numero} · " : "")@Ficha.DataPlaneada.ToString("dd/MM/yyyy")@(Detalhada ? $" · {Ficha.Total:0.00} €" : "")</span>
         @if (ApresentacaoIntervencao.Resumo(Ficha) is { } resumo)
         {
             <TextoLongo Texto="@resumo" Classe="ficha-texto" />
@@ -24,6 +30,10 @@
 
     // Na lista de todas as fichas o título é o equipamento; na ficha do equipamento é o tipo.
     [Parameter] public bool MostrarEquipamento { get; set; }
+
+    // Lista do supervisor: estados derivados (atrasada, fora de ordem, ficha antiga), número e total.
+    [Parameter] public bool Detalhada { get; set; }
+    [Parameter] public DateOnly Hoje { get; set; } = DateOnly.FromDateTime(DateTime.Today);
 
     private string Titulo => MostrarEquipamento ? Ficha.Equipamento : ApresentacaoIntervencao.Tipo(Ficha.Tipo);
 }

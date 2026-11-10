@@ -227,7 +227,7 @@ public sealed class ArmazenamentoSqliteTests : IAsyncLifetime
         c.Remoto.Rede = false;
         await c.Svc.ConcluirAsync("T1", "Substituí a válvula", new TimeOnly(8, 0), new TimeOnly(9, 0));
         c.Remoto.Rede = true;
-        c.Remoto.ExigeMaterial = true;
+        c.Semear(c.Remoto.Fichas["T1"] with { Estado = EstadoIntervencao.Planeada });
 
         await c.Sinc.SincronizarAsync();
 

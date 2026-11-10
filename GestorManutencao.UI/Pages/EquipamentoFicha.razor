@@ -1,5 +1,7 @@
 @page "/equipamentos/{Id}"
 @inject IEquipamentosService Servico
+@inject IGestaoService Gestao
+@inject SessaoService Sessao
 
 <PageTitle>@(_ficha?.Equipamento.Nome ?? "Equipamento") · Gestor de Manutenção</PageTitle>
 
@@ -31,6 +33,15 @@
     else
     {
         var e = _ficha.Equipamento;
+        @if (!e.Obsoleto)
+        {
+            <a class="btn btn-primario" href="nova-ficha?equipamento=@Uri.EscapeDataString(e.Id)"><Icone Nome="plus" /><span>Nova ficha de intervenção</span></a>
+        }
+        @if (Sessao.PodeSerSupervisor)
+        {
+            <a class="btn btn-secundario" href="equipamentos/@Uri.EscapeDataString(e.Id)/editar"><Icone Nome="wrench" /><span>Editar equipamento</span></a>
+            <a class="btn btn-secundario" href="equipamentos/@Uri.EscapeDataString(e.Id)/instrucoes"><Icone Nome="list" /><span>Instruções e tarefas</span></a>
+        }
         <dl class="ficha">
             @if (e.Ref.Length > 0) { <dt>Nº</dt><dd>@e.Ref</dd> }
             @if (e.Tipo.Length > 0) { <dt>Tipo</dt><dd>@e.Tipo</dd> }
@@ -72,6 +83,21 @@
             </ul>
         </section>
 
+        @if (Sessao.PodeSerSupervisor)
+        {
+            <section aria-labelledby="titulo-estado">
+                <h2 id="titulo-estado" class="titulo-grupo"><Icone Nome="clock" /> Histórico de estado <span class="contagem">@_estados.Count</span></h2>
+                @if (_avisoGestao is not null) { <p class="estado-lista" role="status">@_avisoGestao</p> }
+                else if (_estados.Count == 0) { <p class="estado-lista" role="status">Ainda sem mudanças de estado.</p> }
+                <ul class="lista-intervencoes">
+                    @foreach (var h in _estados)
+                    {
+                        <li class="intervencao"><span class="intervencao-titulo">@h.Estado</span><span class="intervencao-desc">@h.Quem</span><span class="intervencao-data">@h.Data.ToString("dd/MM/yyyy")</span></li>
+                    }
+                </ul>
+            </section>
+        }
+
         <section aria-labelledby="titulo-historico">
             <h2 id="titulo-historico" class="titulo-grupo"><Icone Nome="clipboard-list" /> Últimas intervenções <span class="contagem">@_ficha.Historico.Count</span></h2>
             @if (_ficha.Historico.Count == 0)
@@ -92,6 +118,8 @@
     [Parameter] public string Id { get; set; } = "";
 
     private FichaEquipamento? _ficha;
+    private IReadOnlyList<HistoricoEstado> _estados = [];
+    private string? _avisoGestao;
     private bool _a_carregar = true, _falhou, _indisponivel;
     private DateOnly _hoje = DateOnly.FromDateTime(DateTime.Today);
 
@@ -101,9 +129,15 @@
     {
         _a_carregar = true; _falhou = false; _indisponivel = false; _ficha = null;
         _hoje = DateOnly.FromDateTime(DateTime.Today);
+        _estados = []; _avisoGestao = null;
         try { _ficha = await Servico.ObterFichaAsync(Id); }
         catch (NotSupportedException) { _indisponivel = true; }
         catch (Exception) { _falhou = true; }
         finally { _a_carregar = false; }
+        // O histórico de estado só existe online e só o supervisor o vê; sem rede o resto da ficha continua a funcionar.
+        if (_ficha is not null && Sessao.PodeSerSupervisor)
+            try { _estados = await Gestao.ListarHistoricoAsync(Id); }
+            catch (InvalidOperationException ex) { _avisoGestao = ex.Message; }
+            catch (Exception) { _avisoGestao = "Não foi possível carregar o histórico de estado."; }
     }
 }

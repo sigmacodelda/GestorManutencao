@@ -36,6 +36,30 @@ public interface IIntervencoesService
     // Só para supervisores: configuração da manutenção. Guardar lança InvalidOperationException com a mensagem a mostrar se o servidor recusar os valores.
     Task<ConfiguracaoManutencao> ObterConfiguracaoAsync(CancellationToken ct = default);
     Task<ConfiguracaoManutencao> GuardarConfiguracaoAsync(ConfiguracaoManutencao configuracao, CancellationToken ct = default);
+
+    // Ficha completa e ações novas do backoffice. São só online: sem rede lançam InvalidOperationException com MensagensIntervencao.SemRede
+    // e nunca vão para a fila de saída. A mensagem das InvalidOperationException vem pronta para mostrar.
+    // Ficha completa com mão de obra, materiais, totais e bloqueios (null se não existe ou não é do utilizador).
+    Task<FichaDetalhe?> ObterDetalheAsync(string id, CancellationToken ct = default);
+    Task<FichaDetalhe> GuardarFichaAsync(string id, EdicaoFicha edicao, CancellationToken ct = default);
+    // Só supervisor: Planeada ou EmCurso passa a Cancelada (motivo obrigatório) e gera-se a seguinte da tarefa.
+    Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default);
+    // Operador e supervisor: nasce em curso, com o utilizador como técnico.
+    Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default);
+    // Só supervisor, só fichas antigas (sem estado).
+    Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default);
+    Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default);
+    // Mão de obra interna: custo = horas x custo por hora; o custo por hora sugerido é o do último registo do técnico.
+    Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default);
+    Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default);
+    Task<TempoMaoDeObra> EditarMaoDeObraAsync(string id, string tempoId, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default);
+    Task ApagarMaoDeObraAsync(string id, string tempoId, CancellationToken ct = default);
+    Task<decimal> CustoHoraSugeridoAsync(int tecno, CancellationToken ct = default);
+    // Compras ligadas à ficha (só leitura; vazio se a configuração não usa compras) e fornecedores (2 letras no mínimo) para escolher na ficha.
+    Task<IReadOnlyList<CompraLigada>> ListarComprasAsync(string id, CancellationToken ct = default);
+    Task<IReadOnlyList<Fornecedor>> PesquisarFornecedoresAsync(string texto, CancellationToken ct = default);
+    // Só supervisor: contadores do menu.
+    Task<ContadoresMenu> ObterContadoresAsync(CancellationToken ct = default);
 }
 
 // O utilizador ainda não tem o número de técnico do PHC: o supervisor tem de o indicar na Equipa.
@@ -45,13 +69,22 @@ public sealed class SemNumeroTecnicoException : Exception;
 public static class MensagensIntervencao
 {
     public const string Mudou = "Esta intervenção já mudou. Volte à lista e abra-a outra vez.";
+    public const string SemRede = "Sem ligação. Esta ação só funciona com rede.";
+    public const string SemRedeAMeio = "Sem ligação. Pode ter ficado gravado; confirme antes de repetir.";
+    public const string ComPendentes = "Esta intervenção tem alterações por enviar. Tente outra vez depois de serem enviadas.";
 
     public static string Para(string? codigo) => codigo switch
     {
+        "ref_duplicada" => "Esse nº de infraestrutura já existe. Altere o número.",
+        "planeadas_mudaram" => "O número de planeadas mudou entretanto. Confirme outra vez.",
+        "tarefa_com_fichas" => "Esta tarefa já tem fichas feitas. Desligue-a em vez de a apagar.",
+        "instrucao_obsoleta" => "Esta versão da instrução está obsoleta. Crie uma versão nova para juntar tarefas.",
+        "sem_permissao" => "Não tem permissão para esta ação.",
+        "pedido_invalido" => "Algum dos valores indicados não é válido.",
+        "periodicidade_invalida" => "Essa periodicidade não existe neste equipamento.",
         "fora_de_ordem" => "Há intervenções mais antigas nesta zona. Comece pela primeira da lista.",
         "externa_sem_documento" => "Falta o fornecedor ou o documento externo. Peça ao supervisor para os indicar no PHC.",
         "propria" => "Não pode validar uma intervenção feita por si.",
-        "sem_material" => "Indique o material usado antes de concluir.",
         "limite_fotos" => $"No máximo {RegrasFoto.Max} fotos por intervenção.",
         _ => Mudou
     };
@@ -145,7 +178,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         return Alterar(id, EstadoIntervencao.EmCurso, i => i with
         {
             Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null
-        }, () => _configuracao.ExigeMaterial && !(_materiais.GetValueOrDefault(id)?.Count > 0) ? throw new InvalidOperationException(MensagensIntervencao.Para("sem_material")) : null);
+        });
     }
 
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default)
@@ -288,15 +321,9 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
 
     public Task<PaginaFichas> ListarTodasAsync(FiltroFichas filtro, int pagina, CancellationToken ct = default)
     {
-        var texto = (filtro.Texto ?? "").Trim();
         lock (_trinco)
         {
-            var todas = _lista
-                .Where(i => (filtro.Estado is null || i.Estado == filtro.Estado)
-                    && (filtro.Desde is null || i.DataPlaneada >= filtro.Desde) && (filtro.Ate is null || i.DataPlaneada <= filtro.Ate)
-                    && (filtro.Tecno == 0 || i.Envolve(filtro.Tecno))
-                    && (texto.Length == 0 || Contem(i.Equipamento, texto) || Contem(i.Anomalia ?? "", texto) || Contem(i.Feito ?? "", texto) || Contem(i.Tecnico ?? "", texto)))
-                .OrderByDescending(i => i.DataPlaneada).ThenByDescending(i => i.Id).ToList();
+            var todas = VistaFichas.Aplicar(_lista, filtro).ToList();
             var itens = todas.Skip((Math.Max(pagina, 1) - 1) * PorPagina).Take(PorPagina).Select(i => i with { PodeAbrir = true }).ToList();
             return Task.FromResult(new PaginaFichas(itens, todas.Count > Math.Max(pagina, 1) * PorPagina));
         }
@@ -311,6 +338,150 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     {
         if (RegrasConfiguracao.Validar(configuracao.Antecedencia) is { } mensagem) throw new InvalidOperationException(mensagem);
         lock (_trinco) return Task.FromResult(_configuracao = configuracao);
+    }
+
+    // ---- Ficha completa e ações novas (em desenvolvimento age como supervisor) ----
+
+    private readonly Dictionary<string, FichaDetalhe> _extras = [];
+    private readonly Dictionary<string, List<TempoMaoDeObra>> _tempos = [];
+    private static readonly Fornecedor[] Fornecedores = [new(7000004072, "Frio Industrial, Lda"), new(7000001234, "Elevadores do Norte")];
+
+    private static string? Texto(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private FichaDetalhe DetalheDe(Intervencao i)
+    {
+        var eq = Equipamentos.FirstOrDefault(e => e.Nome == i.Equipamento);
+        var extra = _extras.GetValueOrDefault(i.Id) ?? new FichaDetalhe(i.Id, i.Equipamento, i.Estado, i.DataPlaneada);
+        var tempos = _tempos.GetValueOrDefault(i.Id)?.ToList() ?? [];
+        var materiais = _materiais.GetValueOrDefault(i.Id)?.ToList() ?? [];
+        var editavel = i.Estado is not (EstadoIntervencao.Validada or EstadoIntervencao.Cancelada);
+        return extra with
+        {
+            Equipamento = i.Equipamento, Zona = i.Zona, EquipamentoId = eq?.Id ?? "", Ref = eq?.Ref ?? "", Tipo = i.Tipo, Data = i.DataPlaneada, Estado = i.Estado,
+            Tecno = i.Tecno, Tecnico = i.Tecnico, Adicionais = i.Adicionais,
+            HoraInicio = i.HoraInicio is { } h ? i.DataPlaneada.ToDateTime(h) : null, HoraFim = i.HoraFim is { } f ? i.DataPlaneada.ToDateTime(f) : null,
+            Problema = i.Anomalia ?? "", Resolucao = i.Feito ?? "", Motivo = i.Motivo, MaoDeObra = tempos, Materiais = materiais,
+            MoInterna = tempos.Sum(t => t.Custo), MatInterno = materiais.Sum(m => m.Custo),
+            TotMo = tempos.Sum(t => t.Custo) + extra.MoExterna, TotRef = materiais.Sum(m => m.Custo) + extra.MatExterno,
+            ExternosAMao = !_configuracao.ComprasFichaInt, PodeEditar = editavel, PodeEditarGestao = editavel, PodeCancelar = i.PorFazer
+        };
+    }
+
+    public Task<FichaDetalhe?> ObterDetalheAsync(string id, CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult(_lista.FirstOrDefault(i => i.Id == id) is { } ficha ? DetalheDe(ficha) : null);
+    }
+
+    public Task<FichaDetalhe> GuardarFichaAsync(string id, EdicaoFicha e, CancellationToken ct = default)
+    {
+        if (RegrasFichaDetalhe.ValidarEdicao(e) is { } mensagem) throw new InvalidOperationException(mensagem);
+        lock (_trinco)
+        {
+            var pos = _lista.FindIndex(i => i.Id == id);
+            if (pos < 0 || _lista[pos].Estado is EstadoIntervencao.Validada or EstadoIntervencao.Cancelada) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            var i = _lista[pos];
+            var extra = _extras.GetValueOrDefault(id) ?? new FichaDetalhe(id, i.Equipamento, i.Estado, i.DataPlaneada);
+            _lista[pos] = i with
+            {
+                Anomalia = e.Problema is null ? i.Anomalia : Texto(e.Problema), Feito = e.Resolucao is null ? i.Feito : Texto(e.Resolucao),
+                HoraInicio = e.HoraInicio is { } hi ? (hi.Year <= 1900 ? null : TimeOnly.FromDateTime(hi)) : i.HoraInicio,
+                HoraFim = e.HoraFim is { } hf ? (hf.Year <= 1900 ? null : TimeOnly.FromDateTime(hf)) : i.HoraFim,
+                DataPlaneada = e.Data ?? i.DataPlaneada, Tipo = e.Tipo ?? i.Tipo
+            };
+            _extras[id] = extra with
+            {
+                TipoManut = e.TipoManut ?? extra.TipoManut, Periodicidade = e.Periodicidade ?? extra.Periodicidade, Obs = e.Obs ?? extra.Obs, LimRem = e.LimRem ?? extra.LimRem,
+                HorasFrio = e.HorasFrio ?? extra.HorasFrio, HorasConf = e.HorasConf ?? extra.HorasConf, NoFornecedor = e.NoFornecedor ?? extra.NoFornecedor,
+                NomeFornecedor = e.NomeFornecedor ?? extra.NomeFornecedor, DocExterno = e.DocExterno ?? extra.DocExterno,
+                MoExterna = e.MoExterna ?? extra.MoExterna, MatExterno = e.MatExterno ?? extra.MatExterno
+            };
+            return Task.FromResult(DetalheDe(_lista[pos]));
+        }
+    }
+
+    public Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default)
+    {
+        if (RegrasFichaDetalhe.ValidarCancelamento(motivo) is { } mensagem) throw new InvalidOperationException(mensagem);
+        return Alterar(id, null, i => i.PorFazer ? i with { Estado = EstadoIntervencao.Cancelada } : throw new InvalidOperationException(MensagensIntervencao.Mudou));
+    }
+
+    public Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default)
+    {
+        if (RegrasFichaDetalhe.ValidarNova(ficha) is { } mensagem) throw new InvalidOperationException(mensagem);
+        lock (_trinco)
+        {
+            var eq = Equipamentos.FirstOrDefault(e => e.Id == ficha.EquipamentoId && !e.Obsoleto) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            var nova = new Intervencao(Guid.NewGuid().ToString("N"), eq.Nome, eq.Zona, ficha.Tipo, DateOnly.FromDateTime(DateTime.Today), EstadoIntervencao.EmCurso,
+                Texto(ficha.Problema), null, TimeOnly.FromDateTime(DateTime.Now), null, "Operador de Teste", 101);
+            _lista.Add(nova);
+            _extras[nova.Id] = new FichaDetalhe(nova.Id, nova.Equipamento, nova.Estado, nova.DataPlaneada, TipoManut: ficha.TipoManut, Periodicidade: (ficha.Periodicidade ?? "").Trim());
+            return Task.FromResult(nova);
+        }
+    }
+
+    public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
+        throw new InvalidOperationException(MensagensIntervencao.Mudou);
+
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default)
+    {
+        if (RegrasMaterial.Validar(design, qtt, epv) is not null) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+        lock (_trinco)
+        {
+            var lista = _materiais.GetValueOrDefault(id);
+            var pos = lista?.FindIndex(m => m.Id == materialId) ?? -1;
+            if (lista is null || pos < 0 || _lista.FirstOrDefault(i => i.Id == id)?.Estado is null or EstadoIntervencao.Validada or EstadoIntervencao.Cancelada)
+                throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            return Task.FromResult(lista[pos] = new Material(materialId, design.Trim(), qtt, epv, Math.Round(qtt * epv, 3)));
+        }
+    }
+
+    public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult<IReadOnlyList<TempoMaoDeObra>>(_tempos.GetValueOrDefault(id)?.ToList() ?? []);
+    }
+
+    private Task<TempoMaoDeObra> GravarTempo(string id, string? tempoId, int tecno, decimal horas, decimal custoHora)
+    {
+        if (RegrasFichaDetalhe.ValidarTempo(tecno, horas, custoHora) is { } mensagem) throw new InvalidOperationException(mensagem);
+        lock (_trinco)
+        {
+            if (_lista.FirstOrDefault(i => i.Id == id) is not { } ficha || ficha.Estado is EstadoIntervencao.Validada or EstadoIntervencao.Cancelada)
+                throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            if (!_tempos.TryGetValue(id, out var lista)) _tempos[id] = lista = [];
+            var tempo = new TempoMaoDeObra(tempoId ?? Guid.NewGuid().ToString("N"), tecno, NomeDev(tecno), horas, RegrasFichaDetalhe.CustoTempo(horas, custoHora), custoHora);
+            if (tempoId is null) lista.Add(tempo);
+            else if (lista.FindIndex(t => t.Id == tempoId) is var pos and >= 0) lista[pos] = tempo;
+            else throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            return Task.FromResult(tempo);
+        }
+    }
+
+    public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) =>
+        GravarTempo(id, null, tecno, horas, custoHora);
+
+    public Task<TempoMaoDeObra> EditarMaoDeObraAsync(string id, string tempoId, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) =>
+        GravarTempo(id, tempoId, tecno, horas, custoHora);
+
+    public Task ApagarMaoDeObraAsync(string id, string tempoId, CancellationToken ct = default)
+    {
+        lock (_trinco) _tempos.GetValueOrDefault(id)?.RemoveAll(t => t.Id == tempoId);
+        return Task.CompletedTask;
+    }
+
+    public Task<decimal> CustoHoraSugeridoAsync(int tecno, CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult(_tempos.Values.SelectMany(l => l).LastOrDefault(t => t.Tecno == tecno && t.CustoHora > 0)?.CustoHora ?? 0m);
+    }
+
+    public Task<IReadOnlyList<CompraLigada>> ListarComprasAsync(string id, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<CompraLigada>>([]);
+
+    public Task<IReadOnlyList<Fornecedor>> PesquisarFornecedoresAsync(string texto, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<Fornecedor>>(Fornecedores.Where(f => (texto ?? "").Trim().Length >= 2 && Contem(f.Nome, texto!.Trim())).ToList());
+
+    public Task<ContadoresMenu> ObterContadoresAsync(CancellationToken ct = default)
+    {
+        var hoje = DateOnly.FromDateTime(DateTime.Today);
+        lock (_trinco) return Task.FromResult(new ContadoresMenu(_lista.Count(i => i.EstaAtrasada(hoje) || i.ForaDePrazo(hoje)), _lista.Count(i => i.Estado == EstadoIntervencao.Concluida)));
     }
 
     private Task<Intervencao> Alterar(string id, EstadoIntervencao? esperado, Func<Intervencao, Intervencao> mudar, Func<object?>? extra = null)
@@ -354,4 +525,18 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<PaginaFichas> ListarTodasAsync(FiltroFichas filtro, int pagina, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<ConfiguracaoManutencao> ObterConfiguracaoAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<ConfiguracaoManutencao> GuardarConfiguracaoAsync(ConfiguracaoManutencao configuracao, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<FichaDetalhe?> ObterDetalheAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<FichaDetalhe> GuardarFichaAsync(string id, EdicaoFicha edicao, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<TempoMaoDeObra> EditarMaoDeObraAsync(string id, string tempoId, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task ApagarMaoDeObraAsync(string id, string tempoId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<decimal> CustoHoraSugeridoAsync(int tecno, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<CompraLigada>> ListarComprasAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Fornecedor>> PesquisarFornecedoresAsync(string texto, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<ContadoresMenu> ObterContadoresAsync(CancellationToken ct = default) => throw new NotSupportedException();
 }

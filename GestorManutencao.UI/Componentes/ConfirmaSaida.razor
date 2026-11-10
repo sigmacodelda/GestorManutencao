@@ -1,13 +1,14 @@
 <div class="dialogo-fundo" @onkeydown="AoTecla">
     <div tabindex="0" aria-hidden="true" @onfocus="FocarUltimoAsync"></div>
     <div class="dialogo" role="alertdialog" aria-modal="true" aria-labelledby="saida-titulo" aria-describedby="saida-texto">
-        <h2 id="saida-titulo">Sair agora?</h2>
+        <h2 id="saida-titulo">@(Titulo ?? "Sair agora?")</h2>
         <p id="saida-texto">
-            Tem @(Pendentes == 1 ? "1 registo" : $"{Pendentes} registos") por enviar. Se sair agora, ficam guardados neste telemóvel até voltar a entrar com a mesma conta.
+            @if (Texto is not null) { @Texto }
+            else { <text>Tem @(Pendentes == 1 ? "1 registo" : $"{Pendentes} registos") por enviar. Se sair agora, ficam guardados neste telemóvel até voltar a entrar com a mesma conta.</text> }
         </p>
         <div class="dialogo-acoes">
             <button type="button" class="btn btn-primario" @ref="_ficar" @onclick="() => Ficar.InvokeAsync()">Ficar</button>
-            <button type="button" class="btn btn-secundario" @ref="_sair" @onclick="() => Sair.InvokeAsync()">Sair mesmo assim</button>
+            <button type="button" class="btn btn-secundario" @ref="_sair" @onclick="() => Sair.InvokeAsync()">@(TextoSair ?? "Sair mesmo assim")</button>
         </div>
     </div>
     <div tabindex="0" aria-hidden="true" @onfocus="FocarPrimeiroAsync"></div>
@@ -15,6 +16,11 @@
 
 @code {
     [Parameter] public int Pendentes { get; set; }
+
+    // Sem estes, o texto é o da saída da sessão com registos por enviar; com eles serve também para alterações por guardar.
+    [Parameter] public string? Titulo { get; set; }
+    [Parameter] public string? Texto { get; set; }
+    [Parameter] public string? TextoSair { get; set; }
     [Parameter] public EventCallback Sair { get; set; }
     [Parameter] public EventCallback Ficar { get; set; }
 

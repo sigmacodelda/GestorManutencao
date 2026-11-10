@@ -28,7 +28,6 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     public Dictionary<string, Exception> DepoisFalha { get; } = [];
     public TimeSpan Atraso { get; set; }
     public int MaxConcorrencia { get; private set; }
-    public bool ExigeMaterial { get; set; }
 
     public List<string> Chamadas { get; } = [];
     public List<string> OpIds { get; } = [];
@@ -125,7 +124,6 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
             var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
             if (f.Estado == EstadoIntervencao.EmCurso)
             {
-                if (ExigeMaterial && !(Materiais.GetValueOrDefault(id)?.Count > 0)) throw new InvalidOperationException(MensagensIntervencao.Para("sem_material"));
                 f = Fichas[id] = f with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim };
             }
             else if (f.Estado != EstadoIntervencao.Concluida) throw new InvalidOperationException(MensagensIntervencao.Mudou);
@@ -215,7 +213,15 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     }
 
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default)
+    {
+        Entrar("Validar", id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            return Task.FromResult(Fichas[id] = f with { Estado = EstadoIntervencao.Validada });
+        }
+    }
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) => throw new NotSupportedException();
@@ -224,6 +230,60 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     public Task<PaginaFichas> ListarTodasAsync(FiltroFichas filtro, int pagina, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<ConfiguracaoManutencao> ObterConfiguracaoAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<ConfiguracaoManutencao> GuardarConfiguracaoAsync(ConfiguracaoManutencao configuracao, CancellationToken ct = default) => throw new NotSupportedException();
+
+    public Task<FichaDetalhe?> ObterDetalheAsync(string id, CancellationToken ct = default)
+    {
+        Entrar("ObterDetalhe", id);
+        lock (_trinco) return Task.FromResult(Fichas.GetValueOrDefault(id) is { } f ? new FichaDetalhe(f.Id, f.Equipamento, f.Estado, f.DataPlaneada) : null);
+    }
+
+    public Task<FichaDetalhe> GuardarFichaAsync(string id, EdicaoFicha edicao, CancellationToken ct = default)
+    {
+        Entrar("GuardarFicha", id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            return Task.FromResult(new FichaDetalhe(f.Id, f.Equipamento, f.Estado, f.DataPlaneada, Problema: edicao.Problema ?? ""));
+        }
+    }
+
+    public Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default)
+    {
+        Entrar("Cancelar", id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            if (!f.PorFazer) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            return Task.FromResult(Fichas[id] = f with { Estado = EstadoIntervencao.Cancelada });
+        }
+    }
+
+    public Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default)
+    {
+        Entrar("CriarFichaManual");
+        lock (_trinco)
+        {
+            OpIds.Add(ficha.OpId ?? "");
+            var eq = Equipamentos.First(e => e.Id == ficha.EquipamentoId);
+            var id = "S" + ++_seq;
+            return Task.FromResult(Fichas[id] = NovaFicha(id, eq.Nome, EstadoIntervencao.EmCurso, new DateOnly(2026, 11, 9), ficha.Problema));
+        }
+    }
+
+    public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) { Entrar("ListarMaoDeObra", id); return Task.FromResult<IReadOnlyList<TempoMaoDeObra>>([]); }
+    public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default)
+    {
+        Entrar("AdicionarMaoDeObra", id);
+        return Task.FromResult(new TempoMaoDeObra("T" + ++_seq, tecno, "Técnico", horas, horas * custoHora, custoHora));
+    }
+    public Task<TempoMaoDeObra> EditarMaoDeObraAsync(string id, string tempoId, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task ApagarMaoDeObraAsync(string id, string tempoId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<decimal> CustoHoraSugeridoAsync(int tecno, CancellationToken ct = default) { Entrar("CustoHora"); return Task.FromResult(4.5m); }
+    public Task<IReadOnlyList<CompraLigada>> ListarComprasAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Fornecedor>> PesquisarFornecedoresAsync(string texto, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<ContadoresMenu> ObterContadoresAsync(CancellationToken ct = default) { Entrar("Contadores"); return Task.FromResult(new ContadoresMenu(2, 1)); }
 }
 
 internal sealed class Cenario

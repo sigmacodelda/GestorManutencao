@@ -2,6 +2,7 @@
 @inject SessaoService Sessao
 @inject IIntervencoesService Intervencoes
 @inject IEquipaService ServicoEquipa
+@inject GeracaoDiaria GeracaoDiariaServico
 
 <PageTitle>Planeadas · Gestor de Manutenção</PageTitle>
 
@@ -35,6 +36,10 @@
         <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="GerarAsync">
             <Icone Nome="calendar" /><span>Gerar planeadas</span>
         </button>
+        @if (_avisoGeracao is not null)
+        {
+            <p class="ficha-texto" role="status">@_avisoGeracao</p>
+        }
         @if (_aviso is not null)
         {
             <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p>
@@ -46,6 +51,33 @@
         @if (_fichas.Count == 0)
         {
             <p class="estado-lista" role="status">Não há intervenções planeadas.</p>
+        }
+        else
+        {
+            var t = VistaPlaneadas.Contar(_fichas, _hoje, _antecedencia);
+            <ul class="contadores contadores-4" aria-label="Resumo das planeadas (toque para filtrar)">
+                <li><button type="button" class="contador contador-btn @(_kpi == KpiPlaneadas.EmAberto ? "contador-ativo" : "")" aria-pressed="@(_kpi == KpiPlaneadas.EmAberto ? "true" : "false")" @onclick="() => Filtrar(KpiPlaneadas.EmAberto)"><span class="led" aria-hidden="true"></span><span class="contador-num">@t.EmAberto</span><span class="contador-rot">Em aberto</span></button></li>
+                <li><button type="button" class="contador contador-btn @(t.ForaDePrazo > 0 ? "alerta-led" : "") @(_kpi == KpiPlaneadas.ForaDePrazo ? "contador-ativo" : "")" aria-pressed="@(_kpi == KpiPlaneadas.ForaDePrazo ? "true" : "false")" @onclick="() => Filtrar(KpiPlaneadas.ForaDePrazo)"><span class="led" aria-hidden="true"></span><span class="contador-num">@t.ForaDePrazo</span><span class="contador-rot">Fora de prazo</span></button></li>
+                <li><button type="button" class="contador contador-btn @(_kpi == KpiPlaneadas.AVencer ? "contador-ativo" : "")" aria-pressed="@(_kpi == KpiPlaneadas.AVencer ? "true" : "false")" @onclick="() => Filtrar(KpiPlaneadas.AVencer)"><span class="led" aria-hidden="true"></span><span class="contador-num">@t.AVencer</span><span class="contador-rot">A vencer (@_antecedencia dias)</span></button></li>
+                <li><button type="button" class="contador contador-btn @(_kpi == KpiPlaneadas.EmCurso ? "contador-ativo" : "")" aria-pressed="@(_kpi == KpiPlaneadas.EmCurso ? "true" : "false")" @onclick="() => Filtrar(KpiPlaneadas.EmCurso)"><span class="led" aria-hidden="true"></span><span class="contador-num">@t.EmCurso</span><span class="contador-rot">Em curso</span></button></li>
+            </ul>
+            <div class="filtros">
+                <div class="campo">
+                    <label for="pl-zona">Zona</label>
+                    <select id="pl-zona" @bind="_zona">
+                        <option value="">Todas</option>
+                        @foreach (var z in VistaPlaneadas.Zonas(_fichas)) { <option value="@z">@z</option> }
+                    </select>
+                </div>
+                <div class="campo">
+                    <label for="pl-texto">Pesquisar</label>
+                    <input id="pl-texto" type="search" autocomplete="off" maxlength="@RegrasPesquisa.MaxTexto" placeholder="Equipamento, técnico ou problema" @bind="_texto" @bind:event="oninput" />
+                </div>
+            </div>
+            @if (Filtradas().Count == 0)
+            {
+                <p class="estado-lista" role="status">Não há intervenções com estes filtros.</p>
+            }
         }
         @foreach (var zona in Zonas())
         {
@@ -142,8 +174,22 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (Sessao.PodeSerSupervisor) await CarregarAsync();
-        else _a_carregar = false;
+        if (!Sessao.PodeSerSupervisor) { _a_carregar = false; return; }
+        await CarregarAsync();
+        if (!_falhou && !_indisponivel) await GerarDoDiaAsync();
+    }
+
+    // Uma vez por dia (por dispositivo e utilizador) gera as planeadas ao abrir o ecrã; sem rede ou com falha só fica um aviso discreto.
+    private async Task GerarDoDiaAsync()
+    {
+        var utilizador = Sessao.Utilizador?.Nome ?? "";
+        var r = await GeracaoDiariaServico.ExecutarAsync(utilizador, _gerarPlaneadas, () => Intervencoes.GerarPlaneadasAsync());
+        _avisoGeracao = r.Aviso;
+        if (r.Criadas > 0)
+        {
+            _aviso = $"Geradas {r.Criadas} planeadas de hoje.";
+            await CarregarAsync();
+        }
     }
 
     private async Task CarregarAsync()
@@ -153,6 +199,12 @@
         try
         {
             _fichas = (await Intervencoes.ListarPlaneadasAsync()).ToList();
+            try
+            {
+                var cfg = await Intervencoes.ObterConfiguracaoAsync();
+                _antecedencia = cfg.Antecedencia; _gerarPlaneadas = cfg.GerarPlaneadas;
+            }
+            catch (Exception) { _antecedencia = 7; _gerarPlaneadas = false; }
             // Só quem tem número do PHC pode ter fichas.
             _tecnicos = (await ServicoEquipa.ListarAsync(Sessao.Utilizador?.Token)).Where(m => m.Ativo && m.Tecno > 0).OrderBy(m => m.Nome).ToList();
         }
@@ -161,7 +213,18 @@
         finally { _a_carregar = false; }
     }
 
-    private IEnumerable<GrupoZona> Zonas() => _fichas
+    private bool _gerarPlaneadas;
+    private string? _avisoGeracao;
+    private KpiPlaneadas _kpi;
+    private string _zona = "", _texto = "";
+    private int _antecedencia = 7;
+
+    // Tocar outra vez no mesmo indicador tira o filtro.
+    private void Filtrar(KpiPlaneadas kpi) { _kpi = _kpi == kpi ? KpiPlaneadas.Nenhum : kpi; _limites.Clear(); }
+
+    private IReadOnlyList<Intervencao> Filtradas() => VistaPlaneadas.Filtrar(_fichas, _kpi, _zona, _texto, _hoje, _antecedencia);
+
+    private IEnumerable<GrupoZona> Zonas() => Filtradas()
         .GroupBy(f => string.IsNullOrWhiteSpace(f.Zona) ? "Sem zona" : f.Zona)
         .OrderBy(g => g.Key == "Sem zona" ? 1 : 0).ThenBy(g => g.Key)
         .Select(g => new GrupoZona(g.Key, g.OrderBy(f => f.DataPlaneada).ToList()));

@@ -14,6 +14,8 @@ public static class OfflineExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ICacheLocal, CacheLocalMemoria>();
         services.TryAddSingleton<IFilaSaida, FilaSaidaMemoria>();
+        services.TryAddSingleton<IArmazemGeracaoDiaria>(sp => new ArmazemGeracaoDiariaCache(sp.GetRequiredService<ICacheLocal>()));
+        services.TryAddSingleton<GeracaoDiaria>();
         services.TryAddSingleton<IArmazemFotosPendentes, ArmazemFotosPendentesMemoria>();
         services.TryAddSingleton<IRedeEstado, RedeEstadoManual>();
         services.TryAddScoped<IDonoDados, DonoDadosSessao>();

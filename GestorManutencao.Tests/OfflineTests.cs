@@ -410,10 +410,9 @@ public class OfflineTests
     }
 
     [Fact]
-    public async Task Exige_material_so_se_sabe_ao_sincronizar_e_vira_conflito()
+    public async Task Concluir_offline_sem_material_sincroniza_sem_conflito()
     {
         var c = new Cenario();
-        c.Remoto.ExigeMaterial = true;
         await c.SemearEmCacheAsync("T1", "Compressor de ar 02", EstadoIntervencao.EmCurso);
         c.Rede.Definir(false);
         await c.Svc.ConcluirAsync("T1", "Limpeza", new TimeOnly(8, 0), new TimeOnly(9, 0));
@@ -421,10 +420,8 @@ public class OfflineTests
 
         await c.Sinc.SincronizarAsync();
 
-        var aviso = Assert.Single(await c.Sinc.ListarAvisosAsync());
-        Assert.Contains(MensagensIntervencao.Para("sem_material"), aviso.Mensagem);
-        Assert.Equal("Limpeza", aviso.Textos.Single().Texto);
-        Assert.Equal(EstadoIntervencao.EmCurso, (await c.Cache.ObterFichaAsync("T1"))!.Estado);
+        Assert.Empty(await c.Sinc.ListarAvisosAsync());
+        Assert.Equal(EstadoIntervencao.Concluida, c.Remoto.Fichas["T1"].Estado);
     }
 
     [Fact]

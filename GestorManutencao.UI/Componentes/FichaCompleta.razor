@@ -1,0 +1,552 @@
+@* Ficha completa (só online): dados, execução, externo, mão de obra, compras, totais e ações por estado e perfil. Os bloqueios vêm da API (Detalhe.Pode...). *@
+@inject IIntervencoesService Intervencoes
+@inject IEquipamentosService Equipamentos
+@inject IEquipaService ServicoEquipa
+@inject SessaoService Sessao
+@inject NavigationManager Nav
+
+<NavigationLock OnBeforeInternalNavigation="AoNavegar" />
+
+@if (Aviso is not null)
+{
+    <p class="alerta" role="status"><Icone Nome="wifi-off" /><span>@Aviso</span></p>
+}
+
+@if (Detalhe is { } d)
+{
+    var editar = d.PodeEditar;
+    var gestao = d.PodeEditarGestao;
+    var supervisor = Sessao.PodeSerSupervisor;
+
+    @if (d.Antiga)
+    {
+        <p class="alerta alerta-pin" role="status"><Icone Nome="clock" /><span>@SeccoesFicha.TextoSituacao(d)@(d.Supervisao ? " · supervisionada" : " · por supervisionar").</span></p>
+    }
+    @if (d.Estado == EstadoIntervencao.Cancelada && !string.IsNullOrWhiteSpace(d.Motivo))
+    {
+        <div class="alerta alerta-devolvida" role="status"><Icone Nome="x" /><div><strong>Cancelada</strong><p>@d.Motivo</p></div></div>
+    }
+    @if (!editar)
+    {
+        <p class="estado-lista" role="status">@(EstadosSoLeitura(d) ? "Esta ficha já não se altera." : "Só pode alterar as suas fichas em curso.")</p>
+    }
+
+    <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+        <section aria-labelledby="fc-dados">
+            <h2 id="fc-dados" class="titulo-grupo"><Icone Nome="list" /> Dados</h2>
+            <div class="filtros">
+                <div class="campo">
+                    <label for="fc-data">Data</label>
+                    <input id="fc-data" type="date" min="1901-01-01" max="2999-12-31" disabled="@(!gestao)" @bind="_form.Data" />
+                </div>
+                <div class="campo">
+                    <label for="fc-periodo">Periodicidade</label>
+                    <input id="fc-periodo" type="text" list="fc-periodos" maxlength="@RegrasFichaDetalhe.MaxPeriodo" autocomplete="off" disabled="@(!gestao)" @bind="_form.Periodicidade" />
+                    <datalist id="fc-periodos">@foreach (var p in _periodos) { <option value="@p"></option> }</datalist>
+                </div>
+                <div class="campo">
+                    <label for="fc-tipo">Tipo de intervenção</label>
+                    <select id="fc-tipo" disabled="@(!gestao)" @bind="_form.Tipo">
+                        <option value="@TipoIntervencao.Preventiva">Preventiva</option>
+                        <option value="@TipoIntervencao.Curativa">Curativa (avaria)</option>
+                    </select>
+                </div>
+                <div class="campo">
+                    <label for="fc-manut">Manutenção</label>
+                    <select id="fc-manut" disabled="@(!gestao)" @bind="_form.TipoManut">
+                        <option value="Interna">Interna</option>
+                        <option value="Externa">Externa</option>
+                        @if (_form.TipoManut is not ("Interna" or "Externa")) { <option value="@_form.TipoManut">@_form.TipoManut</option> }
+                    </select>
+                </div>
+                <div class="campo">
+                    <label for="fc-tecnico">Técnico</label>
+                    <select id="fc-tecnico" disabled="@(!gestao)" @bind="_form.Tecno">
+                        @if (d.Tecno == 0) { <option value="0">Sem técnico</option> }
+                        @foreach (var t in OpcoesTecnico(d)) { <option value="@t.Tecno">@t.Nome</option> }
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section aria-labelledby="fc-exec">
+            <h2 id="fc-exec" class="titulo-grupo"><Icone Nome="wrench" /> Execução</h2>
+            <div class="horas">
+                <div class="campo">
+                    <label for="fc-inicio">Início</label>
+                    <input id="fc-inicio" type="datetime-local" disabled="@(!editar)" @bind="_form.HoraInicio" @bind:format="yyyy-MM-ddTHH:mm" />
+                </div>
+                <div class="campo">
+                    <label for="fc-fim">Fim</label>
+                    <input id="fc-fim" type="datetime-local" disabled="@(!editar)" @bind="_form.HoraFim" @bind:format="yyyy-MM-ddTHH:mm" />
+                </div>
+                <div class="campo">
+                    <label for="fc-frio">Horas de frio</label>
+                    <input id="fc-frio" type="number" inputmode="decimal" step="0.01" min="0" max="999.99" disabled="@(!editar)" @bind="_form.HorasFrio" />
+                </div>
+                <div class="campo">
+                    <label for="fc-conf">Horas de confirmação</label>
+                    <input id="fc-conf" type="number" inputmode="decimal" step="0.01" min="0" max="999.99" disabled="@(!editar)" @bind="_form.HorasConf" />
+                </div>
+            </div>
+            <div class="campo">
+                <label for="fc-problema">Problema</label>
+                <textarea id="fc-problema" rows="3" maxlength="@RegrasFichaDetalhe.MaxProblema" disabled="@(!editar)" @bind="_form.Problema" @bind:event="oninput"></textarea>
+                @if (editar) { <Microfone @bind-Texto="_form.Problema" MaxLength="RegrasFichaDetalhe.MaxProblema" /> }
+            </div>
+            <div class="campo">
+                <label for="fc-resolucao">Resolução</label>
+                <textarea id="fc-resolucao" rows="4" maxlength="@RegrasFichaDetalhe.MaxResolucao" disabled="@(!editar)" @bind="_form.Resolucao" @bind:event="oninput"></textarea>
+                @if (editar) { <Microfone @bind-Texto="_form.Resolucao" MaxLength="RegrasFichaDetalhe.MaxResolucao" /> }
+            </div>
+            <div class="campo">
+                <label for="fc-obs">Observações</label>
+                <textarea id="fc-obs" rows="3" maxlength="@RegrasFichaDetalhe.MaxObs" disabled="@(!editar)" @bind="_form.Obs" @bind:event="oninput"></textarea>
+                @if (editar) { <Microfone @bind-Texto="_form.Obs" MaxLength="RegrasFichaDetalhe.MaxObs" /> }
+            </div>
+            <label class="opcao-caixa" for="fc-limrem">
+                <input id="fc-limrem" type="checkbox" disabled="@(!editar)" @bind="_form.LimRem" />
+                <span>Limpeza / remoção feita</span>
+            </label>
+        </section>
+
+        @if (SeccoesFicha.MostrarExterno(d))
+        {
+            <section aria-labelledby="fc-externo">
+                <h2 id="fc-externo" class="titulo-grupo"><Icone Nome="factory" /> Externo</h2>
+                @if (SeccoesFicha.AvisoDocumentoExterno(d, _config) is { } aviso)
+                {
+                    <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>@aviso</span></p>
+                }
+                <p class="ficha-texto">Fornecedor: <strong>@(string.IsNullOrWhiteSpace(_form.NomeFornecedor) ? "sem fornecedor" : _form.NomeFornecedor)</strong></p>
+                @if (editar)
+                {
+                    <div class="campo">
+                        <label for="fc-fornecedor">Procurar fornecedor</label>
+                        <input id="fc-fornecedor" type="search" autocomplete="off" placeholder="Pelo menos 2 letras" value="@_textoFornecedor" @oninput="ProcurarFornecedorAsync" />
+                        @if (_fornecedores.Count > 0)
+                        {
+                            <ul class="opcoes" aria-label="Fornecedores encontrados">
+                                @foreach (var f in _fornecedores)
+                                {
+                                    <li><button type="button" class="opcao" @onclick="() => EscolherFornecedor(f)">@f.Nome <span class="opcao-zona">@f.No</span></button></li>
+                                }
+                            </ul>
+                        }
+                        @if (_form.NoFornecedor > 0) { <button type="button" class="btn-texto" @onclick="TirarFornecedor">Tirar fornecedor</button> }
+                    </div>
+                }
+                <div class="campo">
+                    <label for="fc-doc">Documento externo</label>
+                    <input id="fc-doc" type="text" maxlength="@RegrasFichaDetalhe.MaxDocExterno" autocomplete="off" disabled="@(!editar)" @bind="_form.DocExterno" />
+                </div>
+                @if (d.ExternosAMao)
+                {
+                    <div class="horas">
+                        <div class="campo">
+                            <label for="fc-moext">Mão de obra externa (€)</label>
+                            <input id="fc-moext" type="number" inputmode="decimal" step="0.01" min="0" disabled="@(!editar)" @bind="_form.MoExterna" />
+                        </div>
+                        <div class="campo">
+                            <label for="fc-matext">Material externo (€)</label>
+                            <input id="fc-matext" type="number" inputmode="decimal" step="0.01" min="0" disabled="@(!editar)" @bind="_form.MatExterno" />
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+
+        <p class="campo-erro" role="alert">@_erroForm</p>
+        @if (_conflito)
+        {
+            <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="RecarregarAsync"><Icone Nome="refresh-cw" /><span>Recarregar a ficha</span></button>
+        }
+        @if (editar)
+        {
+            @if (TemAlteracoes)
+            {
+                <p class="alerta alerta-pendente" role="status"><Icone Nome="clock" /><span>Alterações por guardar</span></p>
+            }
+            <button type="submit" class="btn btn-primario" disabled="@(_ocupado || !TemAlteracoes)"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Guardar alterações")</span></button>
+            @if (TemAlteracoes)
+            {
+                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="Descartar">Descartar alterações</button>
+            }
+        }
+    </form>
+
+    <section aria-labelledby="fc-mo">
+        <h2 id="fc-mo" class="titulo-grupo"><Icone Nome="users" /> Mão de obra interna <span class="contagem">@d.Tempos.Count</span></h2>
+        @if (d.Tempos.Count == 0) { <p class="estado-lista" role="status">Ainda sem horas lançadas.</p> }
+        <ul class="lista-intervencoes">
+            @foreach (var t in d.Tempos)
+            {
+                <li class="intervencao material-linha">
+                    <span>
+                        <span class="intervencao-titulo">@t.Responsavel</span><br />
+                        <span class="intervencao-desc">@t.Horas.ToString("0.##") h@(d.CustosOcultos && t.Custo == 0 ? "" : $" × {t.CustoHora:0.00} €/h = {t.Custo:0.00} €")</span>
+                    </span>
+                    @if (SeccoesFicha.PodeJuntarMaoDeObra(d))
+                    {
+                        <span>
+                            <button type="button" class="btn-texto" aria-label="Editar horas de @t.Responsavel" disabled="@_ocupado" @onclick="() => EditarTempo(t)"><Icone Nome="wrench" /></button>
+                            <button type="button" class="btn-texto" aria-label="Apagar horas de @t.Responsavel" disabled="@_ocupado" @onclick="() => ApagarTempoAsync(t)"><Icone Nome="trash" /></button>
+                        </span>
+                    }
+                </li>
+            }
+        </ul>
+        @if (SeccoesFicha.PodeJuntarMaoDeObra(d))
+        {
+            <form class="formulario" @onsubmit="GuardarTempoAsync" novalidate>
+                <div class="material-novo">
+                    <div class="campo">
+                        <label for="mo-tecnico">Técnico</label>
+                        <select id="mo-tecnico" value="@_tTecno" @onchange="MudarTecnicoTempoAsync">
+                            <option value="0">Escolha o técnico</option>
+                            @foreach (var t in OpcoesTecnico(d)) { <option value="@t.Tecno">@t.Nome</option> }
+                        </select>
+                    </div>
+                    <div class="campo">
+                        <label for="mo-horas">Horas</label>
+                        <input id="mo-horas" type="number" inputmode="decimal" step="0.01" min="0" max="999.99" @bind="_tHoras" @bind:event="oninput" />
+                    </div>
+                    @if (!d.CustosOcultos)
+                    {
+                        <div class="campo">
+                            <label for="mo-custo">Custo por hora (€)</label>
+                            <input id="mo-custo" type="number" inputmode="decimal" step="0.001" min="0" @bind="_tCustoHora" @bind:event="oninput" />
+                        </div>
+                    }
+                </div>
+                @if (!d.CustosOcultos)
+                {
+                    <p class="ficha-texto">Custo: <strong>@RegrasFichaDetalhe.CustoTempo(_tHoras ?? 0, _tCustoHora ?? 0).ToString("0.00") €</strong></p>
+                }
+                <p class="campo-erro" role="alert">@_erroTempo</p>
+                <button type="submit" class="btn btn-secundario" disabled="@_ocupado"><Icone Nome="@(_tId is null ? "plus" : "check")" /><span>@(_tId is null ? "Juntar horas" : "Guardar horas")</span></button>
+                @if (_tId is not null) { <button type="button" class="btn-texto" @onclick="LimparTempo">Deixar de editar</button> }
+            </form>
+        }
+    </section>
+
+    @if (SeccoesFicha.MostrarCompras(d))
+    {
+        <section aria-labelledby="fc-compras">
+            <h2 id="fc-compras" class="titulo-grupo"><Icone Nome="package" /> Compras ligadas <span class="contagem">@_compras.Count</span></h2>
+            @if (_compras.Count == 0) { <p class="estado-lista" role="status">Sem compras ligadas a esta ficha.</p> }
+            <ul class="lista-intervencoes">
+                @foreach (var c in _compras)
+                {
+                    <li class="intervencao">
+                        <span class="intervencao-titulo">@(c.Design.Length > 0 ? c.Design : c.Ref)</span>
+                        <span class="intervencao-desc">@c.Documento · @c.Fornecedor</span>
+                        <span class="chips"><span class="chip">@(string.IsNullOrWhiteSpace(c.Tipo) ? "Outro" : c.Tipo)</span></span>
+                        <span class="intervencao-data">@c.Qtt.ToString("0.###") · @c.Valor.ToString("0.00") €@(c.Data is { } dia ? " · " + dia.ToString("dd/MM/yyyy") : "")</span>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    @if (SeccoesFicha.MostrarTotais(d))
+    {
+    <section aria-labelledby="fc-totais">
+        <h2 id="fc-totais" class="titulo-grupo"><Icone Nome="clipboard-list" /> Totais</h2>
+        <dl class="ficha">
+            <dt>Mão de obra interna</dt><dd>@d.MoInterna.ToString("0.00") €</dd>
+            <dt>Mão de obra externa</dt><dd>@d.MoExterna.ToString("0.00") €</dd>
+            <dt>Total mão de obra</dt><dd><strong>@d.TotMo.ToString("0.00") €</strong></dd>
+            <dt>Material interno</dt><dd>@d.MatInterno.ToString("0.00") €</dd>
+            <dt>Material externo</dt><dd>@d.MatExterno.ToString("0.00") €</dd>
+            <dt>Total material</dt><dd><strong>@d.TotRef.ToString("0.00") €</strong></dd>
+            <dt>Total da ficha</dt><dd><strong>@d.Total.ToString("0.00") €</strong></dd>
+        </dl>
+    </section>
+    }
+
+    @if (d.PodeFecharAntiga || SeccoesFicha.PodeValidarOuDevolver(d, supervisor) || d.PodeCancelar)
+    {
+        <section aria-labelledby="fc-acoes">
+            <h2 id="fc-acoes" class="titulo-grupo"><Icone Nome="shield-check" /> Ações do supervisor</h2>
+            <p class="campo-erro" role="alert">@_erroAcao</p>
+
+            @if (d.PodeFecharAntiga)
+            {
+                <div class="formulario">
+                    <label class="opcao-caixa" for="fa-sup"><input id="fa-sup" type="checkbox" @bind="_antigaSupervisionada" /><span>Supervisionada</span></label>
+                    <label class="opcao-caixa" for="fa-fechada"><input id="fa-fechada" type="checkbox" @bind="_antigaFechada" /><span>Fechada</span></label>
+                    <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="FecharAntigaAsync"><Icone Nome="check" /><span>Guardar situação da ficha</span></button>
+                </div>
+            }
+
+            @if (SeccoesFicha.PodeValidarOuDevolver(d, supervisor))
+            {
+                <button type="button" class="btn btn-primario" disabled="@_ocupado" @onclick="ValidarAsync"><Icone Nome="shield-check" /><span>Validar e fechar</span></button>
+                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick='() => AbrirMotivo("devolver")'><Icone Nome="rotate-ccw" /><span>Devolver ao técnico</span></button>
+            }
+
+            @if (d.PodeCancelar)
+            {
+                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick='() => AbrirMotivo("cancelar")'><Icone Nome="x" /><span>Cancelar intervenção</span></button>
+            }
+
+            @if (_motivoAcao is not null)
+            {
+                <form class="formulario" @onsubmit="ConfirmarMotivoAsync" novalidate>
+                    <div class="campo">
+                        <label for="fc-motivo">@(_motivoAcao == "devolver" ? "Motivo da devolução" : "Motivo do cancelamento")</label>
+                        <textarea id="fc-motivo" rows="3" maxlength="@(_motivoAcao == "devolver" ? RegrasFichaDetalhe.MaxDevolucao : RegrasFichaDetalhe.MaxMotivoCancelamento)" @bind="_motivo" @bind:event="oninput"></textarea>
+                        <Microfone @bind-Texto="_motivo" MaxLength="@(_motivoAcao == "devolver" ? RegrasFichaDetalhe.MaxDevolucao : RegrasFichaDetalhe.MaxMotivoCancelamento)" />
+                    </div>
+                    <button type="submit" class="btn btn-primario" disabled="@_ocupado">Confirmar</button>
+                    <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _motivoAcao = null">Voltar</button>
+                </form>
+            }
+        </section>
+    }
+}
+
+@if (_pedirSaida)
+{
+    <ConfirmaSaida Titulo="Sair sem guardar?" Texto="Tem alterações por guardar nesta ficha. Se sair agora, perde-as." TextoSair="Sair sem guardar" Sair="SairSemGuardarAsync" Ficar="() => _pedirSaida = false" />
+}
+
+@code {
+    [Parameter] public FichaDetalhe? Detalhe { get; set; }
+    [Parameter] public string? Aviso { get; set; }
+    [Parameter] public EventCallback OnMudou { get; set; }
+
+    private FormFicha _form = new();
+    private FichaDetalhe? _origem;
+    private ConfiguracaoManutencao? _config;
+    private IReadOnlyList<MembroEquipa> _equipa = [];
+    private IReadOnlyList<string> _periodos = [];
+    private IReadOnlyList<CompraLigada> _compras = [];
+    private IReadOnlyList<Fornecedor> _fornecedores = [];
+    private string _textoFornecedor = "", _erroForm = "", _erroTempo = "", _erroAcao = "", _motivo = "";
+    private string? _motivoAcao, _tId, _destino;
+    private int _tTecno;
+    private decimal? _tHoras, _tCustoHora;
+    private bool _ocupado, _pedirSaida, _antigaSupervisionada, _antigaFechada, _conflito, _descartarForm;
+    // Para não repetir pedidos: o que já se carregou para esta ficha e este equipamento.
+    private string? _idExtras, _equipamentoPeriodos;
+    private bool _supervisorCarregado;
+    private CancellationTokenSource? _espera;
+
+    private bool TemAlteracoes => Detalhe is not null && _form.TemAlteracoes(Detalhe);
+
+    private static bool EstadosSoLeitura(FichaDetalhe d) => d.Estado is EstadoIntervencao.Validada or EstadoIntervencao.Cancelada;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Detalhe is not { } d) { _origem = null; return; }
+        var outra = _origem is null || _origem.Id != d.Id;
+        if (!ReferenceEquals(_origem, d))
+        {
+            // Se há alterações por guardar, ficam; senão o formulário acompanha a ficha.
+            if (outra || _descartarForm || !_form.TemAlteracoes(_origem!)) _form = FormFicha.De(d);
+            _descartarForm = false;
+            _origem = d;
+            _antigaSupervisionada = d.Supervisao;
+            _antigaFechada = d.Fechada;
+            if (outra) { _tId = null; _tTecno = 0; _tHoras = _tCustoHora = null; _motivoAcao = null; }
+            await CarregarExtrasAsync(d);
+        }
+    }
+
+    // Opções que enriquecem o ecrã; se falharem, o ecrã continua a funcionar sem elas.
+    private async Task CarregarExtrasAsync(FichaDetalhe d)
+    {
+        // Compras só se relêem quando a ficha muda de uma para outra; periodicidades só quando muda o equipamento; configuração e equipa uma só vez.
+        if (_idExtras != d.Id)
+        {
+            _idExtras = d.Id;
+            _compras = [];
+            if (SeccoesFicha.MostrarCompras(d))
+                try { _compras = await Intervencoes.ListarComprasAsync(d.Id); } catch (Exception) { /* a lista fica vazia */ }
+        }
+        if (d.EquipamentoId.Length > 0 && _equipamentoPeriodos != d.EquipamentoId)
+        {
+            _equipamentoPeriodos = d.EquipamentoId;
+            try { _periodos = (await Equipamentos.ObterFichaAsync(d.EquipamentoId))?.Tarefas.Select(t => t.Periodicidade).Where(p => p.Length > 0).Distinct().Order().ToList() ?? []; }
+            catch (Exception) { _periodos = []; }
+        }
+        if (Sessao.PodeSerSupervisor && !_supervisorCarregado)
+        {
+            _supervisorCarregado = true;
+            try { _config = await Intervencoes.ObterConfiguracaoAsync(); } catch (Exception) { _config = null; }
+            try { _equipa = (await ServicoEquipa.ListarAsync(Sessao.Utilizador?.Token)).Where(m => m.Ativo && m.Tecno > 0).OrderBy(m => m.Nome).ToList(); }
+            catch (Exception) { _equipa = []; }
+        }
+    }
+
+    // Supervisor: a equipa toda; operador: o técnico principal e os adicionais da ficha.
+    private IReadOnlyList<TecnicoFicha> OpcoesTecnico(FichaDetalhe d)
+    {
+        var lista = _equipa.Select(m => new TecnicoFicha(m.Tecno, m.Nome)).ToList();
+        void Juntar(int tecno, string? nome) { if (tecno > 0 && lista.All(t => t.Tecno != tecno)) lista.Add(new(tecno, nome ?? "PHC " + tecno)); }
+        Juntar(d.Tecno, d.Tecnico);
+        foreach (var a in d.Adicionais ?? []) Juntar(a.Tecno, a.Nome);
+        return lista;
+    }
+
+    private async Task Executar(Func<Task> acao, Action<string> erro)
+    {
+        _ocupado = true;
+        try { await acao(); }
+        catch (InvalidOperationException ex) { erro(ex.Message); }
+        catch (NotSupportedException) { erro("Esta parte ainda não está disponível."); }
+        catch (SemNumeroTecnicoException) { erro("Ainda não tem o número de técnico. Fale com o supervisor."); }
+        catch (Exception) { erro("Não foi possível guardar. Tente outra vez."); }
+        finally { _ocupado = false; }
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Detalhe is not { } d) return;
+        _erroForm = _form.Validar(d) ?? "";
+        if (_erroForm.Length > 0 || _form.ParaEdicao(d) is not { } edicao) return;
+        await Executar(async () =>
+        {
+            var nova = await Intervencoes.GuardarFichaAsync(d.Id, edicao);
+            _form = FormFicha.De(nova);
+            await OnMudou.InvokeAsync();
+        }, m => { _erroForm = m; _conflito = m == MensagensIntervencao.Mudou; });
+    }
+
+    private void Descartar()
+    {
+        if (Detalhe is { } d) _form = FormFicha.De(d);
+        _erroForm = "";
+        _conflito = false;
+    }
+
+    // A ficha mudou entretanto: lê a versão nova sem sair do ecrã e descarta o que estava por guardar (que já não corresponde à ficha).
+    private async Task RecarregarAsync()
+    {
+        _conflito = false; _erroForm = "";
+        _descartarForm = true;
+        await OnMudou.InvokeAsync();
+    }
+
+    // ---- Fornecedor ----
+
+    private async Task ProcurarFornecedorAsync(ChangeEventArgs e)
+    {
+        _textoFornecedor = e.Value?.ToString() ?? "";
+        _espera?.Cancel();
+        _espera = new CancellationTokenSource();
+        var cancelamento = _espera.Token;
+        if (_textoFornecedor.Trim().Length < 2) { _fornecedores = []; return; }
+        try
+        {
+            await Task.Delay(300, cancelamento);
+            var encontrados = await Intervencoes.PesquisarFornecedoresAsync(_textoFornecedor.Trim(), cancelamento);
+            if (!cancelamento.IsCancellationRequested) _fornecedores = encontrados;
+        }
+        catch (OperationCanceledException) { /* veio outra tecla */ }
+        catch (InvalidOperationException ex) { _erroForm = ex.Message; }
+        catch (Exception) { _erroForm = "Não foi possível procurar fornecedores."; }
+    }
+
+    private void EscolherFornecedor(Fornecedor f)
+    {
+        (_form.NoFornecedor, _form.NomeFornecedor) = SeccoesFicha.Fornecedor(f);
+        _fornecedores = [];
+        _textoFornecedor = "";
+    }
+
+    private void TirarFornecedor() { _form.NoFornecedor = 0; _form.NomeFornecedor = ""; }
+
+    // ---- Mão de obra ----
+
+    private async Task MudarTecnicoTempoAsync(ChangeEventArgs e)
+    {
+        _tTecno = int.TryParse(e.Value?.ToString(), out var t) ? t : 0;
+        if (_tTecno > 0 && _tId is null && (_tCustoHora ?? 0) == 0)
+            try
+            {
+                var sugerido = await Intervencoes.CustoHoraSugeridoAsync(_tTecno);
+                _tCustoHora = sugerido > 0 ? sugerido : null;
+            }
+            catch (Exception) { /* sem sugestão */ }
+    }
+
+    private void EditarTempo(TempoMaoDeObra t) { _tId = t.Id; _tTecno = t.Tecno; _tHoras = t.Horas; _tCustoHora = t.CustoHora; _erroTempo = ""; }
+
+    private void LimparTempo() { _tId = null; _tTecno = 0; _tHoras = _tCustoHora = null; _erroTempo = ""; }
+
+    private async Task GuardarTempoAsync()
+    {
+        if (Detalhe is not { } d) return;
+        _erroTempo = RegrasFichaDetalhe.ValidarTempo(_tTecno, _tHoras ?? 0, _tCustoHora ?? 0) ?? "";
+        if (_erroTempo.Length > 0) return;
+        await Executar(async () =>
+        {
+            if (_tId is null) await Intervencoes.AdicionarMaoDeObraAsync(d.Id, _tTecno, _tHoras!.Value, _tCustoHora ?? 0);
+            else await Intervencoes.EditarMaoDeObraAsync(d.Id, _tId, _tTecno, _tHoras!.Value, _tCustoHora ?? 0);
+            LimparTempo();
+            await OnMudou.InvokeAsync();
+        }, m => _erroTempo = m);
+    }
+
+    private async Task ApagarTempoAsync(TempoMaoDeObra t)
+    {
+        if (Detalhe is not { } d) return;
+        await Executar(async () => { await Intervencoes.ApagarMaoDeObraAsync(d.Id, t.Id); await OnMudou.InvokeAsync(); }, m => _erroTempo = m);
+    }
+
+    // ---- Ações do supervisor ----
+
+    private void AbrirMotivo(string acao) { _motivoAcao = acao; _motivo = ""; _erroAcao = ""; }
+
+    private async Task ConfirmarMotivoAsync()
+    {
+        if (Detalhe is not { } d || _motivoAcao is null) return;
+        var devolver = _motivoAcao == "devolver";
+        _erroAcao = devolver
+            ? (string.IsNullOrWhiteSpace(_motivo) ? "Escreva o motivo da devolução." : _motivo.Trim().Length > RegrasFichaDetalhe.MaxDevolucao ? $"Escreva menos: no máximo {RegrasFichaDetalhe.MaxDevolucao} letras." : "")
+            : RegrasFichaDetalhe.ValidarCancelamento(_motivo) ?? "";
+        if (_erroAcao.Length > 0) return;
+        await Executar(async () =>
+        {
+            if (devolver) await Intervencoes.DevolverAsync(d.Id, _motivo.Trim());
+            else await Intervencoes.CancelarAsync(d.Id, _motivo.Trim());
+            _motivoAcao = null;
+            await OnMudou.InvokeAsync();
+        }, m => _erroAcao = m);
+    }
+
+    private async Task ValidarAsync()
+    {
+        if (Detalhe is not { } d) return;
+        _erroAcao = "";
+        await Executar(async () => { await Intervencoes.ValidarAsync(d.Id); await OnMudou.InvokeAsync(); }, m => _erroAcao = m);
+    }
+
+    private async Task FecharAntigaAsync()
+    {
+        if (Detalhe is not { } d) return;
+        _erroAcao = "";
+        await Executar(async () => { await Intervencoes.FecharFichaAntigaAsync(d.Id, _antigaSupervisionada, _antigaFechada); await OnMudou.InvokeAsync(); }, m => _erroAcao = m);
+    }
+
+    // ---- Alterações por guardar ----
+
+    private async Task AoNavegar(LocationChangingContext contexto)
+    {
+        if (!TemAlteracoes) return;
+        contexto.PreventNavigation();
+        _destino = contexto.TargetLocation;
+        _pedirSaida = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SairSemGuardarAsync()
+    {
+        _pedirSaida = false;
+        if (Detalhe is { } d) _form = FormFicha.De(d);
+        if (_destino is not null) Nav.NavigateTo(_destino);
+    }
+}
