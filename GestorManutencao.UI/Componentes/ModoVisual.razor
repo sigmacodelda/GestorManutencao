@@ -1,0 +1,23 @@
+@inject IJSRuntime JS
+
+@* Alterna entre modo claro e escuro; a escolha fica guardada neste dispositivo (ver gmModo no index.html). *@
+<button type="button" class="btn-icone" aria-label="@(_escuro ? "Mudar para o modo claro" : "Mudar para o modo escuro")" title="@(_escuro ? "Modo claro" : "Modo escuro")" @onclick="AlternarAsync">
+    <Icone Nome="@(_escuro ? "sun" : "moon")" />
+</button>
+
+@code {
+    private bool _escuro;
+
+    protected override async Task OnAfterRenderAsync(bool primeira)
+    {
+        if (!primeira) return;
+        try { _escuro = await JS.InvokeAsync<string>("gmModo.obter") == "escuro"; StateHasChanged(); }
+        catch (Exception) { /* sem JS fica no claro */ }
+    }
+
+    private async Task AlternarAsync()
+    {
+        try { _escuro = await JS.InvokeAsync<string>("gmModo.definir", _escuro ? "claro" : "escuro") == "escuro"; }
+        catch (Exception) { /* sem JS não muda */ }
+    }
+}

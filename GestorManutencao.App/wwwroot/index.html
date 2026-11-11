@@ -7,6 +7,19 @@
     <base href="/" />
     <link rel="stylesheet" href="_content/GestorManutencao.UI/app.css" />
     <link rel="icon" href="data:,">
+    <script>
+        // Modo claro por defeito; o escuro só se o utilizador o escolheu (guardado neste dispositivo), nunca pelo sistema.
+        window.gmModo = {
+            obter: function () { try { return localStorage.getItem("modo") === "escuro" ? "escuro" : "claro"; } catch (e) { return "claro"; } },
+            definir: function (m) {
+                m = m === "escuro" ? "escuro" : "claro";
+                document.documentElement.setAttribute("data-modo", m);
+                try { localStorage.setItem("modo", m); } catch (e) { /* sem armazenamento: vale só nesta sessão */ }
+                return m;
+            }
+        };
+        document.documentElement.setAttribute("data-modo", window.gmModo.obter());
+    </script>
 </head>
 
 <body>

@@ -66,6 +66,55 @@
 
         @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
         {
+            <section class="fotos" aria-labelledby="titulo-fotos">
+                <h2 id="titulo-fotos" class="titulo-grupo"><Icone Nome="camera" /> Fotos <span class="contagem">@_fotos.Count</span></h2>
+                @if (_fotos.Count == 0)
+                {
+                    <p class="estado-lista" role="status">Ainda sem fotos.</p>
+                }
+                <ul class="fotos-grelha">
+                    @foreach (var f in _fotos)
+                    {
+                        <li class="foto">
+                            @if (_miniaturas.TryGetValue(f.Id, out var url))
+                            {
+                                <img src="@url" alt="@f.Nome" />
+                            }
+                            @if (ClassificacaoErros.IdLocal(f.Id))
+                            {
+                                <span class="chip chip-pendente foto-pendente">Por enviar</span>
+                            }
+                            @if (_i.Estado == EstadoIntervencao.EmCurso && !_viaDetalhe)
+                            {
+                                <button type="button" class="btn-texto foto-apagar" aria-label="Tirar a foto @f.Nome" disabled="@_a_gravar" @onclick="() => ApagarFotoAsync(f)"><Icone Nome="trash" /></button>
+                            }
+                        </li>
+                    }
+                </ul>
+                @if (_i.Estado == EstadoIntervencao.EmCurso && !_viaDetalhe && _fotos.Count < RegrasFoto.Max)
+                {
+                    @if (Camara.Disponivel)
+                    {
+                        <button type="button" class="btn btn-secundario" disabled="@_a_gravar" @onclick="TirarFotoAsync"><Icone Nome="camera" /><span>Tirar foto</span></button>
+                    }
+                    else
+                    {
+                        <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
+                            <Icone Nome="camera" /><span>Tirar foto</span>
+                            <InputFile accept="image/*" capture="environment" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
+                        </label>
+                    }
+                    <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
+                        <Icone Nome="plus" /><span>Escolher da galeria</span>
+                        <InputFile accept="image/*" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
+                    </label>
+                }
+                <p class="campo-erro" role="alert">@_erroFoto</p>
+            </section>
+        }
+
+        @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
+        {
             <section class="materiais" aria-labelledby="titulo-materiais">
                 <h2 id="titulo-materiais" class="titulo-grupo"><Icone Nome="package" /> Material usado <span class="contagem">@_materiais.Count</span></h2>
                 @if (_materiais.Count == 0)
@@ -137,55 +186,6 @@
                         <button type="submit" class="btn btn-secundario" disabled="@_a_gravar"><Icone Nome="plus" /><span>Juntar material</span></button>
                     </form>
                 }
-            </section>
-        }
-
-        @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
-        {
-            <section class="fotos" aria-labelledby="titulo-fotos">
-                <h2 id="titulo-fotos" class="titulo-grupo"><Icone Nome="camera" /> Fotos <span class="contagem">@_fotos.Count</span></h2>
-                @if (_fotos.Count == 0)
-                {
-                    <p class="estado-lista" role="status">Ainda sem fotos.</p>
-                }
-                <ul class="fotos-grelha">
-                    @foreach (var f in _fotos)
-                    {
-                        <li class="foto">
-                            @if (_miniaturas.TryGetValue(f.Id, out var url))
-                            {
-                                <img src="@url" alt="@f.Nome" />
-                            }
-                            @if (ClassificacaoErros.IdLocal(f.Id))
-                            {
-                                <span class="chip chip-pendente foto-pendente">Por enviar</span>
-                            }
-                            @if (_i.Estado == EstadoIntervencao.EmCurso && !_viaDetalhe)
-                            {
-                                <button type="button" class="btn-texto foto-apagar" aria-label="Tirar a foto @f.Nome" disabled="@_a_gravar" @onclick="() => ApagarFotoAsync(f)"><Icone Nome="trash" /></button>
-                            }
-                        </li>
-                    }
-                </ul>
-                @if (_i.Estado == EstadoIntervencao.EmCurso && !_viaDetalhe && _fotos.Count < RegrasFoto.Max)
-                {
-                    @if (Camara.Disponivel)
-                    {
-                        <button type="button" class="btn btn-secundario" disabled="@_a_gravar" @onclick="TirarFotoAsync"><Icone Nome="camera" /><span>Tirar foto</span></button>
-                    }
-                    else
-                    {
-                        <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
-                            <Icone Nome="camera" /><span>Tirar foto</span>
-                            <InputFile accept="image/*" capture="environment" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
-                        </label>
-                    }
-                    <label class="btn btn-secundario @(_a_gravar ? "desativado" : "")">
-                        <Icone Nome="plus" /><span>Escolher da galeria</span>
-                        <InputFile accept="image/*" class="foto-entrada" disabled="@_a_gravar" OnChange="AdicionarFotoAsync" />
-                    </label>
-                }
-                <p class="campo-erro" role="alert">@_erroFoto</p>
             </section>
         }
 

@@ -32,7 +32,8 @@ public class TemaTests
             Assert.True(tema.Escuro.ContainsKey(chave), $"{id} escuro sem {chave}");
         }
         Assert.Contains("--primario:", tema.Css);
-        Assert.Contains("prefers-color-scheme: dark", tema.Css);
+        Assert.Contains("[data-modo=\"escuro\"]", tema.Css);
+        Assert.DoesNotContain("prefers-color-scheme", tema.Css);
     }
 
     // Garante que um cliente novo não entra com cores ilegíveis (WCAG AA, texto normal 4.5:1).
