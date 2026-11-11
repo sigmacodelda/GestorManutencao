@@ -410,3 +410,4 @@ appsettings.Production.json
 
 # APK e binarios de publicacao (gerados, nao se versionam)
 publicar-apk/
+publicar-api/
