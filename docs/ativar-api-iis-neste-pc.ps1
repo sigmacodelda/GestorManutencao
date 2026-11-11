@@ -42,8 +42,8 @@ foreach ($b in @(Get-WebBinding -Name $site.Name -Protocol https | Where-Object 
 New-WebBinding -Name $site.Name -Protocol https -Port $Porta -IPAddress '*'
 (Get-WebBinding -Name $site.Name -Protocol https -Port $Porta).AddSslCertificate($Thumbprint, 'My')
 Write-Host "Binding https *:$Porta com o certificado novo." -ForegroundColor Green
-if (-not (Test-Path (Join-Path $site.PhysicalPath 'appsettings.Production.json'))) {
-  Write-Host "AVISO: falta appsettings.Production.json em $($site.PhysicalPath) (ligação à base, Jwt:Chave, Pin:Pepper)." -ForegroundColor Yellow
+if (-not (Test-Path (Join-Path $site.PhysicalPath 'appsettings.json'))) {
+  Write-Host "AVISO: falta appsettings.json em $($site.PhysicalPath) (ligação à base, Jwt:Chave, Pin:Pepper)." -ForegroundColor Yellow
 }
 
 # 3. Firewall

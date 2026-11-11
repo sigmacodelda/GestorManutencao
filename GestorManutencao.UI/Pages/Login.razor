@@ -119,7 +119,8 @@
             _pin = "";
             if (resultado.Sucesso)
             {
-                Nav.NavigateTo("", replace: true);
+                // Com o PIN de configuração só se cria gente: vai direto à Equipa.
+                Nav.NavigateTo(Sessao.Utilizador?.Configuracao == true ? "equipa" : "", replace: true);
                 return;
             }
             _erro = resultado.Erro switch

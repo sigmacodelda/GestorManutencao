@@ -24,11 +24,11 @@ public sealed record PedidoMudarPin(string? PinAtual, string? PinNovo)
     private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
 }
 
-public sealed record PedidoNovoUtilizador(string? Utilizador, string? Nome, int? Tecno = null);
+public sealed record PedidoNovoUtilizador(string? Utilizador, string? Nome, int? Tecno = null, Perfil? Perfil = null);
 
 public sealed record PedidoTecno(int? Tecno);
 
-public sealed record RespostaLogin(string Token, DateTimeOffset ExpiraEm, string Nome, Perfil Perfil, bool PinProvisorio)
+public sealed record RespostaLogin(string Token, DateTimeOffset ExpiraEm, string Nome, Perfil Perfil, bool PinProvisorio, bool Configuracao = false)
 {
     private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
 }
@@ -50,6 +50,9 @@ public sealed class PinOpcoes
 {
     // Segredo do servidor com que se calcula o hash dos PINs; nunca fica na base de dados.
     public string Pepper { get; set; } = "";
+
+    // PIN de configuração (4 números), só no servidor. Vazio = desligado. Serve apenas para criar utilizadores.
+    public string Dev { get; set; } = "";
 }
 
 public static partial class RegrasPin
@@ -87,6 +90,15 @@ public sealed class PinHasher(Microsoft.Extensions.Options.IOptions<PinOpcoes> o
 {
     public string Hash(string pin) =>
         Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(opcoes.Value.Pepper), Encoding.UTF8.GetBytes(pin)));
+
+    public bool DevAtivo => !string.IsNullOrWhiteSpace(opcoes.Value.Dev);
+
+    // Comparação em tempo constante; só os hashes se comparam, nunca o PIN em claro.
+    public bool EhPinDev(string? pin) =>
+        DevAtivo && pin is not null && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(Hash(pin)), Encoding.UTF8.GetBytes(Hash(opcoes.Value.Dev)));
+
+    // Muda quando o PIN de configuração muda: os tokens antigos deixam de valer.
+    public string VersaoDev => DevAtivo ? Hash("dev-versao:" + opcoes.Value.Dev)[..16] : "";
 }
 
 public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste, TecnoEmUso }
@@ -100,8 +112,8 @@ public interface IRepositorioUtilizadores
     Task<UtilizadorApp?> ObterPorPinAsync(string pinHash, CancellationToken ct);
     Task<UtilizadorApp?> ObterAsync(string codigo, CancellationToken ct);
     Task<IReadOnlyList<UtilizadorApp>> ListarAsync(CancellationToken ct);
-    // Cria sempre um operador, já com o seu PIN provisório.
-    Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, int tecno, string pinHash, string porQuem, CancellationToken ct);
+    // Cria o utilizador já com o seu PIN provisório.
+    Task<ResultadoPin> CriarUtilizadorAsync(string codigo, string nome, Perfil perfil, int tecno, string pinHash, string porQuem, CancellationToken ct);
     // Cada número do PHC só pode estar numa pessoa (0 = sem número).
     Task<ResultadoPin> DefinirTecnoAsync(string codigo, int tecno, string porQuem, CancellationToken ct);
     // Com pinHashAtual só muda se o PIN ainda for esse (evita que duas alterações em simultâneo se atropelem).
@@ -112,6 +124,29 @@ public sealed class EmissorToken(Microsoft.Extensions.Options.IOptions<JwtOpcoes
 {
     public const string ClaimPinProvisorio = "pinprov";
     public const string ClaimVersao = "pv";
+    public const string ClaimConfiguracao = "pindev";
+    public const int MinutosConfiguracao = 30;
+
+    // Quem entra com o PIN de configuração não existe na tabela: o acesso é só a criar utilizadores.
+    public static readonly UtilizadorApp UtilizadorConfiguracao = new("configuracao", "Acesso de configuração", Perfil.Supervisor, true, false);
+
+    public RespostaLogin EmitirConfiguracao(string versao)
+    {
+        var opcoes = jwt.Value;
+        var agora = relogio.GetUtcNow();
+        var expira = agora.AddMinutes(MinutosConfiguracao);
+        // Sem o papel Supervisor: as rotas de gestão e as fichas continuam fechadas.
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, UtilizadorConfiguracao.Codigo),
+            new(ClaimTypes.Name, UtilizadorConfiguracao.Nome),
+            new(ClaimConfiguracao, "1"),
+            new(ClaimVersao, versao)
+        };
+        var token = new JwtSecurityToken(opcoes.Emissor, opcoes.Audiencia, claims, notBefore: agora.UtcDateTime, expires: expira.UtcDateTime,
+            signingCredentials: new SigningCredentials(ChaveDe(opcoes.Chave), SecurityAlgorithms.HmacSha256));
+        return new RespostaLogin(new JwtSecurityTokenHandler().WriteToken(token), expira, UtilizadorConfiguracao.Nome, Perfil.Supervisor, false, true);
+    }
 
     public RespostaLogin Emitir(UtilizadorApp u)
     {
@@ -145,6 +180,7 @@ public static partial class RegrasUtilizador
     [GeneratedRegex(@"^[a-z0-9._-]{2,30}$")]
     private static partial Regex CodigoValido();
 
-    public static bool CodigoOk(string? codigo) => codigo is not null && CodigoValido().IsMatch(codigo);
+    // "configuracao" é o código do acesso por Pin:Dev: reservado para a auditoria não se confundir.
+    public static bool CodigoOk(string? codigo) => codigo is not null && codigo != EmissorToken.UtilizadorConfiguracao.Codigo && CodigoValido().IsMatch(codigo);
     public static bool NomeOk(string? nome) => nome is { } n && n.Trim().Length is >= 2 and <= 60;
 }

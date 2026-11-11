@@ -11,7 +11,7 @@ public class SegurancaTests
 {
     private static PinHasher Hasher(string pepper) => new(Options.Create(new PinOpcoes { Pepper = pepper }));
 
-    // Pasta vazia: os testes de arranque não leem o appsettings.Production.json local que haja nesta máquina.
+    // Pasta vazia: os testes de arranque não leem o appsettings.json local que haja nesta máquina.
     private static string PastaVazia() => Directory.CreateTempSubdirectory("gm-teste").FullName;
 
     [Fact]

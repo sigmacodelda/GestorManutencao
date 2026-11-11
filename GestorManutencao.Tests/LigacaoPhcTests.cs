@@ -55,10 +55,11 @@ public class LigacaoPhcTests
     }
 
     [Fact]
-    public void Cifrada_sem_chave_ou_com_chave_errada_fica_indisponivel()
+    public void Cifrada_com_outra_chave_ou_invalida_fica_indisponivel()
     {
         var cifrada = Cifrar("Server=a;Database=b;", Chave);
 
+        // Sem Seguranca:ChaveLigacao usa-se a chave da LandeiroMaui, que não é a de teste.
         Assert.Throws<RepositorioIndisponivelException>(() => LigacaoPhc.Obter(Config(cifrada)));
         Assert.Throws<RepositorioIndisponivelException>(() => LigacaoPhc.Obter(Config(cifrada, "outra-chave")));
         Assert.Throws<RepositorioIndisponivelException>(() => LigacaoPhc.Obter(Config("isto-nao-e-base64!", Chave)));

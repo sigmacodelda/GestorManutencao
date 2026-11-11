@@ -30,7 +30,7 @@
         }
 
         <form class="formulario" @onsubmit="CriarAsync" novalidate>
-            <h2 class="titulo-grupo">Novo operador</h2>
+            <h2 class="titulo-grupo">@(Sessao.Utilizador?.Configuracao == true ? "Novo utilizador" : "Novo operador")</h2>
             <div class="campo">
                 <label for="nome">Nome</label>
                 <input id="nome" type="text" autocomplete="off" @bind="_nome" @bind:event="oninput" />
@@ -43,6 +43,12 @@
                 <label for="tecno">Número do utilizador no PHC</label>
                 <input id="tecno" type="text" inputmode="numeric" autocomplete="off" @bind="_tecno" @bind:event="oninput" />
             </div>
+            @if (Sessao.Utilizador?.Configuracao == true)
+            {
+                <div class="campo">
+                    <label><input type="checkbox" @bind="_supervisor" /> Criar como supervisor</label>
+                </div>
+            }
             <button type="submit" class="btn btn-secundario" disabled="@_ocupado">Criar e dar PIN</button>
         </form>
 
@@ -87,7 +93,7 @@
     private string _nome = "", _codigo = "", _tecno = "", _tecnoEditado = "", _erro = "", _pinDe = "";
     private string? _aEditar;
     private string? _pinNovo;
-    private bool _a_carregar = true, _ocupado;
+    private bool _a_carregar = true, _ocupado, _supervisor;
 
     protected override async Task OnInitializedAsync()
     {
@@ -115,8 +121,8 @@
         _ocupado = true;
         try
         {
-            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim(), tecno);
-            if (Tratar(r, _nome.Trim())) { _nome = _codigo = _tecno = ""; await CarregarAsync(); }
+            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim(), tecno, _supervisor && Sessao.Utilizador?.Configuracao == true);
+            if (Tratar(r, _nome.Trim())) { _nome = _codigo = _tecno = ""; _supervisor = false; await CarregarAsync(); }
         }
         finally { _ocupado = false; }
     }

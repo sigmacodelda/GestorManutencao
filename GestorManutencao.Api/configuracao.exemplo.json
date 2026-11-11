@@ -1,0 +1,17 @@
+{
+  "_nota": "Modelo sem valores reais. Copiar para appsettings.json (a API lê só este nome) (pasta da API) e preencher; é o único ficheiro de configuração que a API lê. O appsettings.json fica fora do git e fora da publicação, por isso republicar nunca o apaga.",
+  "Logging": { "LogLevel": { "Default": "Information", "Microsoft.AspNetCore": "Warning" } },
+  "ConnectionStrings": {
+    "PHCConn": "<ligação à base do PHC, a string cifrada da LandeiroMaui (a chave já está na API) ou em claro>"
+  },
+  "Jwt": {
+    "Chave": "<texto aleatório com 64 ou mais caracteres, só do servidor>",
+    "Emissor": "GestorManutencao.Api",
+    "Audiencia": "GestorManutencao.App",
+    "HorasValidade": 336
+  },
+  "Pin": {
+    "Pepper": "<o mesmo pepper com que foram criados os PINs em u_manutil; se mudar, ninguém entra>",
+    "Dev": ""
+  }
+}

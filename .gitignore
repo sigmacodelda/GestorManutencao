@@ -405,6 +405,9 @@ obj/
 *.user
 .playwright-mcp/
 appsettings.Production.json
+GestorManutencao.Api/appsettings.json
+Testes-Circuito/resultados-dados/
+Testes-Circuito/resultados-ux/
 **/appsettings.*.local.json
 .claude/worktrees/
 

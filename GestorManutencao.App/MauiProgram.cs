@@ -1,6 +1,7 @@
 using GestorManutencao.Armazenamento;
 using GestorManutencao.UI.Offline;
 using GestorManutencao.UI.Servicos;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace GestorManutencao.App;
@@ -10,13 +11,14 @@ public static class MauiProgram
 	// Cliente desta compilação (ver Temas/*.json no projeto UI).
 	private const string TemaCliente = "landeiro";
 
-	// Endereço (https) da GestorManutencao.Api deste cliente. Vazio só serve em Debug (utilizadores fictícios).
-	private const string ApiUrl = "https://192.168.1.71:5055/";
-
 	public static MauiApp CreateMauiApp()
 	{
 		var builder = MauiApp.CreateBuilder();
 		builder.UseMauiApp<App>();
+
+		// Endereço (https) da GestorManutencao.Api deste cliente, em Resources/Raw/appsettings.json ("ApiUrl"). Vazio só serve em Debug (utilizadores fictícios).
+		using (var ficheiro = FileSystem.OpenAppPackageFileAsync("appsettings.json").GetAwaiter().GetResult())
+			builder.Configuration.AddJsonStream(ficheiro);
 
 		builder.Services.AddMauiBlazorWebView();
 		builder.Services.AddManutencaoUI(TemaCliente);
@@ -36,7 +38,7 @@ public static class MauiProgram
 		builder.Logging.AddDebug();
 #endif
 
-		var apiUrl = ApiUrl;
+		var apiUrl = builder.Configuration["ApiUrl"];
 		HttpMessageHandler? manipulador = null;
 #if DEBUG && WINDOWS
 		// Circuito de testes (Playwright): GESTOR_API_URL aponta à API local; só aceita o certificado de desenvolvimento para localhost.

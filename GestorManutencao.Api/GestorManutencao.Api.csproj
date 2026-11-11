@@ -6,8 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <!-- Os segredos (ligação à base, chave JWT, pepper) ficam só no servidor: nunca vão dentro da pasta de publicação. -->
+  <!-- Os segredos (ligação à base, chave JWT, pepper) ficam só no appsettings.json do servidor, fora do git: nunca vai dentro da pasta de publicação (republicar não o apaga). -->
   <ItemGroup>
+    <Content Update="appsettings.json" CopyToPublishDirectory="Never" />
     <Content Update="appsettings.Production.json" CopyToPublishDirectory="Never" />
     <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
   </ItemGroup>

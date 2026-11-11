@@ -7,7 +7,7 @@ public enum ModoTrabalho { Operador, Supervisor }
 
 public enum ErroLogin { Credenciais, Rede, DemasiadasTentativas, PinFraco, PinEmUso }
 
-public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null, DateTimeOffset? ExpiraEm = null, bool PinProvisorio = false)
+public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null, DateTimeOffset? ExpiraEm = null, bool PinProvisorio = false, bool Configuracao = false) // sigma-ok: parâmetro opcional, sem valor
 {
     // Nunca imprimir o token (o ToString automático do record iria para logs e páginas de erro).
     private bool PrintMembers(System.Text.StringBuilder sb)

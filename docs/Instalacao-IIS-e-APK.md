@@ -1,17 +1,17 @@
 # Instalação: API no IIS e APK no telemóvel
 
-Endereço da API: `https://192.168.1.71:5055/` (dentro da app, em `GestorManutencao.App/MauiProgram.cs`). É o IP Wi-Fi do PC onde corre o IIS; reservar este IP no router (DHCP), senão a app deixa de ligar quando ele mudar e o APK tem de ser refeito.
+Endereço da API: `https://192.168.1.71:5055/` (dentro da app, em `GestorManutencao.App/Resources/Raw/appsettings.json`, chave `ApiUrl`). É o IP Wi-Fi do PC onde corre o IIS; reservar este IP no router (DHCP), senão a app deixa de ligar quando ele mudar e o APK tem de ser refeito.
 
 **Neste PC (caso atual):** correr numa PowerShell como administrador `powershell -NoProfile -ExecutionPolicy Bypass -File docs\ativar-api-iis-neste-pc.ps1`. Copia o certificado para o computador, põe o binding `*:5055` no site do IIS, abre a porta na firewall e testa `/saude`. Os passos abaixo valem para instalar noutro servidor.
 
 ## 1. A API no IIS (num servidor, como administrador)
 
-Pasta pronta a copiar: `publicar-api/` (gerada com `dotnet publish GestorManutencao.Api -c Release -o publicar-api`). Não leva segredos: o `appsettings.Production.json` nunca vai dentro dela.
+Pasta pronta a copiar: `publicar-api/` (gerada com `dotnet publish GestorManutencao.Api -c Release -o publicar-api`). Não leva segredos: o `appsettings.json` nunca vai dentro dela (e por isso republicar por cima não o apaga).
 
 1. **Instalar o .NET 10 Hosting Bundle** no servidor (dá o runtime e o módulo `AspNetCoreModuleV2` ao IIS). Depois de instalar: `iisreset`.
 2. **Copiar** o conteúdo de `publicar-api/` para, por exemplo, `C:\inetpub\GestorManutencaoApi`.
-3. **Criar** `appsettings.Production.json` nessa pasta, a partir de `configuracao-producao.exemplo.json` (vem na pasta publicada; sem valores), e preencher:
-   - `ConnectionStrings:PHCConn` (ligação à base; pode estar cifrada, e então a chave vai em `Seguranca__ChaveLigacao`).
+3. **Criar** `appsettings.json` nessa pasta, a partir de `configuracao.exemplo.json` (vem na pasta publicada; sem valores), e preencher. É o único ficheiro de configuração que a API lê (não lê `appsettings.Production.json` nem `Development`); para passar de testes a real, troca-se o conteúdo deste ficheiro e reinicia-se o site:
+   - `ConnectionStrings:PHCConn` (ligação à base, cifrada como na LandeiroMaui: cola-se a mesma string cifrada, a chave já está dentro da API; em claro também funciona).
    - `Jwt:Chave` (texto aleatório com 64 ou mais caracteres).
    - `Pin:Pepper` (tem de ser o mesmo com que foram criados os PINs em `u_manutil`; se mudar, ninguém entra).
 4. **Certificado HTTPS**: a app só confia no certificado `CN=GestorManutencao` (IPs 192.168.1.71 e 192.168.18.168 e nome `gestor.local`, válido até 11/11/2028, impressão digital `CDF9C00151CC3B1719B26155C8FC236213036EAB`). O IIS tem de usar esse mesmo certificado, senão a app recusa a ligação. A chave privada está no PC de desenvolvimento (utilizador que o criou). O certificado antigo (`4934FB90...`, só 192.168.18.168) já não serve a esta versão da app. Exportar lá, escolhendo uma palavra-passe:
