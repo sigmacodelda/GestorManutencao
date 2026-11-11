@@ -193,7 +193,8 @@ public sealed class GestaoDevService : IGestaoService
     {
         lock (_trinco)
             return Task.FromResult(new OpcoesEquipamento(_equipamentos.Select(e => e.Tipo).Distinct().ToList(), _equipamentos.Select(e => e.Marca).Distinct().ToList(),
-                _equipamentos.Select(e => e.Local).Distinct().ToList(), RegrasGestaoUi.Estados));
+                _equipamentos.Select(e => e.Local).Distinct().ToList(), RegrasGestaoUi.Estados,
+                (_equipamentos.Select(e => int.TryParse(e.Ref.Trim(), out var n) && n >= 0 ? n : 0).DefaultIfEmpty(0).Max() + 1).ToString()));
     }
 
     public Task<EquipamentoGestao?> ObterEquipamentoAsync(string id, CancellationToken ct = default)

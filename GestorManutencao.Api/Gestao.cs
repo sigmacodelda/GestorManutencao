@@ -15,7 +15,7 @@ public sealed record PedidoEquipamento(
     int? Ano = null, decimal? Valor = null, long? NoFornecedor = null, DateOnly? Data = null, string? Local = null, string? Estado = null,
     bool? Obsoleto = null, string? ManualPdf = null, string? Email = null, string? Versao = null, int? PlaneadasConfirmadas = null);
 
-public sealed record OpcoesEquipamentoDto(IReadOnlyList<string> Tipos, IReadOnlyList<string> Marcas, IReadOnlyList<string> Locais, IReadOnlyList<string> Estados);
+public sealed record OpcoesEquipamentoDto(IReadOnlyList<string> Tipos, IReadOnlyList<string> Marcas, IReadOnlyList<string> Locais, IReadOnlyList<string> Estados, string ProximaRef = "");
 
 public sealed record HistoricoEstadoDto(DateOnly Data, string Estado, string Quem);
 

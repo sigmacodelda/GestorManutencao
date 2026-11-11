@@ -23,7 +23,15 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
 
     private const string SqlRefRepetida = "select count(*) from u_equip with (nolock) where ref = @ref and u_equipstamp <> @id";
 
-    private const string SqlProximoNoInterno = "select isnull(max(nointerno), 0) + 1 from u_equip with (nolock)";
+    // Sugestão do nº da infraestrutura: maior número puro + 1 (ignora refs com letras e números enormes); sem TRY_CAST por causa do nível de compatibilidade 100.
+    private const string SqlProximaRef =
+        """
+        select isnull(max(case when len(x.r) between 1 and 9 and x.r not like '%[^0-9]%' then cast(x.r as int) end), 0) + 1
+        from u_equip e with (nolock) cross apply (select ltrim(rtrim(e.ref)) as r) x
+        where e.tipoequip = 1
+        """;
+
+    private const string SqlProximoNoInterno ="select isnull(max(nointerno), 0) + 1 from u_equip with (nolock)";
 
     private const string SqlNovoEquip =
         """
@@ -138,8 +146,9 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
         from u_periocid p with (nolock)
         """;
 
+    // Só as periodicidades de manutenção (u_periocid.manutencao = 1); as outras são de outros módulos do PHC.
     private static readonly string SqlPeriodicidades = SelPeriodicidade +
-        " order by case ltrim(rtrim(p.unidade)) when 'dias' then 0 when 'meses' then 1 else 2 end, p.intervalo, p.periodo";
+        " where isnull(p.manutencao, 0) = 1 order by case ltrim(rtrim(p.unidade)) when 'dias' then 0 when 'meses' then 1 else 2 end, p.intervalo, p.periodo";
 
     private static readonly string SqlPeriodicidadeUma = SelPeriodicidade + " where p.u_periocidstamp = @id";
 
@@ -162,7 +171,8 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
     }
 
     public Task<OpcoesEquipamentoDto> ObterOpcoesAsync(CancellationToken ct) => Executar(async conn =>
-        new OpcoesEquipamentoDto(await LerListaAsync(conn, SqlTipos, ct), await LerListaAsync(conn, SqlMarcas, ct), await LerListaAsync(conn, SqlLocais, ct), RegrasGestao.Estados));
+        new OpcoesEquipamentoDto(await LerListaAsync(conn, SqlTipos, ct), await LerListaAsync(conn, SqlMarcas, ct), await LerListaAsync(conn, SqlLocais, ct), RegrasGestao.Estados,
+            Convert.ToString(await ExecutarEscalarAsync(conn, null, SqlProximaRef, ct), CultureInfo.InvariantCulture) ?? ""));
 
     private static async Task<EquipamentoGestaoDto?> LerEquipamentoGestaoAsync(SqlConnection conn, string id, CancellationToken ct)
     {
@@ -316,7 +326,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
     // Gravou mas a leitura seguinte não encontra o registo (apagado ou alterado entretanto): erro claro em vez de um 200 vazio.
     private static (ResultadoIntervencao, T?) OkOuConflito<T>(T? lido) where T : class => lido is null ? (ResultadoIntervencao.Conflito, null) : (ResultadoIntervencao.Ok, lido);
 
-    private static async Task<object?> ExecutarEscalarAsync(SqlConnection conn, SqlTransaction tx, string sql, CancellationToken ct)
+    private static async Task<object?> ExecutarEscalarAsync(SqlConnection conn, SqlTransaction? tx, string sql, CancellationToken ct)
     {
         await using var cmd = new SqlCommand(sql, conn, tx);
         return await cmd.ExecuteScalarAsync(ct);

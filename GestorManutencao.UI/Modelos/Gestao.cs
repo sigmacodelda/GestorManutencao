@@ -13,7 +13,7 @@ public sealed record EdicaoEquipamento(
     int? Ano = null, decimal? Valor = null, long? NoFornecedor = null, DateOnly? Data = null, string? Local = null, string? Estado = null,
     bool? Obsoleto = null, string? ManualPdf = null, string? Email = null, string? Versao = null, int? PlaneadasConfirmadas = null);
 
-public sealed record OpcoesEquipamento(IReadOnlyList<string> Tipos, IReadOnlyList<string> Marcas, IReadOnlyList<string> Locais, IReadOnlyList<string> Estados);
+public sealed record OpcoesEquipamento(IReadOnlyList<string> Tipos, IReadOnlyList<string> Marcas, IReadOnlyList<string> Locais, IReadOnlyList<string> Estados, string ProximaRef = "");
 
 public sealed record HistoricoEstado(DateOnly Data, string Estado, string Quem);
 
@@ -115,7 +115,9 @@ public sealed class FormEquipamento
         return e == new EdicaoEquipamento() ? null : e with { Versao = string.IsNullOrEmpty(o.Versao) ? null : o.Versao };
     }
 
-    public bool TemAlteracoes(EquipamentoGestao? o) => o is null ? Ref.Length + Design.Length > 0 : ParaEdicao(o) is not null;
+    // Num equipamento novo, o nº sugerido (refSugerida) não conta como alteração.
+    public bool TemAlteracoes(EquipamentoGestao? o, string refSugerida = "") =>
+        o is null ? Design.Length > 0 || (Ref.Length > 0 && Ref != refSugerida) : ParaEdicao(o) is not null;
 
     // Marcar obsoleto (passar de ativo a obsoleto) pede confirmação com o nº de planeadas que ficam canceladas.
     public bool PedeConfirmacaoDeObsoleto(EquipamentoGestao? o) => Obsoleto && o is not { Obsoleto: true };

@@ -206,7 +206,7 @@
     }
     private CancellationTokenSource? _espera;
 
-    private bool TemAlteracoes => !_guardado && _form.TemAlteracoes(_original);
+    private bool TemAlteracoes => !_guardado && _form.TemAlteracoes(_original, _opcoes.ProximaRef);
 
     protected override async Task OnParametersSetAsync() => await CarregarAsync();
 
@@ -218,7 +218,7 @@
         {
             try { _opcoes = await Gestao.ObterOpcoesAsync(); } catch (InvalidOperationException) { throw; } catch (Exception) { /* sem sugestões a lista fica vazia */ }
             _original = Id is null ? null : await Gestao.ObterEquipamentoAsync(Id) ?? throw new InvalidOperationException("Este equipamento já não existe.");
-            _form = _original is null ? new FormEquipamento() : FormEquipamento.De(_original);
+            _form = _original is null ? new FormEquipamento { Ref = _opcoes.ProximaRef } : FormEquipamento.De(_original);
         }
         catch (Exception ex) { _falhou = MensagensGestao.Para(ex, "Não foi possível carregar o equipamento."); }
         finally { _a_carregar = false; }

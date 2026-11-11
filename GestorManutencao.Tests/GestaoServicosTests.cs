@@ -154,6 +154,20 @@ public class FormEquipamentoTests
 public class GestaoDevServiceTests
 {
     [Fact]
+    public async Task Opcoes_sugerem_o_maior_n_de_infraestrutura_mais_um_e_o_formulario_novo_nao_conta_como_alterado()
+    {
+        var s = new GestaoDevService();
+        await s.GravarEquipamentoAsync(null, new EdicaoEquipamento(Ref: "250", Design: "Bomba", Estado: "Em Serviço"));
+        await s.GravarEquipamentoAsync(null, new EdicaoEquipamento(Ref: "AB-900", Design: "Outra", Estado: "Em Serviço"));
+
+        var sugerida = (await s.ObterOpcoesAsync()).ProximaRef;
+
+        Assert.Equal("251", sugerida);
+        Assert.False(new FormEquipamento { Ref = sugerida }.TemAlteracoes(null, sugerida));
+        Assert.True(new FormEquipamento { Ref = "999" }.TemAlteracoes(null, sugerida));
+    }
+
+    [Fact]
     public async Task Equipamento_novo_numera_cria_instrucao_e_historico_e_recusa_ref_repetida_e_viaturas()
     {
         var s = new GestaoDevService();

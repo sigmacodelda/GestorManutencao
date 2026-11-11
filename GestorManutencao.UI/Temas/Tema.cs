@@ -22,8 +22,8 @@ public sealed partial class Tema
     public required IReadOnlyDictionary<string, string> Claro { get; init; }
     public required IReadOnlyDictionary<string, string> Escuro { get; init; }
 
-    // Variáveis CSS do tema; o escuro segue o sistema (prefers-color-scheme).
-    public string Css => $":root{{{Bloco(Claro)}}}@media (prefers-color-scheme: dark){{:root{{{Bloco(Escuro)}}}}}";
+    // Variáveis CSS do tema; claro por defeito, o escuro só com data-modo="escuro" no <html> (escolha do utilizador, não do sistema).
+    public string Css => $":root{{{Bloco(Claro)}}}:root[data-modo=\"escuro\"]{{{Bloco(Escuro)}}}";
 
     public static Tema Carregar(string? id)
     {

@@ -87,7 +87,8 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
         {
             static List<string> Distintos(IEnumerable<string> valores) => valores.Where(v => v.Length > 0).Distinct().Order().ToList();
             var visiveis = Equipamentos.Where(e => Gerido(e)).ToList();
-            return Task.FromResult(new OpcoesEquipamentoDto(Distintos(visiveis.Select(e => e.Tipo)), Distintos(visiveis.Select(e => e.Marca)), Distintos(visiveis.Select(e => e.Zona)), RegrasGestao.Estados));
+            return Task.FromResult(new OpcoesEquipamentoDto(Distintos(visiveis.Select(e => e.Tipo)), Distintos(visiveis.Select(e => e.Marca)), Distintos(visiveis.Select(e => e.Zona)), RegrasGestao.Estados,
+                (visiveis.Select(e => int.TryParse(e.Ref.Trim(), out var n) && n >= 0 ? n : 0).DefaultIfEmpty(0).Max() + 1).ToString()));
         }
     }
 
