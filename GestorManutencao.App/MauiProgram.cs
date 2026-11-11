@@ -11,12 +11,23 @@ public static class MauiProgram
 	// Cliente desta compilação (ver Temas/*.json no projeto UI).
 	private const string TemaCliente = "landeiro";
 
+	// https sempre; http só para um IP privado (10.x, 172.16-31.x, 192.168.x) ou loopback, ou seja, rede interna.
+	internal static bool UrlPermitida(string url)
+	{
+		if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+		if (uri.Scheme == Uri.UriSchemeHttps) return true;
+		if (uri.Scheme != Uri.UriSchemeHttp || !System.Net.IPAddress.TryParse(uri.Host, out var ip)) return false;
+		if (System.Net.IPAddress.IsLoopback(ip)) return true;
+		var b = ip.GetAddressBytes();
+		return b.Length == 4 && (b[0] == 10 || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168));
+	}
+
 	public static MauiApp CreateMauiApp()
 	{
 		var builder = MauiApp.CreateBuilder();
 		builder.UseMauiApp<App>();
 
-		// Endereço (https) da GestorManutencao.Api deste cliente, em Resources/Raw/appsettings.json ("ApiUrl"). Vazio só serve em Debug (utilizadores fictícios).
+		// Endereço (https, ou http numa rede interna) da GestorManutencao.Api deste cliente, em Resources/Raw/appsettings.json ("ApiUrl"). Vazio só serve em Debug (utilizadores fictícios).
 		using (var ficheiro = FileSystem.OpenAppPackageFileAsync("appsettings.json").GetAwaiter().GetResult())
 			builder.Configuration.AddJsonStream(ficheiro);
 
@@ -66,8 +77,8 @@ public static class MauiProgram
 #endif
 		if (!string.IsNullOrWhiteSpace(apiUrl))
 		{
-			if (!apiUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-				throw new InvalidOperationException("ApiUrl tem de ser https (o PIN não pode ir em claro).");
+			if (!UrlPermitida(apiUrl))
+				throw new InvalidOperationException("ApiUrl tem de ser https (http só para um IP da rede interna: o PIN não pode ir em claro pela internet).");
 			var http = new HttpClient(new TempoLimitePorPedidoHandler(manipulador ?? new HttpClientHandler())) { BaseAddress = new Uri(apiUrl), Timeout = Timeout.InfiniteTimeSpan };
 			builder.Services.AddSingleton<IAutenticacaoService>(new AutenticacaoApiService(http));
 			builder.Services.AddSingleton<IEquipaService>(new EquipaApiService(http));

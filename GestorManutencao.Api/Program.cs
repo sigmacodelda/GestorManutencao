@@ -172,8 +172,12 @@ if (proxies.Length > 0)
     app.UseForwardedHeaders(forwarded);
 }
 
-if (!emDesenvolvimento) app.UseHsts();
-app.UseHttpsRedirection();
+// Rede interna: com "Seguranca:PermitirHttp": true a API aceita http sem redirecionar para https.
+if (!app.Configuration.GetValue<bool>("Seguranca:PermitirHttp"))
+{
+    if (!emDesenvolvimento) app.UseHsts();
+    app.UseHttpsRedirection();
+}
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

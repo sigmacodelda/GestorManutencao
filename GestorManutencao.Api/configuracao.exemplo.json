@@ -10,6 +10,7 @@
     "Audiencia": "GestorManutencao.App",
     "HorasValidade": 336
   },
+  "Seguranca": { "PermitirHttp": false },
   "Pin": {
     "Pepper": "<o mesmo pepper com que foram criados os PINs em u_manutil; se mudar, ninguém entra>",
     "Dev": ""
