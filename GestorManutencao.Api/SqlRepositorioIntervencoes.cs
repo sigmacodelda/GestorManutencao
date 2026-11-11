@@ -245,8 +245,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         """
         set xact_abort on;
         begin transaction;
-        -- UPDLOCK + HOLDLOCK: duas gravações em simultâneo não criam duas linhas.
-        if exists (select 1 from u_configman with (updlock, holdlock))
+        if exists (select 1 from u_configman with (nolock))
             update u_configman set antecedencia = @antecedencia, gerarplaneadas = @gerar, avancaordem = @avanca, validarpropria = @propria,
                    extexigedoc = @ext, comprasfichaint = @compras, usrinis = @codigo, usrdata = @dia, usrhora = @hora;
         else
@@ -384,6 +383,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
                    from u_fichaint with (nolock) where estado = '' and obsoleto = 0 and data <= getdate() and ltrim(rtrim(periodo)) <> ''
                    group by u_equipstamp, ltrim(rtrim(periodo))) lg on lg.u_equipstamp = i.u_equipstamp and lg.periodo = ltrim(rtrim(l.periodo))
         where i.obsoleto = 0 and e.obsoleto = 0 and e.tipo <> @veiculos and (@tarefa = '' or l.u_itmanutlistamp = @tarefa)
+          and ltrim(rtrim(isnull(e.status, ''))) <> @foraServico
         """;
 
     // Se outra pessoa gerou entretanto, não duplica. Sem nolock de propósito: é a verificação que protege a escrita. Revalida no insert que o equipamento,
@@ -464,12 +464,26 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private static async Task<ConfigManutencao> LerConfiguracaoAsync(SqlConnection conn, CancellationToken ct)
     {
-        await using var cmd = new SqlCommand(SqlConfiguracao, conn);
+        // As colunas do Landeiro (início do plano, limite e regularização) podem não existir nesta base: só se leem se existirem.
+        if (_camposPlano is null)
+        {
+            await using var sonda = new SqlCommand("select col_length('u_configman', 'datainicio'), col_length('u_configman', 'mesesregul'), col_length('u_configman', 'regularizacao')", conn);
+            await using var s = await sonda.ExecuteReaderAsync(ct);
+            await s.ReadAsync(ct);
+            _camposPlano = (!s.IsDBNull(0), !s.IsDBNull(1), !s.IsDBNull(2));
+        }
+        var (temInicio, temMeses, temRegul) = _camposPlano.Value;
+        var sql = SqlConfiguracao.Replace("from u_configman",
+            $", {(temInicio ? "datainicio" : "cast(null as datetime)")}, {(temMeses ? "convert(int, isnull(mesesregul, 12))" : "12")}, {(temRegul ? "convert(int, isnull(regularizacao, 0))" : "0")} from u_configman");
+        await using var cmd = new SqlCommand(sql, conn);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct)
-            ? new ConfigManutencao((int)r.GetDecimal(0), r.GetBoolean(1), r.GetBoolean(2), r.GetBoolean(3), r.GetBoolean(4), r.GetBoolean(5))
+            ? new ConfigManutencao((int)r.GetDecimal(0), r.GetBoolean(1), r.GetBoolean(2), r.GetBoolean(3), r.GetBoolean(4), r.GetBoolean(5),
+                r.IsDBNull(6) ? default : r.GetDateTime(6).Date, r.GetInt32(7), r.GetInt32(8) != 0)
             : new ConfigManutencao();
     }
+
+    private static (bool Inicio, bool Meses, bool Regularizacao)? _camposPlano;
 
     private static IntervencaoDto Ler(SqlDataReader r, bool podeValidar = true)
     {
@@ -935,6 +949,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         {
             Texto(cmd, "@tarefa", 25, tarefa);
             Veiculos(cmd);
+            Texto(cmd, "@foraServico", 20, RegrasManutencao.StatusForaServico); // equipamento parado não gera
             await using var r = await cmd.ExecuteReaderAsync(ct);
             while (await r.ReadAsync(ct))
                 candidatas.Add(new Candidata(
@@ -946,7 +961,9 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
         var agora = await AgoraAsync(conn, ct);
         var hoje = agora.Dia;
+        var cfg = await LerConfiguracaoAsync(conn, ct);
         var proximoNumero = new Dictionary<int, decimal>();
+        var porRegularizar = 0;
 
         foreach (var c in candidatas)
         {
@@ -954,14 +971,13 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
             var unidade = RegrasManutencao.LerUnidade(c.Unidade);
             if (unidade == UnidadePeriodo.Nenhum || c.Intervalo <= 0) { semPeriodicidade++; continue; }
 
+            // Base do calendário: a última feita (ou a do equipamento nas fichas antigas), ou a última cancelada se for mais recente (cancelar salta a ocorrência).
             var feita = c.UltimaFeita ?? c.UltimaLegado;
-            var intervalo = (int)c.Intervalo;
-            DateTime data;
-            if (c.UltimaCancelada.HasValue && (!feita.HasValue || c.UltimaCancelada.Value > feita.Value))
-                data = RegrasManutencao.ProximaDepoisDaUltima(c.UltimaCancelada.Value, unidade, intervalo) ?? hoje;
-            else
-                data = feita.HasValue ? RegrasManutencao.ProximaDepoisDaUltima(feita.Value, unidade, intervalo) ?? hoje : hoje;
-            if (data < hoje) data = hoje;
+            var ultima = c.UltimaCancelada.HasValue && (!feita.HasValue || c.UltimaCancelada.Value > feita.Value) ? c.UltimaCancelada : feita;
+            var decisao = RegrasManutencao.DecidirGeracao(ultima, unidade, (int)c.Intervalo, hoje, cfg);
+            if (decisao.Decisao == DecisaoGeracao.SemPeriodicidade) { semPeriodicidade++; continue; }
+            if (decisao.Decisao == DecisaoGeracao.PorRegularizar) { porRegularizar++; continue; } // o supervisor regulariza no backoffice
+            var data = decisao.Data;
 
             try
             {
@@ -987,7 +1003,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
             catch (SqlException ex) when (ex.Number is 2601 or 2627) { jaTinham++; }
             catch (SqlException) { erros++; }
         }
-        return new RelatorioGeracao(criadas, jaTinham, semPeriodicidade, erros);
+        return new RelatorioGeracao(criadas, jaTinham, semPeriodicidade, erros, porRegularizar);
     }
 
     public Task<IReadOnlyList<MaterialDto>?> ListarMateriaisAsync(string id, TecnicoAtual tecnico, CancellationToken ct) => Executar<IReadOnlyList<MaterialDto>?>(async conn =>

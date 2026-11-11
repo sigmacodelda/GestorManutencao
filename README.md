@@ -12,9 +12,9 @@ Cada cliente é um JSON em `GestorManutencao.UI/Temas/` (cores em claro e escuro
 
 ## Login
 
-Só por PIN (4 a 6 dígitos), sem escolher utilizador. A app envia o PIN à `GestorManutencao.Api`, que o confere (hash com pepper) na tabela `u_manutil` do PHC e devolve um token. O supervisor cria os técnicos e o número de utilizador PHC de cada um (`tecno`); o primeiro PIN tem de ser mudado no primeiro acesso. Há limite de tentativas por PIN e por IP.
+Só por PIN (4 dígitos), sem escolher utilizador. A app envia o PIN à `GestorManutencao.Api`, que o confere (hash com pepper) na tabela `u_manutil` do PHC e devolve um token. O supervisor cria os técnicos e o número de utilizador PHC de cada um (`tecno`); o primeiro PIN tem de ser mudado no primeiro acesso. Há limite de tentativas por PIN e por IP.
 
-Com `ApiUrl` vazio em `GestorManutencao.App/MauiProgram.cs` a app corre em Debug com dados fictícios (`GestorManutencao.UI/Dados/utilizadores-teste.json`). Com `ApiUrl` preenchido (tem de ser https) usa a API real.
+Com `ApiUrl` vazio em `GestorManutencao.App/Resources/Raw/appsettings.json` a app corre em Debug com dados fictícios (`GestorManutencao.UI/Dados/utilizadores-teste.json`). Com `ApiUrl` preenchido (tem de ser https) usa a API real.
 
 ## Intervenções
 

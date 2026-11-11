@@ -8,7 +8,7 @@ namespace GestorManutencao.UI.Servicos;
 // Entrada na GestorManutencao.Api: a app nunca fala com o SQL Server nem guarda segredos dele.
 public sealed class AutenticacaoApiService(HttpClient http) : IAutenticacaoService
 {
-    private sealed record RespostaLogin(string Token, DateTimeOffset ExpiraEm, string Nome, Perfil Perfil, bool PinProvisorio);
+    private sealed record RespostaLogin(string Token, DateTimeOffset ExpiraEm, string Nome, Perfil Perfil, bool PinProvisorio, bool Configuracao = false);
 
     public Task<ResultadoLogin> EntrarAsync(string pin, CancellationToken ct = default) =>
         Enviar(() => new HttpRequestMessage(HttpMethod.Post, "auth/login") { Content = JsonContent.Create(new { pin }) }, ct);
@@ -39,7 +39,7 @@ public sealed class AutenticacaoApiService(HttpClient http) : IAutenticacaoServi
             var corpo = await resposta.Content.ReadFromJsonAsync<RespostaLogin>(ct);
             return corpo is null
                 ? ResultadoLogin.Falha(ErroLogin.Rede)
-                : ResultadoLogin.Ok(new Utilizador(corpo.Nome, corpo.Perfil, corpo.Token, corpo.ExpiraEm, corpo.PinProvisorio));
+                : ResultadoLogin.Ok(new Utilizador(corpo.Nome, corpo.Perfil, corpo.Token, corpo.ExpiraEm, corpo.PinProvisorio, corpo.Configuracao));
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException
                                    || (ex is TaskCanceledException && !ct.IsCancellationRequested))

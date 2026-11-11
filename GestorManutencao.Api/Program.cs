@@ -8,6 +8,10 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
+// Um só ficheiro de configuração: só se lê o appsettings.json (nunca o appsettings.Production.json nem o Development).
+foreach (var fonte in builder.Configuration.Sources.OfType<Microsoft.Extensions.Configuration.Json.JsonConfigurationSource>()
+             .Where(s => !string.Equals(s.Path, "appsettings.json", StringComparison.OrdinalIgnoreCase)).ToList())
+    builder.Configuration.Sources.Remove(fonte);
 var emDesenvolvimento = builder.Environment.IsDevelopment();
 
 builder.Services.Configure<JwtOpcoes>(builder.Configuration.GetSection("Jwt"));
@@ -45,6 +49,11 @@ if (args.Contains("gerar-pin"))
     return;
 }
 
+// PIN de configuração (opcional): só serve para criar utilizadores. Tem de ser um PIN aceitável de 4 números.
+var pinDev = builder.Configuration["Pin:Dev"]?.Trim() ?? "";
+if (pinDev.Length > 0 && !RegrasPin.Aceitavel(pinDev)) throw new InvalidOperationException("Pin:Dev tem de ter 4 números e não pode ser uma sequência óbvia.");
+builder.Services.Configure<PinOpcoes>(o => o.Dev = pinDev);
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<EmissorToken>();
 builder.Services.AddSingleton<PinHasher>();
@@ -55,8 +64,8 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn
     if (!emDesenvolvimento) throw new InvalidOperationException("ConnectionStrings:PHCConn não está configurada.");
     builder.Services.AddSingleton<IRepositorioUtilizadores>(sp => new RepositorioUtilizadoresMemoria(
     [
-        (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), sp.GetRequiredService<PinHasher>().Hash("482913")),
-        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("795316"))
+        (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), sp.GetRequiredService<PinHasher>().Hash("4829")),
+        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("7953"))
     ]));
     builder.Services.AddSingleton<IRepositorioIntervencoes, RepositorioIntervencoesMemoria>();
 }
@@ -86,6 +95,13 @@ builder.Services
             OnTokenValidated = async ctx =>
             {
                 var codigo = ctx.Principal?.FindFirstValue("sub") ?? ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (ctx.Principal?.HasClaim(EmissorToken.ClaimConfiguracao, "1") == true)
+                {
+                    // Token do PIN de configuração: vale só enquanto esse PIN existir e for o mesmo.
+                    var hasher = ctx.HttpContext.RequestServices.GetRequiredService<PinHasher>();
+                    if (!hasher.DevAtivo || ctx.Principal.FindFirstValue(EmissorToken.ClaimVersao) != hasher.VersaoDev) ctx.Fail("sessao_revogada");
+                    return;
+                }
                 try
                 {
                     var atual = codigo is null ? null : await ctx.HttpContext.RequestServices.GetRequiredService<IRepositorioUtilizadores>()
@@ -102,11 +118,14 @@ builder.Services
         };
     });
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("Autenticado", p => p.RequireAuthenticatedUser())
+    .AddPolicy("Autenticado", p => p.RequireAuthenticatedUser().RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1")))
     .SetDefaultPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder().RequireAuthenticatedUser()
-        .RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1")).Build())
-    .AddPolicy("PinDefinitivo", p => p.RequireAuthenticatedUser().RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1")))
-    .AddPolicy("Supervisor", p => p.RequireRole(nameof(Perfil.Supervisor)).RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1")));
+        .RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1") && !c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1")).Build())
+    .AddPolicy("PinDefinitivo", p => p.RequireAuthenticatedUser().RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1") && !c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1")))
+    .AddPolicy("GestaoUtilizadores", p => p.RequireAssertion(c =>
+        !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1")
+        && (c.User.IsInRole(nameof(Perfil.Supervisor)) || c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1"))))
+    .AddPolicy("Supervisor", p => p.RequireRole(nameof(Perfil.Supervisor)).RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1") && !c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1")));
 
 // Como o PIN identifica a pessoa, adivinhá-lo não se trava por utilizador: trava-se por endereço e no total.
 // O limite global é só um teto contra ataques distribuídos; um valor baixo deixava qualquer um bloquear a equipa toda.
@@ -165,9 +184,18 @@ static string? Codigo(ClaimsPrincipal u) => u.FindFirstValue("sub") ?? u.FindFir
 // O token dura um turno, mas as ações do supervisor confirmam-se na base: um supervisor desativado perde-as logo.
 static async Task<UtilizadorApp?> SupervisorAtual(ClaimsPrincipal u, IRepositorioUtilizadores repo, CancellationToken ct)
 {
+    if (u.HasClaim(EmissorToken.ClaimConfiguracao, "1")) return EmissorToken.UtilizadorConfiguracao;
     var codigo = Codigo(u);
     var atual = codigo is null ? null : await repo.ObterAsync(codigo, ct);
     return atual is { Ativo: true, Perfil: Perfil.Supervisor, PinProvisorio: false } ? atual : null;
+}
+
+// Um PIN gerado nunca pode ser o de configuração (quem o recebesse ficava a conhecê-lo e não conseguia entrar).
+static string PinNovo(PinHasher hasher)
+{
+    string pin;
+    do pin = RegrasPin.Gerar(); while (hasher.EhPinDev(pin));
+    return pin;
 }
 
 static IResult RegistarPinEmUso(ILogger log, HttpContext http)
@@ -189,6 +217,11 @@ app.MapPost("/auth/login", async (PedidoLogin pedido, IRepositorioUtilizadores r
 
     try
     {
+        if (hasher.EhPinDev(pedido.Pin))
+        {
+            log.LogWarning("Entrada com o PIN de configuração a partir de {Ip}.", http.Connection.RemoteIpAddress);
+            return Results.Ok(emissor.EmitirConfiguracao(hasher.VersaoDev));
+        }
         var utilizador = await repo.ObterPorPinAsync(hasher.Hash(pedido.Pin!), ct);
         if (utilizador is not null) return Results.Ok(emissor.Emitir(utilizador));
 
@@ -208,6 +241,7 @@ app.MapPost("/auth/pin", async (PedidoMudarPin pedido, ClaimsPrincipal eu, IRepo
     http.Response.Headers.CacheControl = "no-store";
     if (!RegrasPin.FormatoValido(pedido.PinAtual) || !RegrasPin.FormatoValido(pedido.PinNovo)) return Erro(400, "pedido_invalido");
     if (!RegrasPin.Aceitavel(pedido.PinNovo)) return Erro(400, "pin_fraco");
+    if (hasher.EhPinDev(pedido.PinNovo)) return Erro(409, "pin_em_uso");
     if (pedido.PinNovo == pedido.PinAtual) return Erro(400, "pin_igual");
 
     var codigo = Codigo(eu);
@@ -243,7 +277,7 @@ app.MapGet("/auth/eu", (ClaimsPrincipal utilizador) => Results.Ok(new
     perfil = utilizador.FindFirstValue(ClaimTypes.Role)
 })).RequireAuthorization();
 
-var equipa = app.MapGroup("/utilizadores").RequireAuthorization("Supervisor");
+var equipa = app.MapGroup("/utilizadores").RequireAuthorization("GestaoUtilizadores");
 
 equipa.MapGet("/", async (ClaimsPrincipal eu, IRepositorioUtilizadores repo, CancellationToken ct) =>
 {
@@ -260,7 +294,7 @@ equipa.MapPost("/", async (PedidoNovoUtilizador pedido, ClaimsPrincipal eu, IRep
 {
     http.Response.Headers.CacheControl = "no-store";
     var codigo = pedido.Utilizador?.Trim().ToLowerInvariant();
-    if (!RegrasUtilizador.CodigoOk(codigo) || !RegrasUtilizador.NomeOk(pedido.Nome)) return Erro(400, "pedido_invalido");
+    if (!RegrasUtilizador.CodigoOk(codigo) || !RegrasUtilizador.NomeOk(pedido.Nome) || pedido.Perfil is { } pf && !Enum.IsDefined(pf)) return Erro(400, "pedido_invalido");
 
     try
     {
@@ -270,10 +304,14 @@ equipa.MapPost("/", async (PedidoNovoUtilizador pedido, ClaimsPrincipal eu, IRep
         var tecno = pedido.Tecno ?? 0;
         if (tecno is < 0 or > 99999) return Erro(400, "pedido_invalido");
 
+        // Só o PIN de configuração cria supervisores (é assim que se cria o primeiro); um supervisor só cria operadores.
+        var perfil = pedido.Perfil ?? Perfil.Operador;
+        if (perfil == Perfil.Supervisor && !eu.HasClaim(EmissorToken.ClaimConfiguracao, "1")) return Results.Forbid();
+
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {
-            var pin = RegrasPin.Gerar();
-            switch (await repo.CriarOperadorAsync(codigo!, pedido.Nome!.Trim(), tecno, hasher.Hash(pin), supervisor.Codigo, ct))
+            var pin = PinNovo(hasher);
+            switch (await repo.CriarUtilizadorAsync(codigo!, pedido.Nome!.Trim(), perfil, tecno, hasher.Hash(pin), supervisor.Codigo, ct))
             {
                 case ResultadoPin.Ok: return Results.Json(new RespostaPin(pin), statusCode: StatusCodes.Status201Created);
                 case ResultadoPin.JaExiste: return Erro(409, "ja_existe");
@@ -318,7 +356,7 @@ equipa.MapPost("/{codigo}/pin", async (string codigo, ClaimsPrincipal eu, IRepos
 
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {
-            var pin = RegrasPin.Gerar();
+            var pin = PinNovo(hasher);
             switch (await repo.DefinirPinAsync(codigo, hasher.Hash(pin), true, supervisor.Codigo, ct))
             {
                 case ResultadoPin.Ok: return Results.Ok(new RespostaPin(pin));

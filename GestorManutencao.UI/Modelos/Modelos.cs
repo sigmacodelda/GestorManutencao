@@ -7,7 +7,7 @@ public enum ModoTrabalho { Operador, Supervisor }
 
 public enum ErroLogin { Credenciais, Rede, DemasiadasTentativas, PinFraco, PinEmUso }
 
-public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null, DateTimeOffset? ExpiraEm = null, bool PinProvisorio = false)
+public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null, DateTimeOffset? ExpiraEm = null, bool PinProvisorio = false, bool Configuracao = false) // sigma-ok: parâmetro opcional, sem valor
 {
     // Nunca imprimir o token (o ToString automático do record iria para logs e páginas de erro).
     private bool PrintMembers(System.Text.StringBuilder sb)
@@ -37,7 +37,7 @@ public sealed record Utilizador(string Nome, Perfil Perfil, string? Token = null
 public static class RegrasPin
 {
     public const int Minimo = 4;
-    public const int Maximo = 6;
+    public const int Maximo = 4;
 
     public static bool FormatoValido(string? pin) => pin is { Length: >= Minimo and <= Maximo } && pin.All(c => c is >= '0' and <= '9');
 
@@ -49,7 +49,7 @@ public static class RegrasPin
     }
 
     public static string? ValidarNovo(string? pin, string? repetido) =>
-        !FormatoValido(pin) ? "O PIN tem de ter de 4 a 6 números."
+        !FormatoValido(pin) ? "O PIN tem de ter 4 números."
         : !Aceitavel(pin) ? "Esse PIN é fácil de adivinhar. Escolha outro."
         : pin != repetido ? "Os dois PINs não são iguais."
         : null;

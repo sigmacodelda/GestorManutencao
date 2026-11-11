@@ -3,6 +3,7 @@
 @inject IIntervencoesService Intervencoes
 @inject IEquipamentosService Equipamentos
 @inject NavigationManager Nav
+@inject SessaoService Sessao
 
 <PageTitle>Nova ficha de intervenção · Gestor de Manutenção</PageTitle>
 
@@ -85,6 +86,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // O técnico só regista avarias (sempre curativas); a ficha completa é do supervisor.
+        if (Sessao.Modo != ModoTrabalho.Supervisor) { Nav.NavigateTo("avaria", replace: true); return; }
         if (string.IsNullOrWhiteSpace(EquipamentoId)) return;
         try
         {

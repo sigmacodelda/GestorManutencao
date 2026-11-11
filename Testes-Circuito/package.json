@@ -1,0 +1,8 @@
+{
+  "name": "gestor-manutencao-circuito",
+  "private": true,
+  "type": "module",
+  "description": "Circuito de testes ponta a ponta: API e app Windows (WebView2, por CDP) em simultâneo.",
+  "scripts": { "circuito": "node circuito.mjs" },
+  "devDependencies": { "playwright-core": "1.65.0" }
+}

@@ -405,8 +405,12 @@ obj/
 *.user
 .playwright-mcp/
 appsettings.Production.json
+GestorManutencao.Api/appsettings.json
+Testes-Circuito/resultados-dados/
+Testes-Circuito/resultados-ux/
 **/appsettings.*.local.json
 .claude/worktrees/
 
 # APK e binarios de publicacao (gerados, nao se versionam)
 publicar-apk/
+publicar-api/

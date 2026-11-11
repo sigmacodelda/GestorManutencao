@@ -7,7 +7,7 @@
 <section class="conteudo">
     <div class="boas-vindas">
         <h1 tabindex="-1">Escolha o seu PIN</h1>
-        <p class="login-sub">O PIN que recebeu é provisório. Escolha um só seu, com 4 a 6 números, que mais ninguém conheça.</p>
+        <p class="login-sub">O PIN que recebeu é provisório. Escolha um só seu, com 4 números, que mais ninguém conheça.</p>
     </div>
 
     <form class="formulario" @onsubmit="GuardarAsync" novalidate>
@@ -17,11 +17,11 @@
         </div>
         <div class="campo">
             <label for="pin-novo">PIN novo</label>
-            <input id="pin-novo" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" @bind="_novo" @bind:event="oninput" />
+            <input id="pin-novo" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" @bind="_novo" @bind:event="oninput" />
         </div>
         <div class="campo">
             <label for="pin-repetir">Repita o PIN novo</label>
-            <input id="pin-repetir" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" @bind="_repetir" @bind:event="oninput" />
+            <input id="pin-repetir" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" @bind="_repetir" @bind:event="oninput" />
         </div>
 
         <p class="campo-erro" role="alert">@_erro</p>
@@ -36,7 +36,7 @@
 
     private async Task GuardarAsync()
     {
-        _erro = !RegrasPin.FormatoValido(_atual) ? "Escreva o PIN que recebeu (4 a 6 números)."
+        _erro = !RegrasPin.FormatoValido(_atual) ? "Escreva o PIN que recebeu (4 números)."
               : RegrasPin.ValidarNovo(_novo, _repetir)
               ?? (_novo == _atual ? "O PIN novo tem de ser diferente do que recebeu." : "");
         if (_erro.Length > 0) return;

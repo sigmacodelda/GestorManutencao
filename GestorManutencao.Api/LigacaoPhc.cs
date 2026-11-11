@@ -3,19 +3,21 @@ using System.Text;
 
 namespace GestorManutencao.Api;
 
-// A connection string do PHC pode vir cifrada no appsettings, no mesmo formato da LandeiroMaui (Helpers/EncriptacaoHelper): TripleDES, modo ECB,
-// chave = MD5 do texto da chave, resultado em base64. A chave não está no código: vem de Seguranca:ChaveLigacao (variável de ambiente
-// Seguranca__ChaveLigacao). Uma connection string em claro (com ';') passa sem mudança.
+// A connection string do PHC vem cifrada no appsettings, exatamente como na LandeiroMaui (Helpers/EncriptacaoHelper): TripleDES, modo ECB,
+// chave = MD5 do texto da chave, resultado em base64. A chave é a mesma da LandeiroMaui e está aqui dentro, por isso basta colar no
+// appsettings a connection string cifrada que já se usa lá. Seguranca:ChaveLigacao só serve para trocar a chave, se for preciso.
+// Uma connection string em claro (com ';') passa sem mudança.
 public static class LigacaoPhc
 {
     public const string ChaveConfiguracao = "Seguranca:ChaveLigacao";
+    private const string ChavePadrao = "F;x~7TN=`OuxCHDyh=JEU.bjQFME'h"; // sigma-ok: chave de cifra da LandeiroMaui, pedida para reutilizar as mesmas connection strings cifradas
 
     public static string? Obter(IConfiguration configuracao)
     {
         var valor = configuracao.GetConnectionString("PHCConn");
         if (string.IsNullOrWhiteSpace(valor) || valor.Contains(';')) return valor;
         var chave = configuracao[ChaveConfiguracao];
-        if (string.IsNullOrWhiteSpace(chave)) throw new RepositorioIndisponivelException();
+        if (string.IsNullOrWhiteSpace(chave)) chave = ChavePadrao;
         try { return Desencriptar(valor, chave); }
         catch (Exception ex) when (ex is FormatException or CryptographicException or InvalidOperationException) { throw new RepositorioIndisponivelException(ex); }
     }

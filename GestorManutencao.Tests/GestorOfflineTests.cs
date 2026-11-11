@@ -11,7 +11,7 @@ public class GestorOfflineTests
     {
         var c = new Cenario();
         var sessao = new SessaoService(new DevAutenticacaoService(), new ArmazemSessaoMemoria());
-        if (comSessao) await sessao.EntrarAsync("795316");
+        if (comSessao) await sessao.EntrarAsync("7953");
         var gestor = new GestorOffline(sessao, c.Sinc, c.Atualizador, c.Mc, c.Fila, c.Dono, c.Rede, c.Svc);
         return (c, sessao, gestor);
     }

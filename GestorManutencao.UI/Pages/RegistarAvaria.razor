@@ -3,6 +3,7 @@
 @inject IEquipamentosService Equipamentos
 @inject NavigationManager Nav
 @inject IGestorOffline Offline
+@inject SessaoService Sessao
 
 <PageTitle>Registar avaria · Gestor de Manutenção</PageTitle>
 
@@ -11,7 +12,10 @@
         <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
         <h1 tabindex="-1">Registar avaria</h1>
     </div>
-    <a class="btn btn-secundario" href="nova-ficha"><Icone Nome="plus" /><span>Nova ficha completa</span></a>
+    @if (Sessao.Modo == ModoTrabalho.Supervisor)
+    {
+        <a class="btn btn-secundario" href="nova-ficha"><Icone Nome="plus" /><span>Nova ficha completa</span></a>
+    }
 
     @if (_guardadoSemRede)
     {
@@ -74,6 +78,19 @@
     private const int Max = RegrasIntervencao.MaxAnomaliaComOpId;
 
     private CancellationTokenSource? _espera;
+
+    [SupplyParameterFromQuery(Name = "equipamento")] public string? EquipamentoId { get; set; }
+
+    // Vindo da ficha de um equipamento, já traz o equipamento escolhido.
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(EquipamentoId)) return;
+        try
+        {
+            if (await Equipamentos.ObterFichaAsync(EquipamentoId) is { } ficha) { _escolhido = ficha.Equipamento; _texto = ficha.Equipamento.Nome; }
+        }
+        catch (Exception) { /* escolhe-se à mão */ }
+    }
 
     // Espera 300 ms depois da última tecla antes de ir ao servidor.
     private async Task PesquisarAsync(ChangeEventArgs e)

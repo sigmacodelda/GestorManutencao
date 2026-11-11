@@ -12,7 +12,7 @@ public class SessaoTests
     public async Task Operador_entra_em_modo_operador_e_nao_pode_ser_supervisor()
     {
         var sessao = Criar();
-        var r = await sessao.EntrarAsync("482913");
+        var r = await sessao.EntrarAsync("4829");
 
         Assert.True(r.Sucesso);
         Assert.Equal(ModoTrabalho.Operador, sessao.Modo);
@@ -24,7 +24,7 @@ public class SessaoTests
     public async Task Supervisor_abre_em_modo_supervisor_e_pode_passar_a_operador()
     {
         var sessao = Criar();
-        await sessao.EntrarAsync("795316");
+        await sessao.EntrarAsync("7953");
 
         Assert.Equal(ModoTrabalho.Supervisor, sessao.Modo);
         sessao.MudarModo(ModoTrabalho.Operador);
@@ -32,7 +32,7 @@ public class SessaoTests
     }
 
     [Theory]
-    [InlineData("000001")]
+    [InlineData("0000")]
     [InlineData("999999")]
     public async Task Pin_errado_falha_sem_criar_sessao(string pin)
     {
@@ -48,7 +48,7 @@ public class SessaoTests
     public async Task Sessao_e_restaurada_do_armazem_e_sair_limpa_tudo()
     {
         var armazem = new ArmazemSessaoMemoria();
-        await Criar(armazem: armazem).EntrarAsync("795316");
+        await Criar(armazem: armazem).EntrarAsync("7953");
 
         var nova = Criar(armazem: armazem);
         await nova.RestaurarAsync();
@@ -88,27 +88,27 @@ public class SessaoTests
     public async Task Pin_provisorio_obriga_a_mudar_e_a_sessao_passa_a_definitiva()
     {
         var sessao = Criar();
-        await sessao.EntrarAsync("357159");
+        await sessao.EntrarAsync("3571");
         Assert.True(sessao.Utilizador!.PinProvisorio);
 
-        Assert.Equal(ErroLogin.PinFraco, (await sessao.MudarPinAsync("357159", "111111")).Erro);
-        Assert.Equal(ErroLogin.Credenciais, (await sessao.MudarPinAsync("000001", "913753")).Erro);
-        Assert.Equal(ErroLogin.PinEmUso, (await sessao.MudarPinAsync("357159", "795316")).Erro);
+        Assert.Equal(ErroLogin.PinFraco, (await sessao.MudarPinAsync("3571", "1111")).Erro);
+        Assert.Equal(ErroLogin.Credenciais, (await sessao.MudarPinAsync("0000", "9137")).Erro);
+        Assert.Equal(ErroLogin.PinEmUso, (await sessao.MudarPinAsync("3571", "7953")).Erro);
         Assert.True(sessao.Utilizador!.PinProvisorio);
 
-        Assert.True((await sessao.MudarPinAsync("357159", "913753")).Sucesso);
+        Assert.True((await sessao.MudarPinAsync("3571", "9137")).Sucesso);
         Assert.False(sessao.Utilizador!.PinProvisorio);
     }
 
     [Theory]
-    [InlineData("482913", "482913", null)]
-    [InlineData("123", "123", "O PIN tem de ter de 4 a 6 números.")]
-    [InlineData("111111", "111111", "Esse PIN é fácil de adivinhar. Escolha outro.")]
-    [InlineData("913753", "913754", "Os dois PINs não são iguais.")]
-    [InlineData("913753", "913753", null)]
+    [InlineData("4829", "4829", null)]
+    [InlineData("123", "123", "O PIN tem de ter 4 números.")]
+    [InlineData("1111", "1111", "Esse PIN é fácil de adivinhar. Escolha outro.")]
+    [InlineData("9137", "9138", "Os dois PINs não são iguais.")]
+    [InlineData("9137", "9137", null)]
     public void Validacao_do_pin_novo_no_ecra(string pin, string repetido, string? esperado)
     {
         var r = RegrasPin.ValidarNovo(pin, repetido);
-        if (pin == "482913") Assert.Null(r); else Assert.Equal(esperado, r);
+        if (pin == "4829") Assert.Null(r); else Assert.Equal(esperado, r);
     }
 }

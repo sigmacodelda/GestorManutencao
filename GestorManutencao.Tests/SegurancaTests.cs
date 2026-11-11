@@ -11,7 +11,7 @@ public class SegurancaTests
 {
     private static PinHasher Hasher(string pepper) => new(Options.Create(new PinOpcoes { Pepper = pepper }));
 
-    // Pasta vazia: os testes de arranque não leem o appsettings.Production.json local que haja nesta máquina.
+    // Pasta vazia: os testes de arranque não leem o appsettings.json local que haja nesta máquina.
     private static string PastaVazia() => Directory.CreateTempSubdirectory("gm-teste").FullName;
 
     [Fact]
@@ -27,7 +27,8 @@ public class SegurancaTests
     }
 
     [Theory]
-    [InlineData("482913", true)]
+    [InlineData("4829", true)]
+    [InlineData("482913", false)] // PIN novo tem sempre 4 números
     [InlineData("000000", false)]
     [InlineData("111111", false)]
     [InlineData("123456", false)]
@@ -42,7 +43,7 @@ public class SegurancaTests
     public void Regras_do_pin(string? pin, bool aceitavel) => Assert.Equal(aceitavel, RegrasPin.Aceitavel(pin));
 
     [Fact]
-    public void Pins_gerados_sao_sempre_aceitaveis_e_com_seis_digitos()
+    public void Pins_gerados_sao_sempre_aceitaveis_e_com_quatro_digitos()
     {
         for (var i = 0; i < 500; i++) Assert.True(RegrasPin.Aceitavel(RegrasPin.Gerar()));
     }

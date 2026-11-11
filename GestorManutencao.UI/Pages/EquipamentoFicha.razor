@@ -35,7 +35,14 @@
         var e = _ficha.Equipamento;
         @if (!e.Obsoleto)
         {
-            <a class="btn btn-primario" href="nova-ficha?equipamento=@Uri.EscapeDataString(e.Id)"><Icone Nome="plus" /><span>Nova ficha de intervenção</span></a>
+            @if (Sessao.Modo == ModoTrabalho.Supervisor)
+            {
+                <a class="btn btn-primario" href="nova-ficha?equipamento=@Uri.EscapeDataString(e.Id)"><Icone Nome="plus" /><span>Nova ficha de intervenção</span></a>
+            }
+            else
+            {
+                <a class="btn btn-primario" href="avaria?equipamento=@Uri.EscapeDataString(e.Id)"><Icone Nome="triangle-alert" /><span>Registar avaria</span></a>
+            }
         }
         @if (Sessao.PodeSerSupervisor)
         {

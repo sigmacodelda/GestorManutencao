@@ -33,14 +33,14 @@ public sealed class RepositorioUtilizadoresMemoria : IRepositorioUtilizadores
         lock (_trinco) return Task.FromResult<IReadOnlyList<UtilizadorApp>>(_dados.Values.Select(x => x.U).OrderBy(u => u.Nome).ToList());
     }
 
-    public Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, int tecno, string pinHash, string porQuem, CancellationToken ct)
+    public Task<ResultadoPin> CriarUtilizadorAsync(string codigo, string nome, Perfil perfil, int tecno, string pinHash, string porQuem, CancellationToken ct)
     {
         lock (_trinco)
         {
             if (_dados.ContainsKey(codigo)) return Task.FromResult(ResultadoPin.JaExiste);
             if (_dados.Values.Any(x => x.Hash == pinHash)) return Task.FromResult(ResultadoPin.PinEmUso);
             if (tecno > 0 && _dados.Values.Any(x => x.U.Tecno == tecno)) return Task.FromResult(ResultadoPin.TecnoEmUso);
-            _dados[codigo] = (new UtilizadorApp(codigo, nome, Perfil.Operador, true, true, Tecno: tecno), pinHash);
+            _dados[codigo] = (new UtilizadorApp(codigo, nome, perfil, true, true, Tecno: tecno), pinHash);
             return Task.FromResult(ResultadoPin.Ok);
         }
     }
@@ -83,7 +83,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         """
         insert into u_manutil (u_manutilstamp, utilizador, nome, perfil, ativo, pinhash, pinmudar,
                                pinalteradopor, pinalteradoem, tecno, ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        values (@stamp, @codigo, @nome, 'OPERADOR', 1, @hash, 1, @por, @agora, @tecno, @por, @dia, @hora, @por, @dia, @hora)
+        values (@stamp, @codigo, @nome, @perfil, 1, @hash, 1, @por, @agora, @tecno, @por, @dia, @hora, @por, @dia, @hora)
         """;
 
     private const string SqlDefinirTecno =
@@ -178,7 +178,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         return await cmd.ExecuteNonQueryAsync(ct) == 0 ? ResultadoPin.NaoExiste : ResultadoPin.Ok;
     });
 
-    public async Task<ResultadoPin> CriarOperadorAsync(string codigo, string nome, int tecno, string pinHash, string porQuem, CancellationToken ct)
+    public async Task<ResultadoPin> CriarUtilizadorAsync(string codigo, string nome, Perfil perfil, int tecno, string pinHash, string porQuem, CancellationToken ct)
     {
         try
         {
@@ -190,6 +190,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
                 Texto(cmd, "@stamp", 25, NovoStamp());
                 Texto(cmd, "@codigo", 30, codigo);
                 Texto(cmd, "@nome", 60, nome);
+                Texto(cmd, "@perfil", 12, perfil == Perfil.Supervisor ? "SUPERVISOR" : "OPERADOR");
                 Texto(cmd, "@hash", 64, pinHash);
                 Auditoria(cmd, porQuem);
                 await cmd.ExecuteNonQueryAsync(ct);

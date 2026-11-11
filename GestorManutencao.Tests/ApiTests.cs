@@ -21,7 +21,7 @@ public class ApiTests : IDisposable
         (new UtilizadorApp("rui", "Rui Costa", Perfil.Operador, true, true), Hasher.Hash("357159")),
         (new UtilizadorApp("inativo", "Inativo", Perfil.Operador, false, false), Hasher.Hash("246802")),
         (new UtilizadorApp("chefe", "Chefe Turno", Perfil.Supervisor, true, false), Hasher.Hash("795316")),
-        (new UtilizadorApp("chefe2", "Outro Chefe", Perfil.Supervisor, true, false), Hasher.Hash("813572"))
+        (new UtilizadorApp("chefe2", "Outro Chefe", Perfil.Supervisor, true, false), Hasher.Hash("8135"))
     ]);
 
     private readonly WebApplicationFactory<Program> _fabrica;
@@ -104,7 +104,7 @@ public class ApiTests : IDisposable
         public Task<UtilizadorApp?> ObterPorPinAsync(string pinHash, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<UtilizadorApp?> ObterAsync(string codigo, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<IReadOnlyList<UtilizadorApp>> ListarAsync(CancellationToken ct) => throw new RepositorioIndisponivelException();
-        public Task<ResultadoPin> CriarOperadorAsync(string c, string n, int tecno, string h, string p, CancellationToken ct) => throw new RepositorioIndisponivelException();
+        public Task<ResultadoPin> CriarUtilizadorAsync(string c, string n, Perfil perfil, int tecno, string h, string p, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<ResultadoPin> DefinirTecnoAsync(string c, int tecno, string p, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<ResultadoPin> DefinirPinAsync(string c, string h, bool p, string q, CancellationToken ct, string? a = null) => throw new RepositorioIndisponivelException();
     }
@@ -166,22 +166,22 @@ public class ApiTests : IDisposable
         Assert.True(login.PinProvisorio);
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.Token);
 
-        var nova = await cliente.PostAsJsonAsync("/auth/pin", new PedidoMudarPin("357159", "913753"));
+        var nova = await cliente.PostAsJsonAsync("/auth/pin", new PedidoMudarPin("357159", "9137"));
         Assert.Equal(HttpStatusCode.OK, nova.StatusCode);
         Assert.False((await nova.Content.ReadFromJsonAsync<RespostaLogin>())!.PinProvisorio);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await Cliente().PostAsJsonAsync("/auth/login", new PedidoLogin("357159"))).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Cliente().PostAsJsonAsync("/auth/login", new PedidoLogin("913753"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Cliente().PostAsJsonAsync("/auth/login", new PedidoLogin("9137"))).StatusCode);
     }
 
     [Theory]
-    [InlineData("482913", "111111", "pin_fraco")]
-    [InlineData("482913", "123456", "pin_fraco")]
-    [InlineData("482913", "482913", "pin_igual")]
-    [InlineData("482913", "795316", "pin_em_uso")]
+    [InlineData("482913", "1111", "pin_fraco")]
+    [InlineData("482913", "1234", "pin_fraco")]
+    [InlineData("8135", "8135", "pin_igual")]
+    [InlineData("482913", "8135", "pin_em_uso")]
     public async Task Mudar_pin_recusa_pins_fracos_repetidos_ou_de_outra_pessoa(string atual, string novo, string erro)
     {
-        var cliente = await ComoAsync(Cliente(), "482913");
+        var cliente = await ComoAsync(Cliente(), atual);
         var r = await cliente.PostAsJsonAsync("/auth/pin", new PedidoMudarPin(atual, novo));
 
         Assert.Contains(erro, await r.Content.ReadAsStringAsync());
@@ -194,7 +194,7 @@ public class ApiTests : IDisposable
         var cliente = await ComoAsync(Cliente(), "482913");
 
         Assert.Equal(HttpStatusCode.Unauthorized,
-            (await cliente.PostAsJsonAsync("/auth/pin", new PedidoMudarPin("795316", "913753"))).StatusCode);
+            (await cliente.PostAsJsonAsync("/auth/pin", new PedidoMudarPin("795316", "9137"))).StatusCode);
     }
 
     // ---- Equipa (supervisor) ----
@@ -331,7 +331,7 @@ public class ApiTests : IDisposable
     public async Task Token_antigo_morre_quando_a_propria_pessoa_muda_o_pin_e_o_novo_funciona()
     {
         var antigo = await ComoAsync(Cliente(), "482913");
-        var troca = await antigo.PostAsJsonAsync("/auth/pin", new PedidoMudarPin("482913", "913753"));
+        var troca = await antigo.PostAsJsonAsync("/auth/pin", new PedidoMudarPin("482913", "9137"));
         var novo = (await troca.Content.ReadFromJsonAsync<RespostaLogin>())!;
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await antigo.GetAsync("/auth/eu")).StatusCode);
@@ -347,7 +347,7 @@ public class ApiTests : IDisposable
         // o supervisor repõe o PIN depois de a pessoa já se ter autenticado
         await _repo.DefinirPinAsync("ana", Hasher.Hash("864209"), true, "chefe", default);
 
-        var r = await cliente.PostAsJsonAsync("/auth/pin", new PedidoMudarPin("482913", "913753"));
+        var r = await cliente.PostAsJsonAsync("/auth/pin", new PedidoMudarPin("482913", "9137"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Cliente().PostAsJsonAsync("/auth/login", new PedidoLogin("864209"))).StatusCode);
@@ -357,8 +357,8 @@ public class ApiTests : IDisposable
     public void Records_com_pin_ou_token_nao_se_imprimem()
     {
         Assert.DoesNotContain("482913", new PedidoLogin("482913").ToString());
-        Assert.DoesNotContain("482913", new PedidoMudarPin("482913", "913753").ToString());
-        Assert.DoesNotContain("913753", new RespostaPin("913753").ToString());
+        Assert.DoesNotContain("482913", new PedidoMudarPin("482913", "9137").ToString());
+        Assert.DoesNotContain("9137", new RespostaPin("9137").ToString());
         Assert.DoesNotContain("tok", new RespostaLogin("tok-secreto", DateTimeOffset.UtcNow, "Ana", Perfil.Operador, false).ToString());
     }
 }
