@@ -216,7 +216,7 @@ const semErroBlazor = async (page) => afirma(!(await page.locator('#blazor-error
 async function entrarApp(page, pin) {
   await page.locator('.teclado').waitFor({ timeout: 30000 });
   for (const d of pin) await clicar(page.locator('.teclado button.tecla', { hasText: new RegExp(`^${d}$`) }), `tecla ${d}`);
-  // Com 6 números a app entra sozinha; com menos, carrega-se em Entrar.
+  // Com 4 números a app entra sozinha; se não entrar, carrega-se em Entrar.
   const hero = page.locator('.hero-texto');
   if (!(await hero.waitFor({ timeout: 4000 }).then(() => true, () => false))) await clicar(botao(page, 'Entrar'), 'Entrar');
   await hero.waitFor({ timeout: 30000 });

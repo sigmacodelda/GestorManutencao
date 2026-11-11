@@ -5,12 +5,26 @@ public enum UnidadePeriodo { Dias, Meses, Nenhum }
 // Configuração da manutenção (u_configman, uma linha); sem linha valem estes valores, como na LandeiroMaui.
 public sealed record ConfigManutencao(
     int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false,
-    bool ExtExigeDoc = true, bool ComprasFichaInt = true);
+    bool ExtExigeDoc = true, bool ComprasFichaInt = true,
+    // Colunas do backoffice do Landeiro (só se lêem, nunca se gravam aqui): início do plano, limite de atraso em meses
+    // (0 = sem limite) e se a regularização manual está ligada. Sem início (ano < 2000) vale a regra antiga.
+    DateTime DataInicio = default, int MesesRegularizar = 12, bool Regularizacao = false)
+{
+    public bool TemInicio => DataInicio.Year >= 2000;
+}
+
+public enum DecisaoGeracao { Gerar, PorRegularizar, SemPeriodicidade }
+
+// Data da planeada a criar (só com Gerar); Devia = última feita + 1 período (null sem histórico).
+public readonly record struct DecisaoPlaneada(DecisaoGeracao Decisao, DateTime Data, DateTime? Devia);
 
 // Regras copiadas da LandeiroMaui (Helpers/ManutencaoRegras e PeriodicidadeHelper) para as duas apps tratarem as fichas da mesma forma.
 public static class RegrasManutencao
 {
     public const string TipoVeiculos = "Veículos";
+
+    // Equipamento parado: não gera planeadas (u_equip.status).
+    public const string StatusForaServico = "Fora de Serviço";
 
     // Há números de ficha errados que não entram no "próximo número do ano".
     public const decimal LimiteNumeroFicha = 1_000_000m;
@@ -41,6 +55,57 @@ public static class RegrasManutencao
             UnidadePeriodo.Meses => ultima.Date.AddMonths(intervalo),
             _ => null
         };
+    }
+
+    // Primeira data do calendário (âncora + k períodos, k ≥ 1) que não é antes de hoje.
+    public static DateTime? ProximaNoCalendario(DateTime ancora, UnidadePeriodo unidade, int intervalo, DateTime hoje)
+    {
+        if (intervalo <= 0 || unidade == UnidadePeriodo.Nenhum || ancora.Year <= 1900) return null;
+        hoje = hoje.Date;
+        for (var k = 1; k <= 20000; k++)
+        {
+            var d = unidade == UnidadePeriodo.Dias ? ancora.Date.AddDays((double)k * intervalo) : ancora.Date.AddMonths(k * intervalo);
+            if (d >= hoje) return d;
+        }
+        return null;
+    }
+
+    // Mesma regra do Landeiro (PeriodicidadeHelper.Decidir, 09/11/2026): devia = última + 1 período. Por chegar → nessa data;
+    // já passou há no máximo limiteMeses → hoje (fica em atraso); sem histórico ou mais atrasada → por regularizar. Limite 0 = sem limite.
+    public static DecisaoPlaneada Decidir(DateTime? ultima, UnidadePeriodo unidade, int intervalo, DateTime hoje, int limiteMeses)
+    {
+        if (unidade == UnidadePeriodo.Nenhum || intervalo <= 0) return new(DecisaoGeracao.SemPeriodicidade, default, null);
+        if (ultima is not { } u || u.Year <= 1900) return new(DecisaoGeracao.PorRegularizar, default, null);
+        hoje = hoje.Date;
+        var devia = ProximaDepoisDaUltima(u, unidade, intervalo)!.Value;
+        if (devia >= hoje) return new(DecisaoGeracao.Gerar, devia, devia);
+        if (limiteMeses > 0 && devia < hoje.AddMonths(-limiteMeses)) return new(DecisaoGeracao.PorRegularizar, default, devia);
+        return new(DecisaoGeracao.Gerar, hoje, devia);
+    }
+
+    // Com o início do plano: com registo desde o início vale Decidir; sem registo o calendário parte do início, não recupera
+    // datas passadas e a planeada fica na próxima data do calendário (nunca em atraso nem por regularizar).
+    public static DecisaoPlaneada DecidirComInicio(DateTime? ultima, DateTime inicio, UnidadePeriodo unidade, int intervalo, DateTime hoje, int limiteMeses)
+    {
+        if (ultima is { } u && u.Year > 1900 && u.Date >= inicio.Date) return Decidir(ultima, unidade, intervalo, hoje, limiteMeses);
+        if (unidade == UnidadePeriodo.Nenhum || intervalo <= 0) return new(DecisaoGeracao.SemPeriodicidade, default, null);
+        var proxima = ProximaNoCalendario(inicio, unidade, intervalo, hoje);
+        return proxima.HasValue ? new(DecisaoGeracao.Gerar, proxima.Value, proxima.Value) : new(DecisaoGeracao.SemPeriodicidade, default, null);
+    }
+
+    // Decisão da geração automática: com início do plano segue o Landeiro; sem ele mantém a regra antiga (sem histórico ou atrasada → hoje).
+    // Por regularizar só se a regularização do backoffice estiver ligada; senão não fica nada à espera de ninguém e gera para hoje.
+    public static DecisaoPlaneada DecidirGeracao(DateTime? ultima, UnidadePeriodo unidade, int intervalo, DateTime hoje, ConfigManutencao cfg)
+    {
+        if (unidade == UnidadePeriodo.Nenhum || intervalo <= 0) return new(DecisaoGeracao.SemPeriodicidade, default, null);
+        hoje = hoje.Date;
+        if (!cfg.TemInicio)
+        {
+            var prox = ultima.HasValue ? ProximaDepoisDaUltima(ultima.Value, unidade, intervalo) : null;
+            return new(DecisaoGeracao.Gerar, prox is { } p && p > hoje ? p : hoje, prox);
+        }
+        var d = DecidirComInicio(ultima, cfg.DataInicio, unidade, intervalo, hoje, cfg.MesesRegularizar);
+        return d.Decisao == DecisaoGeracao.PorRegularizar && !cfg.Regularizacao ? new(DecisaoGeracao.Gerar, hoje, d.Devia) : d;
     }
 
     public static decimal ProximoNumeroFicha(IEnumerable<decimal> numerosDoAno)

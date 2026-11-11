@@ -62,7 +62,7 @@
                         <span class="intervencao-desc">@(m.Perfil == Perfil.Supervisor ? "Supervisor" : "Operador")@(m.PinProvisorio ? " · PIN por escolher" : "")@(m.Ativo ? "" : " · Inativo")@(m.Tecno > 0 ? $" · PHC {m.Tecno}" : " · sem número do PHC")</span>
                         @if (m.Perfil == Perfil.Operador && m.Ativo)
                         {
-                            <button type="button" class="btn-texto intervencao-data" disabled="@_ocupado" @onclick="() => NovoPinAsync(m)">Novo PIN</button>
+                            <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => NovoPinAsync(m)">Novo PIN</button>
                         }
                         @if (_aEditar == m.Codigo)
                         {

@@ -30,7 +30,7 @@ Imprime o PIN (para entregar à pessoa) e o `pinhash` (para gravar na tabela). O
 
 ## Regras
 
-- Entra-se só com o PIN: 4 a 6 números (os gerados pelo sistema têm 4), sem sequências óbvias (0000, 1234, 4321, 123456...).
+- Entra-se só com o PIN: 4 números (o login ainda aceita PINs antigos de 4 a 6), sem sequências óbvias (0000, 1234, 4321, 123456...).
 - O supervisor cria o operador e a app mostra-lhe o PIN provisório uma única vez. O mesmo ao repor um PIN.
 - Com PIN provisório a pessoa só consegue escolher o PIN definitivo.
 - O supervisor não repõe o PIN de outro supervisor.
@@ -53,4 +53,4 @@ Imprime o PIN (para entregar à pessoa) e o `pinhash` (para gravar na tabela). O
 
 ## Limite conhecido
 
-Com entrada só por PIN não é possível bloquear uma pessoa em concreto. A proteção é por limites de tentativas por endereço e no total (valores acima). Um atacante com muitos endereços pode, a longo prazo, acertar num PIN válido; por isso os PINs têm de 4 a 6 números (menos de 6 enfraquece esta proteção) e os óbvios são recusados.
+Com entrada só por PIN não é possível bloquear uma pessoa em concreto. A proteção é por limites de tentativas por endereço e no total (valores acima). Um atacante com muitos endereços pode, a longo prazo, acertar num PIN válido; por isso os limites de tentativas são a proteção principal (4 números são poucos) e os óbvios são recusados.

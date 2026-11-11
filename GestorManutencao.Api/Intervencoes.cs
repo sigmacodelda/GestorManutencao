@@ -67,7 +67,7 @@ public sealed record PedidoAtribuicao(int? Tecno);
 
 public sealed record PedidoAdicionais(IReadOnlyList<int>? Tecnos);
 
-public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros);
+public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros, int PorRegularizar = 0);
 
 public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, Viatura, InstrucaoObsoleta }
 

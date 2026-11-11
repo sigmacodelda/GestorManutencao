@@ -55,7 +55,7 @@ public sealed class PinOpcoes
 public static partial class RegrasPin
 {
     public const int Minimo = 4;
-    public const int Maximo = 6;
+    public const int Maximo = 4;
 
     [GeneratedRegex(@"^\d{4,6}$")]
     private static partial Regex QuatroASeisDigitos();
@@ -65,8 +65,9 @@ public static partial class RegrasPin
     // Recusa os PINs que qualquer pessoa tentaria primeiro: 0000, 1234, 4321, 123456...
     public static bool Aceitavel(string? pin)
     {
-        if (!FormatoValido(pin)) return false;
-        var passos = pin!.Zip(pin.Skip(1), (a, b) => b - a).ToList();
+        // O login ainda aceita 4 a 6 números (PINs antigos); um PIN novo tem sempre 4.
+        if (!FormatoValido(pin) || pin!.Length != Maximo) return false;
+        var passos = pin.Zip(pin.Skip(1), (a, b) => b - a).ToList();
         return !passos.All(p => p == 0) && !passos.All(p => p == 1) && !passos.All(p => p == -1);
     }
 

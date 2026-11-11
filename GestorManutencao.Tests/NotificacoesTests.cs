@@ -299,7 +299,7 @@ public class NotificacaoServicoTests
     [Fact]
     public async Task Primeira_verificacao_enche_o_centro_sem_avisar_e_depois_so_o_novo_avisa()
     {
-        var (servico, fichas, sistema, naApp) = await CriarAsync("482913", new ArmazemAvisosMemoria());
+        var (servico, fichas, sistema, naApp) = await CriarAsync("4829", new ArmazemAvisosMemoria());
 
         await servico.VerificarAsync();
         Assert.NotEmpty(servico.Lista);
@@ -322,7 +322,7 @@ public class NotificacaoServicoTests
     [Fact]
     public async Task Sem_aviso_do_sistema_a_app_mostra_a_faixa()
     {
-        var (servico, fichas, _, naApp) = await CriarAsync("482913", new ArmazemAvisosMemoria(), sistemaMostra: false);
+        var (servico, fichas, _, naApp) = await CriarAsync("4829", new ArmazemAvisosMemoria(), sistemaMostra: false);
         await servico.VerificarAsync();
         await fichas.AtribuirAsync("T3", 101);
         await servico.VerificarAsync();
@@ -333,11 +333,11 @@ public class NotificacaoServicoTests
     public async Task Lista_e_chaves_vistas_sobrevivem_ao_fecho_da_app()
     {
         var armazem = new ArmazemAvisosMemoria();
-        var (primeiro, fichas, _, _) = await CriarAsync("482913", armazem);
+        var (primeiro, fichas, _, _) = await CriarAsync("4829", armazem);
         await primeiro.VerificarAsync();
         var total = primeiro.Lista.Count;
 
-        var (segundo, _, sistema, _) = await CriarAsync("482913", armazem, fichas);
+        var (segundo, _, sistema, _) = await CriarAsync("4829", armazem, fichas);
         await segundo.VerificarAsync();
 
         Assert.Equal(total, segundo.Lista.Count);
@@ -347,7 +347,7 @@ public class NotificacaoServicoTests
     [Fact]
     public async Task Supervisor_ve_fichas_por_validar_e_sem_sessao_nao_faz_nada()
     {
-        var (servico, _, _, _) = await CriarAsync("795316", new ArmazemAvisosMemoria());
+        var (servico, _, _, _) = await CriarAsync("7953", new ArmazemAvisosMemoria());
         await servico.VerificarAsync();
         Assert.Contains(servico.Lista, e => e.Aviso.Tipo == TipoAviso.PorValidar);
 
@@ -361,7 +361,7 @@ public class NotificacaoServicoTests
     public async Task Sem_api_nao_rebenta_nem_marca_a_linha_de_base()
     {
         var sessao = new SessaoService(new DevAutenticacaoService(), new ArmazemSessaoMemoria());
-        await sessao.EntrarAsync("482913");
+        await sessao.EntrarAsync("4829");
         var servico = new NotificacaoService(sessao, new IntervencoesIndisponiveis(), new ArmazemAvisosMemoria(), new AvisoSistemaNenhum(), new CicloVidaApp());
 
         await servico.VerificarAsync();

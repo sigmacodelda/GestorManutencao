@@ -348,7 +348,7 @@ public class OfflineRobustezTests
     {
         var c = new Cenario();
         var sessao = new SessaoService(new DevAutenticacaoService(), new ArmazemSessaoMemoria());
-        await sessao.EntrarAsync("795316");
+        await sessao.EntrarAsync("7953");
         await c.Fotos.GuardarAsync("L-orfa", [3]);
         c.Rede.Definir(false);
         var gestor = new GestorOffline(sessao, c.Sinc, c.Atualizador, c.Mc, c.Fila, c.Dono, c.Rede, c.Svc);

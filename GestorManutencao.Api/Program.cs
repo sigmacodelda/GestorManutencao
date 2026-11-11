@@ -55,8 +55,8 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn
     if (!emDesenvolvimento) throw new InvalidOperationException("ConnectionStrings:PHCConn não está configurada.");
     builder.Services.AddSingleton<IRepositorioUtilizadores>(sp => new RepositorioUtilizadoresMemoria(
     [
-        (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), sp.GetRequiredService<PinHasher>().Hash("482913")),
-        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("795316"))
+        (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), sp.GetRequiredService<PinHasher>().Hash("4829")),
+        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("7953"))
     ]));
     builder.Services.AddSingleton<IRepositorioIntervencoes, RepositorioIntervencoesMemoria>();
 }

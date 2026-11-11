@@ -1,0 +1,25 @@
+# Intervenção de 10/11/2026: Gestor de Manutenção
+
+- Tornei mais rápida a lista de intervenções no telemóvel: a cache local passou a gravar as fichas de uma só vez.
+- Acrescentei técnicos adicionais nas fichas, definidos pelo supervisor, com nomes na API e suporte offline.
+- A `LigacaoPhc` passou a obter a ligação ao PHC cifrada.
+- Na app Android pus câmara, ícone e splash em PNG.
+- Implementei a paridade com o backoffice do Landeiro (PAT-18077): os 16 itens da lista, em 4 fases.
+- Equipamentos: criar e editar, histórico de estado e tornar obsoleto, com confirmação do número de planeadas a cancelar.
+- Criei os ecrãs e endpoints de gestão de instruções, tarefas e periodicidades, só para o Supervisor e só online.
+- Ficha completa: edição, cancelar, ficha manual, ficha antiga, mão de obra interna, material, compras, externos e totais.
+- Listas com filtros e KPIs (todas as fichas, equipamentos, planeadas), com geração diária das planeadas ao abrir o ecrã.
+- Contadores do menu com a mesma regra do KPI de fora de prazo, com teste que compara os dois.
+- Reforcei segurança e robustez: concorrência por token/versão, `nolock` nas leituras, transações (sem hints de bloqueio), 403 ao Operador e custos ocultos ao Operador.
+- Acrescentei cerca de 4.000 linhas de testes novos.
+- Retirei a opção de material obrigatório: concluir nunca é recusado por falta de material e deixou de ser preciso criar o campo `matobrig` no PHC.
+- Build sem erros e 692 testes a passar; verifiquei na `testes_land2` as escritas de gestão e as leituras alteradas.
+- Separei técnico e supervisor: o técnico só regista avarias (a API força Curativa, Interna e sem periodicidade, e recusa preventivas com 403).
+- O técnico deixa de ver a ficha completa e de escolher horas: o início fica gravado ao começar e o fim é "agora".
+- "Nova ficha" fica só para o supervisor; "Registar avaria" aceita `?equipamento=` e vem já preenchido a partir da ficha do equipamento.
+- Criei o circuito de testes ponta a ponta (`Testes-Circuito/`): API (supervisor e técnico) e app Windows real em simultâneo, com Playwright.
+- O circuito corre em modo memória ou contra a `testes_land2`, guarda resultados e capturas, e nunca imprime os PINs.
+- O `MauiProgram` ganhou um desvio só em DEBUG/Windows que aceita `GESTOR_API_URL` apenas se for loopback.
+- Por fechar: a separação técnico/supervisor, o circuito de testes e a retirada dos hints de bloqueio estão em stage, ainda sem commit.
+- Por fechar: o SQL novo da paridade não correu em nenhuma base, e os ecrãs novos não foram vistos em Android.
+- Por confirmar com o Landeiro: o "aviso" da periodicidade grava em `analise`, a nova versão de instrução nasce em branco e a data da ficha concluída é o dia em que iniciou.
