@@ -33,9 +33,6 @@
     }
     else
     {
-        <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="GerarAsync">
-            <Icone Nome="calendar" /><span>Gerar planeadas</span>
-        </button>
         @if (_avisoGeracao is not null)
         {
             <p class="ficha-texto" role="status">@_avisoGeracao</p>
@@ -273,20 +270,6 @@
             await CarregarAsync();
             _erro = "Não foi possível guardar. Tente outra vez.";
         }
-        finally { _ocupado = false; }
-    }
-
-    private async Task GerarAsync()
-    {
-        _ocupado = true; _aviso = _erro = null;
-        try
-        {
-            var r = await Intervencoes.GerarPlaneadasAsync();
-            _aviso = r.Criadas == 0 ? "Está tudo gerado: não há planeadas novas." : $"Criadas {r.Criadas} planeadas novas.";
-            if (r.Erros > 0) _erro = $"{r.Erros} não foram geradas. Tente outra vez.";
-            await CarregarAsync();
-        }
-        catch (Exception) { _erro = "Não foi possível gerar as planeadas. Tente outra vez."; }
         finally { _ocupado = false; }
     }
 

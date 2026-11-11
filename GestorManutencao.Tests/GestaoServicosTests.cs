@@ -66,8 +66,6 @@ public class FormEquipamentoTests
         Assert.Null(PassosEquipamento.Validar(0, f));
         Assert.Equal(-1, PassosEquipamento.PrimeiroComErro(f));
 
-        f.Tipo = "Veículos";
-        Assert.NotNull(PassosEquipamento.Validar(0, f));
         f.Tipo = "";
         f.Ano = 10000;
         Assert.NotNull(PassosEquipamento.Validar(1, f));
@@ -114,17 +112,6 @@ public class FormEquipamentoTests
         Assert.Null(e.Estado);
         f.Estado = "Fora de Serviço";
         Assert.Equal("Fora de Serviço", f.ParaEdicao(antigo)!.Estado);
-    }
-
-    [Theory]
-    [InlineData("Veículos")]
-    [InlineData("Veiculos")]
-    [InlineData("VEÍCULOS")]
-    [InlineData(" veiculos ")]
-    public void Viaturas_sem_distinguir_acentos_nem_maiusculas(string tipo)
-    {
-        Assert.True(RegrasGestaoUi.EhViatura(tipo));
-        Assert.NotNull(PassosEquipamento.Validar(0, new FormEquipamento { Ref = "R", Design = "D", Tipo = tipo }));
     }
 
     [Fact]
@@ -177,7 +164,6 @@ public class GestaoDevServiceTests
         Assert.Single(await s.ListarInstrucoesAsync(e.Id));
         Assert.Single(await s.ListarHistoricoAsync(e.Id));
         await Assert.ThrowsAsync<InvalidOperationException>(() => s.GravarEquipamentoAsync(null, new EdicaoEquipamento(Ref: "n-1", Design: "Outra")));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => s.GravarEquipamentoAsync(null, new EdicaoEquipamento(Ref: "V-1", Design: "Carrinha", Tipo: "Veículos")));
     }
 
     [Fact]

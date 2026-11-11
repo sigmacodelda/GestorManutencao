@@ -112,12 +112,10 @@ public class GestaoApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Viaturas_sao_recusadas_e_os_dados_sao_validados()
+    public async Task Os_dados_sao_validados()
     {
         var chefe = await ComoAsync(PinChefe);
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await chefe.PostAsJsonAsync("/gestao/equipamentos", Nova() with { Tipo = "Veículos" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await chefe.PutAsJsonAsync("/gestao/equipamentos/E1", new PedidoEquipamento(Tipo: " veículos "))).StatusCode);
         foreach (var invalido in new[]
         {
             new PedidoEquipamento(Design: "x"), new PedidoEquipamento(Ref: "x"), Nova(new string('a', 31)), Nova() with { Estado = "Parado" }, Nova() with { Email = "sem-arroba" },
@@ -322,7 +320,7 @@ public class GestaoApiTests : IDisposable
     // ---------------------------------------------------------------- Viaturas, IDOR, avisos e obsoleto sem planeadas
 
     [Fact]
-    public async Task Viaturas_ficam_fora_da_gestao_em_todos_os_caminhos_com_ou_sem_acentos()
+    public async Task Viaturas_ficam_fora_da_gestao_em_todos_os_caminhos()
     {
         var chefe = await ComoAsync(PinChefe);
 
@@ -342,8 +340,6 @@ public class GestaoApiTests : IDisposable
         Assert.DoesNotContain(await Ler<List<EquipamentoDto>>(await chefe.GetAsync("/equipamentos")), e => e.Id == "E8");
         Assert.DoesNotContain(await Ler<List<EquipamentoDto>>(await chefe.GetAsync("/equipamentos?leve=true&q=carrinha")), e => e.Id == "E8");
         Assert.DoesNotContain("Veículos", (await Ler<OpcoesEquipamentoDto>(await chefe.GetAsync("/gestao/opcoes"))).Tipos);
-        foreach (var tipo in new[] { "Veiculos", "VEÍCULOS", " veículos " })
-            Assert.Equal(HttpStatusCode.BadRequest, (await chefe.PostAsJsonAsync("/gestao/equipamentos", Nova() with { Tipo = tipo })).StatusCode);
     }
 
     [Fact]

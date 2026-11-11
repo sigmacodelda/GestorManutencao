@@ -18,7 +18,7 @@ public sealed partial class SqlRepositorioIntervencoes
                isnull(f.mointerna, 0), isnull(f.moexterna, 0), isnull(f.matinterno, 0), isnull(f.matexterno, 0), isnull(f.totmo, 0), isnull(f.totref, 0), isnull(f.valobs, ''),
                convert(varchar(8), f.usrdata, 112) + isnull(f.usrhora, '')
         from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
-        where f.u_fichaintstamp = @id and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        where f.u_fichaintstamp = @id and f.obsoleto = 0 and e.tipoequip = 1
         """;
 
     // Só grava o que mudou (o SET vem de SetsFicha). Protege o técnico lido (reatribuição concorrente) e a versão lida (usrdata + usrhora): se diferirem, não grava.
@@ -45,18 +45,18 @@ public sealed partial class SqlRepositorioIntervencoes
     // Como a avaria, mas com tipo, tipo de manutenção e periodicidade; a periodicidade tem de ser de uma tarefa do equipamento.
     private const string SqlFichaManual =
         """
-        insert into u_fichaint (u_fichaintstamp, no, ref, design, tipointerv, tipomanut, periodo, problema, data, estado, u_equipstamp, hini, tecno, tecnome,
+        insert into u_fichaint (u_fichaintstamp, no, ref, design, tipointerv, tipomanut, periodo, problema, data, estado, u_equipstamp, hini, tecno, tecnome, opid,
                                 ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        select @stamp, @no, left(e.ref, 20), left(e.design, 45), @tipo, @tipomanut, @periodo, @problema, @dia, 'EmCurso', e.u_equipstamp, @agora, @tecno, @tecnome,
+        select @stamp, @no, left(e.ref, 20), left(e.design, 45), @tipo, @tipomanut, @periodo, @problema, @dia, 'EmCurso', e.u_equipstamp, @agora, @tecno, @tecnome, @opid,
                @codigo, @dia, @hora, @codigo, @dia, @hora
         from u_equip e with (nolock)
-        where e.u_equipstamp = @equipamento and e.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        where e.u_equipstamp = @equipamento and e.obsoleto = 0 and e.tipoequip = 1
           and (@periodo = '' or exists (select 1 from u_itmanutli l with (nolock) join u_itmanut i with (nolock) on i.u_itmanutstamp = l.u_itmanutstamp
                                         where i.u_equipstamp = e.u_equipstamp and i.obsoleto = 0 and ltrim(rtrim(l.periodo)) = @periodo))
         """;
 
     private const string SqlEquipamentoValido =
-        "select count(*) from u_equip with (nolock) where u_equipstamp = @equipamento and obsoleto = 0 and isnull(tipo, '') <> @veiculos";
+        "select count(*) from u_equip with (nolock) where u_equipstamp = @equipamento and obsoleto = 0 and tipoequip = 1";
 
     private const string SqlTempos = "select u_tempintervstamp, no, responsavel, tempo, custo from u_tempinterv with (nolock) where u_fichaintstamp = @id order by ousrdata, ousrhora";
 
@@ -111,7 +111,7 @@ public sealed partial class SqlRepositorioIntervencoes
     private const string SqlContarPorValidar =
         """
         select count(*) from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
-        where f.estado = 'Concluida' and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        where f.estado = 'Concluida' and f.obsoleto = 0 and e.tipoequip = 1
         """;
 
     private static decimal Dec(SqlDataReader r, int i) => Convert.ToDecimal(r.GetValue(i), CultureInfo.InvariantCulture);
@@ -136,7 +136,6 @@ public sealed partial class SqlRepositorioIntervencoes
     {
         await using var cmd = new SqlCommand(SqlDetalhe, conn);
         Texto(cmd, "@id", 25, id);
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct) ? LerFicha(r) : null;
     }
@@ -283,14 +282,11 @@ public sealed partial class SqlRepositorioIntervencoes
         var problema = (pedido.Problema ?? "").Trim();
         if (pedido.OpId is not null)
         {
-            var marcador = RegrasIntervencao.Marcador(pedido.OpId);
             await using var procura = new SqlCommand(SqlAvariaPorOp, conn);
             Numero(procura, "@tecno", tecnico.Tecno, 5);
-            procura.Parameters.Add("@tam", SqlDbType.Int).Value = marcador.Length;
-            Texto(procura, "@marcador", 40, marcador);
+            Texto(procura, "@opid", RegrasIntervencao.MaxOpId, pedido.OpId);
             if (await procura.ExecuteScalarAsync(ct) is string existente && await LerUmaAsync(conn, existente.Trim(), ct) is { } ficha)
                 return (ResultadoIntervencao.Ok, ficha);
-            problema += marcador;
         }
 
         var agora = await AgoraAsync(conn, ct);
@@ -304,7 +300,7 @@ public sealed partial class SqlRepositorioIntervencoes
         Texto(cmd, "@tipomanut", RegrasManutencao.TamanhoTipoFicha, RegrasFicha.NormalizarTipoManut(pedido.TipoManut) ?? RegrasManutencao.TipoInterna);
         Texto(cmd, "@periodo", RegrasManutencao.TamanhoPeriodo, RegrasManutencao.Cortar(pedido.Periodicidade, RegrasManutencao.TamanhoPeriodo));
         Texto(cmd, "@problema", RegrasManutencao.TamanhoProblema, problema);
-        Veiculos(cmd);
+        Texto(cmd, "@opid", RegrasIntervencao.MaxOpId, pedido.OpId ?? "");
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
         Texto(cmd, "@tecnome", RegrasManutencao.TamanhoNomeTecnico, tecnico.Nome);
         Auditoria(cmd, tecnico.Codigo, agora);
@@ -313,7 +309,6 @@ public sealed partial class SqlRepositorioIntervencoes
         // Sem linha: ou o equipamento não serve (não existe, obsoleto, viatura) ou a periodicidade não é de uma tarefa dele.
         await using var existe = new SqlCommand(SqlEquipamentoValido, conn);
         Texto(existe, "@equipamento", 25, pedido.EquipamentoId!);
-        Veiculos(existe);
         return Convert.ToInt32(await existe.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture) > 0
             ? (ResultadoIntervencao.PeriodicidadeInvalida, null)
             : (ResultadoIntervencao.NaoExiste, null);
@@ -473,7 +468,6 @@ public sealed partial class SqlRepositorioIntervencoes
         var atrasadas = 0;
         await using (var cmd = new SqlCommand(SqlPlaneadas, conn))
         {
-            Veiculos(cmd);
             await using var r = await cmd.ExecuteReaderAsync(ct);
             var lidas = 0;
             while (lidas++ < 500 && await r.ReadAsync(ct))
@@ -483,7 +477,6 @@ public sealed partial class SqlRepositorioIntervencoes
             }
         }
         await using var contar = new SqlCommand(SqlContarPorValidar, conn);
-        Veiculos(contar);
         return new ContadoresMenuDto(atrasadas, Convert.ToInt32(await contar.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture));
     });
 }

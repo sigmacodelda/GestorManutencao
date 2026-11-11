@@ -68,7 +68,7 @@ public static class RegrasFichaDetalhe
         string.IsNullOrWhiteSpace(f.EquipamentoId) ? "Escolha o equipamento."
         : f.TipoManut is not ("Interna" or "Externa") ? "Escolha se a manutenção é interna ou externa."
         : (f.Periodicidade ?? "").Trim().Length > MaxPeriodo ? $"A periodicidade tem de ter no máximo {MaxPeriodo} letras."
-        : (f.Problema ?? "").Trim().Length > RegrasIntervencao.MaxAnomaliaComOpId ? $"Escreva menos: no máximo {RegrasIntervencao.MaxAnomaliaComOpId} letras."
+        : (f.Problema ?? "").Trim().Length > RegrasIntervencao.MaxAnomalia ? $"Escreva menos: no máximo {RegrasIntervencao.MaxAnomalia} letras."
         : null;
 
     public static string? ValidarEdicao(EdicaoFicha e)

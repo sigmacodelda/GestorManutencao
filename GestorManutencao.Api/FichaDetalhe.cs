@@ -116,8 +116,8 @@ public static class RegrasFicha
         : p.Tipo is { } t && !Enum.IsDefined(t) ? "Tipo de intervenção inválido."
         : !string.IsNullOrWhiteSpace(p.TipoManut) && NormalizarTipoManut(p.TipoManut) is null ? "O tipo de manutenção é Interna ou Externa."
         : (p.Periodicidade ?? "").Trim().Length > RegrasManutencao.TamanhoPeriodo ? $"A periodicidade tem de ter no máximo {RegrasManutencao.TamanhoPeriodo} letras."
-        : (p.Problema ?? "").Trim().Length > (p.OpId is null ? RegrasManutencao.TamanhoProblema : RegrasManutencao.TamanhoProblema - RegrasIntervencao.Marcador(p.OpId).Length)
-            ? $"O problema tem de ter no máximo {(p.OpId is null ? RegrasManutencao.TamanhoProblema : RegrasManutencao.TamanhoProblema - RegrasIntervencao.Marcador(p.OpId).Length)} letras."
+        : (p.Problema ?? "").Trim().Length > RegrasManutencao.TamanhoProblema
+            ? $"O problema tem de ter no máximo {RegrasManutencao.TamanhoProblema} letras."
         : null;
 
     public static string? ValidarTempo(int? tecno, decimal? horas, decimal? custoHora) =>

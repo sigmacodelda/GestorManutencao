@@ -287,7 +287,7 @@ public class OfflineTests
     public async Task Avaria_valida_o_maximo_com_opId()
     {
         var c = new Cenario();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.RegistarAvariaAsync("E1", new string('a', RegrasIntervencao.MaxAnomaliaComOpId + 1)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.RegistarAvariaAsync("E1", new string('a', RegrasIntervencao.MaxAnomalia + 1)));
         Assert.Empty(c.Remoto.Chamadas);
     }
 

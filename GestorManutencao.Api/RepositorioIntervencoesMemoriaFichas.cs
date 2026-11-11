@@ -126,7 +126,7 @@ public sealed partial class RepositorioIntervencoesMemoria
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> CriarFichaManualAsync(PedidoFichaManual pedido, TecnicoAtual tecnico, CancellationToken ct)
     {
-        var e = Equipamentos.FirstOrDefault(x => x.Id == pedido.EquipamentoId && !x.Obsoleto && !RegrasGestao.EhViatura(x.Tipo));
+        var e = Equipamentos.FirstOrDefault(x => x.Id == pedido.EquipamentoId && !x.Obsoleto && Gerido(x));
         if (e is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
         var periodo = RegrasManutencao.Cortar(pedido.Periodicidade, RegrasManutencao.TamanhoPeriodo);
         if (periodo.Length > 0 && !Tarefas.Any(t => t.EquipamentoId == e.Id && !InstrucaoObsoleta(t.InstrucaoId) && string.Equals(t.Periodo, periodo, StringComparison.OrdinalIgnoreCase)))

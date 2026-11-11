@@ -37,10 +37,6 @@ public static class RegrasGestaoUi
 
     public static readonly string[] Estados = ["Em Serviço", "Fora de Serviço"];
 
-    // "Veículos", "veiculos" e "VEÍCULOS" são todos viaturas (sem distinguir acentos nem maiúsculas), como no servidor.
-    public static bool EhViatura(string? tipo) =>
-        string.Compare((tipo ?? "").Trim(), "Veículos", System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.CompareOptions.IgnoreNonSpace | System.Globalization.CompareOptions.IgnoreCase) == 0;
 
     // O texto da periodicidade da tarefa, cortado ao tamanho da coluna (a u_periocid tem textos maiores do que o campo da tarefa), sem repetidos.
     public static IReadOnlyList<string> PeriodosParaEscolher(IEnumerable<Periodicidade> periodicidades) =>
@@ -137,7 +133,6 @@ public static class PassosEquipamento
             case 0:
                 if (string.IsNullOrWhiteSpace(f.Ref)) return "Indique o nº da infraestrutura.";
                 if (string.IsNullOrWhiteSpace(f.Design)) return "Indique a designação.";
-                if (RegrasGestaoUi.EhViatura(f.Tipo)) return "As viaturas não são geridas neste módulo.";
                 return Tam(f.Ref, RegrasGestaoUi.MaxRef, "O nº") ?? Tam(f.Design, RegrasGestaoUi.MaxDesign, "A designação") ?? Tam(f.Tipo, RegrasGestaoUi.MaxTipo, "O tipo")
                     ?? Tam(f.Marca, RegrasGestaoUi.MaxMarca, "A marca") ?? Tam(f.Modelo, RegrasGestaoUi.MaxModelo, "O modelo") ?? Tam(f.Serie, RegrasGestaoUi.MaxSerie, "O nº de série")
                     ?? Tam(f.Local, RegrasGestaoUi.MaxLocal, "O local");

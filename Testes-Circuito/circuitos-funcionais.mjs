@@ -305,10 +305,6 @@ await circuito('04 Planeadas (supervisor)', async () => {
     await sel.selectOption({ label: alvo });
     await page.getByText(/atribuída a/).first().waitFor({ timeout: 20000 });
   });
-  await passo('"Gerar planeadas" corre sem erro', async () => {
-    await clicar(botao(page, 'Gerar planeadas'), 'Gerar planeadas');
-    await page.getByText(/Criadas \d+ planeadas novas\.|Está tudo gerado/).first().waitFor({ timeout: 60000 });
-  });
 });
 
 await circuito('05 Todas as fichas, Equipamentos e navegação (supervisor)', async () => {

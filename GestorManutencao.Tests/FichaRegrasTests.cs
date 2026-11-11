@@ -248,8 +248,8 @@ public class RegrasFichaTests
         Assert.NotNull(RegrasFicha.ValidarFichaManual(new PedidoFichaManual("E1", TipoManut: "Mista")));
         Assert.NotNull(RegrasFicha.ValidarFichaManual(new PedidoFichaManual("E1", Periodicidade: new string('a', 21))));
         Assert.NotNull(RegrasFicha.ValidarFichaManual(new PedidoFichaManual("E1", Problema: new string('a', 201))));
-        Assert.NotNull(RegrasFicha.ValidarFichaManual(new PedidoFichaManual("E1", Problema: new string('a', 170), OpId: new string('a', 32))));
-        Assert.Null(RegrasFicha.ValidarFichaManual(new PedidoFichaManual("E1", Problema: new string('a', RegrasIntervencao.MaxAnomaliaComOpId), OpId: new string('a', 32))));
+        Assert.Null(RegrasFicha.ValidarFichaManual(new PedidoFichaManual("E1", Problema: new string('a', 170), OpId: new string('a', 32))));
+        Assert.Null(RegrasFicha.ValidarFichaManual(new PedidoFichaManual("E1", Problema: new string('a', RegrasIntervencao.MaxAnomalia), OpId: new string('a', 32))));
         Assert.NotNull(RegrasFicha.ValidarFichaManual(new PedidoFichaManual("E1", OpId: "curto")));
     }
 

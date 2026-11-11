@@ -41,7 +41,7 @@ O servidor ganha sempre. Se recusar um registo feito sem rede (por exemplo, a fi
 - Tudo o que é do supervisor: validar, devolver, atribuir, gerar planeadas, configuração e "todas as fichas".
 - A regra "exige material" só se sabe quando o registo chega ao servidor. Se o técnico concluir sem material e a regra estiver ativa, a conclusão vira conflito ("por rever").
 - Equipamentos que nunca foram guardados no telemóvel não aparecem na pesquisa de avaria sem rede. O ecrã avisa e pede para tentar quando houver rede.
-- A avaria registada sem rede fica com um identificador local até ser criada no servidor; o texto tem no máximo 162 letras (o servidor junta-lhe um identificador da operação).
+- A avaria registada sem rede fica com um identificador local até ser criada no servidor; o texto tem no máximo 200 letras. O identificador da operação (anti-duplicado) fica no campo `opid` da ficha no PHC, não no texto.
 
 ## Ao sair da conta
 

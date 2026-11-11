@@ -21,7 +21,6 @@ public readonly record struct DecisaoPlaneada(DecisaoGeracao Decisao, DateTime D
 // Regras copiadas da LandeiroMaui (Helpers/ManutencaoRegras e PeriodicidadeHelper) para as duas apps tratarem as fichas da mesma forma.
 public static class RegrasManutencao
 {
-    public const string TipoVeiculos = "Veículos";
 
     // Equipamento parado: não gera planeadas (u_equip.status).
     public const string StatusForaServico = "Fora de Serviço";

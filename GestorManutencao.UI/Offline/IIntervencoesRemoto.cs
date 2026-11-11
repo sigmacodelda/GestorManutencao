@@ -9,6 +9,6 @@ public interface IIntervencoesRemoto : IIntervencoesService, IEquipamentosServic
     // Fichas do técnico concluídas, validadas ou canceladas nos últimos dias (1 a 90).
     Task<IReadOnlyList<Intervencao>> ListarRecentesAsync(int dias, CancellationToken ct = default);
 
-    // Repetir o mesmo opId devolve a mesma ficha; com opId o texto tem no máximo RegrasIntervencao.MaxAnomaliaComOpId letras.
+    // Repetir o mesmo opId devolve a mesma ficha.
     Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, string opId, CancellationToken ct = default);
 }

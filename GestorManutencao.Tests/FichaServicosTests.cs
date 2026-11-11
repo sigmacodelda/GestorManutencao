@@ -32,7 +32,7 @@ public class RegrasFichaDetalheTests
         Assert.NotNull(RegrasFichaDetalhe.ValidarNova(new NovaFicha("")));
         Assert.NotNull(RegrasFichaDetalhe.ValidarNova(new NovaFicha("E1", TipoManut: "Mista")));
         Assert.NotNull(RegrasFichaDetalhe.ValidarNova(new NovaFicha("E1", Periodicidade: new string('a', 21))));
-        Assert.NotNull(RegrasFichaDetalhe.ValidarNova(new NovaFicha("E1", Problema: new string('a', RegrasIntervencao.MaxAnomaliaComOpId + 1))));
+        Assert.NotNull(RegrasFichaDetalhe.ValidarNova(new NovaFicha("E1", Problema: new string('a', RegrasIntervencao.MaxAnomalia + 1))));
     }
 
     [Fact]

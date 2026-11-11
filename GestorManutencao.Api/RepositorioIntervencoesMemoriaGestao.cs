@@ -47,10 +47,10 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
     {
         if (_instrucoes.Count > 0) return;
         // As viaturas ficam de fora do módulo: não há instruções para gerir.
-        foreach (var e in Equipamentos.Where(e => !RegrasGestao.EhViatura(e.Tipo))) _instrucoes.Add(new Instrucao { Id = "I-" + e.Id, EquipamentoId = e.Id, Data = Hoje });
+        foreach (var e in Equipamentos.Where(e => Gerido(e))) _instrucoes.Add(new Instrucao { Id = "I-" + e.Id, EquipamentoId = e.Id, Data = Hoje });
     }
 
-    private bool EquipamentoEViatura(string equipamentoId) => Equipamentos.FirstOrDefault(e => e.Id == equipamentoId) is { } e && RegrasGestao.EhViatura(e.Tipo);
+    private bool EquipamentoEViatura(string equipamentoId) => Equipamentos.FirstOrDefault(e => e.Id == equipamentoId) is { } e && !Gerido(e);
 
     private bool InstrucaoDeViatura(string instrucaoId) => _instrucoes.FirstOrDefault(i => i.Id == instrucaoId) is { } i && EquipamentoEViatura(i.EquipamentoId);
 
@@ -86,7 +86,7 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
         lock (Trinco())
         {
             static List<string> Distintos(IEnumerable<string> valores) => valores.Where(v => v.Length > 0).Distinct().Order().ToList();
-            var visiveis = Equipamentos.Where(e => !RegrasGestao.EhViatura(e.Tipo)).ToList();
+            var visiveis = Equipamentos.Where(e => Gerido(e)).ToList();
             return Task.FromResult(new OpcoesEquipamentoDto(Distintos(visiveis.Select(e => e.Tipo)), Distintos(visiveis.Select(e => e.Marca)), Distintos(visiveis.Select(e => e.Zona)), RegrasGestao.Estados));
         }
     }
@@ -94,13 +94,13 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
     public Task<EquipamentoGestaoDto?> ObterEquipamentoGestaoAsync(string id, CancellationToken ct)
     {
         lock (Trinco())
-            return Task.FromResult(Equipamentos.FirstOrDefault(e => e.Id == id && !RegrasGestao.EhViatura(e.Tipo)) is { } e ? Detalhe(e) : null);
+            return Task.FromResult(Equipamentos.FirstOrDefault(e => e.Id == id && Gerido(e)) is { } e ? Detalhe(e) : null);
     }
 
     public Task<int?> ContarPlaneadasEquipamentoAsync(string id, CancellationToken ct)
     {
         lock (Trinco())
-            return Task.FromResult(Equipamentos.FirstOrDefault(e => e.Id == id && !RegrasGestao.EhViatura(e.Tipo)) is { } e
+            return Task.FromResult(Equipamentos.FirstOrDefault(e => e.Id == id && Gerido(e)) is { } e
                 ? (int?)_lista.Count(f => f.D.Equipamento == e.Nome && f.D.Estado == EstadoIntervencao.Planeada)
                 : null);
     }
@@ -108,7 +108,7 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
     public Task<IReadOnlyList<HistoricoEstadoDto>?> ListarHistoricoEstadoAsync(string equipamentoId, CancellationToken ct)
     {
         lock (Trinco())
-            return Task.FromResult(Equipamentos.Any(e => e.Id == equipamentoId && !RegrasGestao.EhViatura(e.Tipo))
+            return Task.FromResult(Equipamentos.Any(e => e.Id == equipamentoId && Gerido(e))
                 ? (IReadOnlyList<HistoricoEstadoDto>?)(_historicoEstado.GetValueOrDefault(equipamentoId)?.AsEnumerable().Reverse().ToList() ?? [])
                 : null);
     }
@@ -124,7 +124,7 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
             if (novo) atual = RegrasGestao.EquipamentoVazio(Hoje);
             else
             {
-                existente = Equipamentos.FirstOrDefault(e => e.Id == id && !RegrasGestao.EhViatura(e.Tipo));
+                existente = Equipamentos.FirstOrDefault(e => e.Id == id && Gerido(e));
                 if (existente is null) return Task.FromResult(Falha<EquipamentoGestaoDto>(ResultadoIntervencao.NaoExiste));
                 atual = Detalhe(existente);
                 if (!string.IsNullOrEmpty(pedido.Versao) && pedido.Versao != atual.Versao) return Task.FromResult(Falha<EquipamentoGestaoDto>(ResultadoIntervencao.Conflito));
@@ -132,7 +132,6 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
 
             var nova = RegrasGestao.AplicarEquipamento(atual, pedido);
             if (nova.Ref.Length == 0 || nova.Design.Length == 0) return Task.FromResult(Falha<EquipamentoGestaoDto>(ResultadoIntervencao.Invalido));
-            if (RegrasGestao.EhViatura(nova.Tipo)) return Task.FromResult(Falha<EquipamentoGestaoDto>(ResultadoIntervencao.Viatura));
             if (nova.NoFornecedor > 0)
             {
                 if (Fornecedores.FirstOrDefault(f => f.No == nova.NoFornecedor) is not { } fornecedor) return Task.FromResult(Falha<EquipamentoGestaoDto>(ResultadoIntervencao.Invalido));
@@ -187,7 +186,7 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
         lock (Trinco())
         {
             GarantirInstrucoesIniciais();
-            return Task.FromResult(Equipamentos.Any(e => e.Id == equipamentoId && !RegrasGestao.EhViatura(e.Tipo))
+            return Task.FromResult(Equipamentos.Any(e => e.Id == equipamentoId && Gerido(e))
                 ? (IReadOnlyList<InstrucaoDto>?)_instrucoes.Where(i => i.EquipamentoId == equipamentoId)
                     .OrderBy(i => i.Obsoleta).ThenByDescending(i => i.Data).ThenByDescending(i => i.Versao, StringComparer.Ordinal).Select(ParaDto).ToList()
                 : null);
@@ -201,7 +200,7 @@ public sealed partial class RepositorioIntervencoesMemoria : IRepositorioGestao
             GarantirInstrucoesIniciais();
             if (id is null)
             {
-                if (!Equipamentos.Any(e => e.Id == equipamentoId && !RegrasGestao.EhViatura(e.Tipo))) return Task.FromResult(Falha<InstrucaoDto>(ResultadoIntervencao.NaoExiste));
+                if (!Equipamentos.Any(e => e.Id == equipamentoId && Gerido(e))) return Task.FromResult(Falha<InstrucaoDto>(ResultadoIntervencao.NaoExiste));
                 var nova = new Instrucao
                 {
                     Id = Guid.NewGuid().ToString("N")[..25].ToUpperInvariant(), EquipamentoId = equipamentoId!, Versao = RegrasManutencao.Cortar(pedido.Versao, RegrasGestao.Versao),

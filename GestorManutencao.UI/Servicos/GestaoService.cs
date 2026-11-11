@@ -216,7 +216,6 @@ public sealed class GestaoDevService : IGestaoService
                 Obsoleto = e.Obsoleto ?? atual.Obsoleto, ManualPdf = e.ManualPdf ?? atual.ManualPdf, Email = e.Email ?? atual.Email
             };
             if (nova.Ref.Trim().Length == 0 || nova.Design.Trim().Length == 0) throw new InvalidOperationException("Indique o nº e a designação.");
-            if (RegrasGestaoUi.EhViatura(nova.Tipo)) throw new InvalidOperationException("As viaturas não são geridas neste módulo.");
             if (_equipamentos.Any(x => x.Id != id && string.Equals(x.Ref, nova.Ref, StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException(MensagensIntervencao.Para("ref_duplicada"));
             if (nova.Obsoleto && !atual.Obsoleto)
             {

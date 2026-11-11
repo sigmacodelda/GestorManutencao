@@ -54,7 +54,7 @@ public sealed record FotoDto(string Id, string Nome, int Bytes);
 
 public sealed record FotoConteudo(string Nome, byte[] Dados);
 
-// OpId (opcional) identifica a operação para a repetição do pedido não criar outra ficha; vai gravado no fim do texto do problema.
+// OpId (opcional) identifica a operação para a repetição do pedido não criar outra ficha; vai gravado no campo opid da ficha.
 public sealed record PedidoAvaria(string? EquipamentoId, string? Anomalia, string? OpId = null);
 
 public sealed record PedidoConclusao(string? Feito, TimeOnly? Inicio, TimeOnly? Fim);
@@ -69,7 +69,7 @@ public sealed record PedidoAdicionais(IReadOnlyList<int>? Tecnos);
 
 public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros, int PorRegularizar = 0);
 
-public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, Viatura, InstrucaoObsoleta }
+public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, InstrucaoObsoleta }
 
 // O nome vai em tecnome (45); nas colunas de auditoria vai o código (30); a identidade da pessoa nas fichas é o Tecno.
 public sealed record TecnicoAtual(string Codigo, int Tecno, string Nome);
@@ -111,8 +111,8 @@ public static class RegrasIntervencao
     public static bool Envolve(IntervencaoDto ficha, int tecno) =>
         tecno > 0 && (ficha.Tecno == tecno || ficha.Adicionais?.Any(a => a.Tecno == tecno) == true);
 
-    // Marcador gravado no fim do problema: " [op:" + OpId + "]". Com o OpId máximo o texto fica em 200 - 6 - 32 = 162 caracteres.
-    public const int MinOpId = 8, MaxOpId = 32, MaxAnomaliaComOpId = MaxAnomalia - 6 - MaxOpId;
+    // O OpId grava-se no campo opid da ficha (32). O marcador " [op:...]" no fim do problema é só das fichas antigas: lê-se e esconde-se, já não se grava.
+    public const int MinOpId = 8, MaxOpId = 32;
 
     public const int MinDiasRecentes = 1, MaxDiasRecentes = 90, DiasRecentesOmissao = 30, MaxRecentes = 500;
 
@@ -140,7 +140,7 @@ public static class RegrasIntervencao
     public static string? ValidarAvaria(string? equipamentoId, string? anomalia, string? opId = null) =>
         string.IsNullOrWhiteSpace(equipamentoId) || equipamentoId.Length > 25 ? "Equipamento em falta."
         : opId is not null && !OpIdValido(opId) ? "Identificador da operação inválido."
-        : string.IsNullOrWhiteSpace(anomalia) || anomalia.Trim().Length > (opId is null ? MaxAnomalia : MaxAnomalia - Marcador(opId).Length) ? "Descrição em falta ou demasiado longa."
+        : string.IsNullOrWhiteSpace(anomalia) || anomalia.Trim().Length > MaxAnomalia ? "Descrição em falta ou demasiado longa."
         : null;
 
     public static string? ValidarConclusao(string? feito, TimeOnly? inicio, TimeOnly? fim) =>
@@ -637,7 +637,7 @@ public static partial class EndpointsIntervencoes
         ResultadoIntervencao.PlaneadasMudaram => Conflito("planeadas_mudaram"),
         ResultadoIntervencao.TarefaComFichas => Conflito("tarefa_com_fichas"),
         ResultadoIntervencao.InstrucaoObsoleta => Conflito("instrucao_obsoleta"),
-        ResultadoIntervencao.Viatura => Results.Json(new { erro = "pedido_invalido", mensagem = "As viaturas não são geridas neste módulo." }, statusCode: StatusCodes.Status400BadRequest),
+       
         ResultadoIntervencao.PeriodicidadeInvalida => Results.Json(new { erro = "periodicidade_invalida", mensagem = "Essa periodicidade não existe neste equipamento." }, statusCode: StatusCodes.Status400BadRequest),
         _ => Conflito("conflito")
     };

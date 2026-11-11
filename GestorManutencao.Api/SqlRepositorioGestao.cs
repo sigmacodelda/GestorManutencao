@@ -18,7 +18,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
                isnull(cast(e.anoaq as int), 0), isnull(e.[aquisiçao], 0), isnull(e.nofornec, 0), isnull(e.nomeforn, ''), e.data, isnull(e.[local], ''), isnull(e.status, ''), e.obsoleto,
                isnull(e.manpdf, ''), isnull(e.email, ''), {ConcorrenciaE}
         from u_equip e with (nolock)
-        where e.u_equipstamp = @id and isnull(e.tipo, '') <> @veiculos
+        where e.u_equipstamp = @id and e.tipoequip = 1
         """;
 
     private const string SqlRefRepetida = "select count(*) from u_equip with (nolock) where ref = @ref and u_equipstamp <> @id";
@@ -27,9 +27,9 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
 
     private const string SqlNovoEquip =
         """
-        insert into u_equip (u_equipstamp, nointerno, ref, design, tipo, marca, modelo, serie, anoaq, [aquisiçao], nofornec, nomeforn, data, [local], status, obsoleto, manpdf, email,
+        insert into u_equip (u_equipstamp, nointerno, ref, design, tipo, tipoequip, marca, modelo, serie, anoaq, [aquisiçao], nofornec, nomeforn, data, [local], status, obsoleto, manpdf, email,
                              ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        values (@id, @no, @ref, @design, @tipo, @marca, @modelo, @serie, @ano, @valor, @nofornec, @nomeforn, @data, @local, @status, @obsoleto, @manpdf, @email,
+        values (@id, @no, @ref, @design, @tipo, 1, @marca, @modelo, @serie, @ano, @valor, @nofornec, @nomeforn, @data, @local, @status, @obsoleto, @manpdf, @email,
                 @codigo, @dia, @hora, @codigo, @dia, @hora);
         insert into u_itmanut (u_itmanutstamp, u_equipstamp, ref, design, data, versao, obsoleto, ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
         values (@instrucao, @id, @ref, @design, @dia, '', 0, @codigo, @dia, @hora, @codigo, @dia, @hora);
@@ -41,7 +41,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
                nofornec = @nofornec, nomeforn = @nomeforn, data = @data, [local] = @local, status = @status, obsoleto = @obsoleto, manpdf = @manpdf, email = @email,
                usrinis = @codigo, usrdata = @dia, usrhora = @hora
         from u_equip e
-        where e.u_equipstamp = @id and isnull(e.tipo, '') <> @veiculos and (@versao = '' or {ConcorrenciaE} = @versao)
+        where e.u_equipstamp = @id and e.tipoequip = 1 and (@versao = '' or {ConcorrenciaE} = @versao)
         """;
 
     private const string SqlHistorico =
@@ -55,20 +55,20 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
 
     private const string SqlPlaneadasDoEquipLeitura = "select count(*) from u_fichaint with (nolock) where u_equipstamp = @id and estado = 'Planeada'";
 
-    private const string SqlEquipExiste = "select count(*) from u_equip with (nolock) where u_equipstamp = @id and isnull(tipo, '') <> @veiculos";
+    private const string SqlEquipExiste = "select count(*) from u_equip with (nolock) where u_equipstamp = @id and tipoequip = 1";
 
-    private const string SqlTipos = "select distinct ltrim(rtrim(tipo)) from u_equip with (nolock) where ltrim(rtrim(tipo)) <> '' and tipo <> @veiculos order by 1";
+    private const string SqlTipos = "select distinct ltrim(rtrim(tipo)) from u_equip with (nolock) where ltrim(rtrim(tipo)) <> '' and tipoequip = 1 order by 1";
 
     private const string SqlMarcas = "select distinct ltrim(rtrim(marca)) from u_marcaequip with (nolock) where ltrim(rtrim(marca)) <> '' and marca not like '-%' order by 1";
 
-    private const string SqlLocais = "select distinct ltrim(rtrim([local])) from u_equip with (nolock) where ltrim(rtrim([local])) <> '' and [local] not like '-%' and tipo <> @veiculos order by 1";
+    private const string SqlLocais = "select distinct ltrim(rtrim([local])) from u_equip with (nolock) where ltrim(rtrim([local])) <> '' and [local] not like '-%' and tipoequip = 1 order by 1";
 
     private static readonly string SelInstrucao =
         $"""
         select i.u_itmanutstamp, i.u_equipstamp, isnull(i.versao, ''), i.data, i.obsoleto, isnull(cast(i.obs as varchar(max)), ''),
                (select count(*) from u_itmanutli x with (nolock) where x.u_itmanutstamp = i.u_itmanutstamp), {ConcorrenciaI}
         from u_itmanut i with (nolock) join u_equip e with (nolock) on e.u_equipstamp = i.u_equipstamp
-        where isnull(e.tipo, '') <> @veiculos and
+        where e.tipoequip = 1 and
         """;
 
     private static readonly string SqlInstrucoesDoEquip = SelInstrucao + " i.u_equipstamp = @id order by i.obsoleto, i.data desc, i.versao desc";
@@ -79,7 +79,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
         """
         insert into u_itmanut (u_itmanutstamp, u_equipstamp, ref, design, versao, data, obsoleto, obs, ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
         select @id, e.u_equipstamp, e.ref, e.design, @versao, @data, @obsoleto, @obs, @codigo, @dia, @hora, @codigo, @dia, @hora
-        from u_equip e where e.u_equipstamp = @equip and isnull(e.tipo, '') <> @veiculos
+        from u_equip e where e.u_equipstamp = @equip and e.tipoequip = 1
         """;
 
     private static readonly string SqlEditarInstrucao =
@@ -96,7 +96,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
         from u_itmanutli l with (nolock)
         join u_itmanut i with (nolock) on i.u_itmanutstamp = l.u_itmanutstamp
         join u_equip e with (nolock) on e.u_equipstamp = i.u_equipstamp
-        where isnull(e.tipo, '') <> @veiculos and
+        where e.tipoequip = 1 and
         """;
 
     private static readonly string SqlTarefasDaInstrucao = SelTarefa + " i.u_itmanutstamp = @id order by l.periodo, l.ousrdata, l.ousrhora";
@@ -152,10 +152,9 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
 
     private static string NovoStampGestao() => Guid.NewGuid().ToString("N")[..25].ToUpperInvariant();
 
-    private static async Task<List<string>> LerListaAsync(SqlConnection conn, string sql, bool veiculos, CancellationToken ct)
+    private static async Task<List<string>> LerListaAsync(SqlConnection conn, string sql, CancellationToken ct)
     {
         await using var cmd = new SqlCommand(sql, conn);
-        if (veiculos) Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<string>();
         while (await r.ReadAsync(ct)) lista.Add(r.GetString(0).Trim());
@@ -163,13 +162,12 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
     }
 
     public Task<OpcoesEquipamentoDto> ObterOpcoesAsync(CancellationToken ct) => Executar(async conn =>
-        new OpcoesEquipamentoDto(await LerListaAsync(conn, SqlTipos, true, ct), await LerListaAsync(conn, SqlMarcas, false, ct), await LerListaAsync(conn, SqlLocais, true, ct), RegrasGestao.Estados));
+        new OpcoesEquipamentoDto(await LerListaAsync(conn, SqlTipos, ct), await LerListaAsync(conn, SqlMarcas, ct), await LerListaAsync(conn, SqlLocais, ct), RegrasGestao.Estados));
 
     private static async Task<EquipamentoGestaoDto?> LerEquipamentoGestaoAsync(SqlConnection conn, string id, CancellationToken ct)
     {
         await using var cmd = new SqlCommand(SqlEquipGestao, conn);
         Texto(cmd, "@id", 25, id);
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) return null;
         return new EquipamentoGestaoDto(
@@ -189,13 +187,13 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
 
     public Task<int?> ContarPlaneadasEquipamentoAsync(string id, CancellationToken ct) => Executar<int?>(async conn =>
     {
-        if (await ContarAsync(conn, null, SqlEquipExiste, c => { Texto(c, "@id", 25, id); Veiculos(c); }, ct) == 0) return null;
+        if (await ContarAsync(conn, null, SqlEquipExiste, c => { Texto(c, "@id", 25, id); }, ct) == 0) return null;
         return await ContarAsync(conn, null, SqlPlaneadasDoEquipLeitura, c => Texto(c, "@id", 25, id), ct);
     });
 
     public Task<IReadOnlyList<HistoricoEstadoDto>?> ListarHistoricoEstadoAsync(string equipamentoId, CancellationToken ct) => Executar<IReadOnlyList<HistoricoEstadoDto>?>(async conn =>
     {
-        if (await ContarAsync(conn, null, SqlEquipExiste, c => { Texto(c, "@id", 25, equipamentoId); Veiculos(c); }, ct) == 0) return null;
+        if (await ContarAsync(conn, null, SqlEquipExiste, c => { Texto(c, "@id", 25, equipamentoId); }, ct) == 0) return null;
         await using var cmd = new SqlCommand(SqlListaHistorico, conn);
         Texto(cmd, "@id", 25, equipamentoId);
         await using var r = await cmd.ExecuteReaderAsync(ct);
@@ -241,7 +239,6 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
 
             var nova = RegrasGestao.AplicarEquipamento(atual, pedido);
             if (nova.Ref.Length == 0 || nova.Design.Length == 0) return (ResultadoIntervencao.Invalido, null);
-            if (RegrasGestao.EhViatura(nova.Tipo)) return (ResultadoIntervencao.Viatura, null);
             // O nome do fornecedor vem do número (fl); sem número, fica vazio.
             if (nova.NoFornecedor > 0)
             {
@@ -288,7 +285,6 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
                 }
                 else
                 {
-                    Veiculos(cmd);
                     Texto(cmd, "@versao", 20, pedido.Versao ?? "");
                 }
                 if (await cmd.ExecuteNonQueryAsync(ct) == 0 && !novo) { await tx.RollbackAsync(ct); return (ResultadoIntervencao.Conflito, null); }
@@ -336,7 +332,6 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
     {
         await using var cmd = new SqlCommand(sql, conn);
         Texto(cmd, "@id", 25, id);
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<InstrucaoDto>();
         while (await r.ReadAsync(ct))
@@ -347,7 +342,7 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
     }
 
     public Task<IReadOnlyList<InstrucaoDto>?> ListarInstrucoesAsync(string equipamentoId, CancellationToken ct) => Executar<IReadOnlyList<InstrucaoDto>?>(async conn =>
-        await ContarAsync(conn, null, SqlEquipExiste, c => { Texto(c, "@id", 25, equipamentoId); Veiculos(c); }, ct) == 0 ? null : await LerInstrucoesAsync(conn, SqlInstrucoesDoEquip, equipamentoId, ct));
+        await ContarAsync(conn, null, SqlEquipExiste, c => { Texto(c, "@id", 25, equipamentoId); }, ct) == 0 ? null : await LerInstrucoesAsync(conn, SqlInstrucoesDoEquip, equipamentoId, ct));
 
     public Task<(ResultadoIntervencao, InstrucaoDto?)> GravarInstrucaoAsync(string? equipamentoId, string? id, PedidoInstrucao pedido, TecnicoAtual supervisor, CancellationToken ct) =>
         Executar<(ResultadoIntervencao, InstrucaoDto?)>(async conn =>
@@ -365,7 +360,6 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
                 Quando(novo, "@data", data);
                 novo.Parameters.Add("@obsoleto", SqlDbType.Bit).Value = pedido.Obsoleta ?? false;
                 novo.Parameters.Add("@obs", SqlDbType.VarChar, -1).Value = (pedido.Obs ?? "").Trim();
-                Veiculos(novo);
                 Auditoria(novo, supervisor.Codigo, agora);
                 if (await novo.ExecuteNonQueryAsync(ct) == 0) return (ResultadoIntervencao.NaoExiste, null);
                 return OkOuConflito(await LerInstrucaoAsync(conn, stamp, ct));
@@ -415,7 +409,6 @@ public sealed partial class SqlRepositorioIntervencoes : IRepositorioGestao
     {
         await using var cmd = new SqlCommand(sql, conn);
         Texto(cmd, "@id", 25, id);
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<TarefaGestaoDto>();
         while (await r.ReadAsync(ct))

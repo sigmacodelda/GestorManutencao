@@ -32,7 +32,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string SqlListar = Selecao +
         $"""
 
-        where f.estado in ('Planeada', 'EmCurso') and f.fechada = 0 and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        where f.estado in ('Planeada', 'EmCurso') and f.fechada = 0 and f.obsoleto = 0 and e.tipoequip = 1
           and (f.tecno = @tecno or {EmTecnos} or (f.tecno = 0 and f.data <= @ate))
         order by f.data, f.ordem, f.no
         """;
@@ -40,13 +40,13 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string SqlObter = Selecao +
         $"""
 
-        where f.u_fichaintstamp = @id and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos and (f.tecno = @tecno or f.tecno = 0 or {EmTecnos})
+        where f.u_fichaintstamp = @id and f.obsoleto = 0 and e.tipoequip = 1 and (f.tecno = @tecno or f.tecno = 0 or {EmTecnos})
         """;
 
     private const string SqlObterQualquer = Selecao +
         """
 
-        where f.u_fichaintstamp = @id and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        where f.u_fichaintstamp = @id and f.obsoleto = 0 and e.tipoequip = 1
         """;
 
     // Como a LandeiroMaui: última feita da tarefa (ou, nas fichas antigas, do equipamento com a mesma periodicidade), última cancelada e periodicidade.
@@ -71,14 +71,14 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
                      from u_fichaint x with (nolock)
                      where x.u_equipstamp = f.u_equipstamp and x.estado = '' and x.obsoleto = 0 and x.data <= getdate()
                        and ltrim(rtrim(x.periodo)) = ltrim(rtrim(f.periodo)) and ltrim(rtrim(f.periodo)) <> '') lg
-        where f.estado in ('Planeada', 'EmCurso') and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        where f.estado in ('Planeada', 'EmCurso') and f.obsoleto = 0 and e.tipoequip = 1
         order by f.data, f.ordem, f.no
         """;
 
     private const string SqlPorValidar = Selecao +
         """
 
-        where f.estado = 'Concluida' and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        where f.estado = 'Concluida' and f.obsoleto = 0 and e.tipoequip = 1
         order by f.data, f.no
         """;
 
@@ -86,7 +86,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         $"""
         select rtrim(f.estado), f.uitmanutlistamp, f.tipomanut, f.nofornec, f.docexterno, f.tecno, isnull(e.[local], ''), f.hini, {TecnosSel}
         from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
-        where f.u_fichaintstamp = @id and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        where f.u_fichaintstamp = @id and f.obsoleto = 0 and e.tipoequip = 1
         """;
 
     private const string SqlConfiguracao =
@@ -142,7 +142,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string SqlEquipamentos = SelecaoEquipamento +
         """
 
-        where isnull(e.tipo, '') <> @veiculos and (@obsoletos = 1 or e.obsoleto = 0)
+        where e.tipoequip = 1 and (@obsoletos = 1 or e.obsoleto = 0)
           and (@tipo = '' or e.tipo = @tipo) and (@local = '' or e.[local] = @local)
           and (@texto = '' or e.design like @texto escape '\' or e.ref like @texto escape '\' or e.marca like @texto escape '\' or e.modelo like @texto escape '\')
         order by e.design, e.nointerno
@@ -151,7 +151,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string SqlEquipamento = SelecaoEquipamento +
         """
 
-        where e.u_equipstamp = @id and isnull(e.tipo, '') <> @veiculos
+        where e.u_equipstamp = @id and e.tipoequip = 1
         """;
 
     // Tarefas ativas das instruções de manutenção do equipamento, com a periodicidade e as datas necessárias à próxima.
@@ -198,7 +198,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     // Sem OFFSET (nível 100): lê-se até ao fim da página pedida mais uma ficha (para saber se há mais) e saltam-se as anteriores.
     private const string SqlTodasBase = "select top (@topo)" + CamposTodas +
-        " where isnull(e.tipo, '') <> @veiculos and f.obsoleto = 0 and (@estado = '' or " + EstadoEfetivo + " = @estado)" +
+        " where e.tipoequip = 1 and f.obsoleto = 0 and (@estado = '' or " + EstadoEfetivo + " = @estado)" +
         " and f.data >= @desde and f.data < @ate and (@tecno = 0 or f.tecno = @tecno or " + EmTecnos + ")" +
         " and (@situacao = 'Todas' or (@situacao = 'Abertas' and f.fechada = 0 and rtrim(f.estado) <> 'Cancelada') or (@situacao = 'Fechadas' and f.fechada = 1))" +
         " and (@soPorSupervisionar = 0 or f.supervisao = 0) and (@tipo = '' or rtrim(f.tipointerv) = @tipo)" +
@@ -222,14 +222,14 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     // Cache offline: fichas fechadas do técnico (principal ou adicional) nas últimas semanas, sem viaturas.
     private const string SqlRecentes = "select top 500" + CamposFicha +
-        " where (f.tecno = @tecno or " + EmTecnos + ") and f.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos and " + EstadoEfetivo + " in ('Concluida', 'Validada', 'Cancelada')" +
+        " where (f.tecno = @tecno or " + EmTecnos + ") and f.obsoleto = 0 and e.tipoequip = 1 and " + EstadoEfetivo + " in ('Concluida', 'Validada', 'Cancelada')" +
         " and f.data >= @desde order by f.data desc, f.no desc, f.u_fichaintstamp desc";
 
-    // Procura a avaria já gravada com o marcador do OpId no fim do problema (sem LIKE, por causa dos parênteses retos).
+    // Procura a ficha já gravada com o OpId (campo opid).
     private const string SqlAvariaPorOp =
         """
         select top 1 f.u_fichaintstamp from u_fichaint f with (nolock)
-        where f.tecno = @tecno and f.obsoleto = 0 and right(rtrim(cast(f.problema as varchar(254))), @tam) = @marcador
+        where f.tecno = @tecno and f.obsoleto = 0 and f.opid = @opid
         order by f.data desc, f.no desc
         """;
 
@@ -237,7 +237,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string SqlPesquisaAvaria =
         """
         select top 20 u_equipstamp, isnull(design, ''), isnull([local], '') from u_equip with (nolock)
-        where obsoleto = 0 and isnull(tipo, '') <> @veiculos and (design like @texto escape '\' or ref like @texto escape '\')
+        where obsoleto = 0 and tipoequip = 1 and (design like @texto escape '\' or ref like @texto escape '\')
         order by design
         """;
 
@@ -259,11 +259,11 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlAvaria =
         """
-        insert into u_fichaint (u_fichaintstamp, no, ref, design, tipointerv, tipomanut, problema, data, estado, u_equipstamp, hini, tecno, tecnome,
+        insert into u_fichaint (u_fichaintstamp, no, ref, design, tipointerv, tipomanut, problema, data, estado, u_equipstamp, hini, tecno, tecnome, opid,
                                 ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        select @stamp, @no, left(e.ref, 20), left(e.design, 45), 'Curativa', 'Interna', @anomalia, @dia, 'EmCurso', e.u_equipstamp, @agora, @tecno, @tecnome,
+        select @stamp, @no, left(e.ref, 20), left(e.design, 45), 'Curativa', 'Interna', @anomalia, @dia, 'EmCurso', e.u_equipstamp, @agora, @tecno, @tecnome, @opid,
                @codigo, @dia, @hora, @codigo, @dia, @hora
-        from u_equip e where e.u_equipstamp = @equipamento and e.obsoleto = 0 and isnull(e.tipo, '') <> @veiculos
+        from u_equip e where e.u_equipstamp = @equipamento and e.obsoleto = 0 and e.tipoequip = 1
         """;
 
     private const string SqlPrimeiraDaZona =
@@ -382,7 +382,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         left join (select u_equipstamp, ltrim(rtrim(periodo)) as periodo, max(data) as ultima
                    from u_fichaint with (nolock) where estado = '' and obsoleto = 0 and data <= getdate() and ltrim(rtrim(periodo)) <> ''
                    group by u_equipstamp, ltrim(rtrim(periodo))) lg on lg.u_equipstamp = i.u_equipstamp and lg.periodo = ltrim(rtrim(l.periodo))
-        where i.obsoleto = 0 and e.obsoleto = 0 and e.tipo <> @veiculos and (@tarefa = '' or l.u_itmanutlistamp = @tarefa)
+        where i.obsoleto = 0 and e.obsoleto = 0 and e.tipoequip = 1 and (@tarefa = '' or l.u_itmanutlistamp = @tarefa)
           and ltrim(rtrim(isnull(e.status, ''))) <> @foraServico
         """;
 
@@ -444,8 +444,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         p.Precision = precisao; p.Scale = escala; p.Value = valor;
     }
 
-    private static void Veiculos(SqlCommand cmd) =>
-        cmd.Parameters.Add("@veiculos", SqlDbType.NVarChar, 30).Value = RegrasManutencao.TipoVeiculos;
 
     // As datas e horas gravadas são as do servidor SQL (como a LandeiroMaui), por isso não dependem do fuso da API.
     private static async Task<Momento> AgoraAsync(SqlConnection conn, CancellationToken ct)
@@ -525,7 +523,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     {
         await using var cmd = new SqlCommand(SqlAtual, conn, tx);
         Texto(cmd, "@id", 25, id);
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct)
             ? new Atual(r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim(), r.GetDecimal(3), r.GetString(4), r.GetDecimal(5), r.GetString(6).Trim(), r.GetDateTime(7), r.GetString(8))
@@ -536,7 +533,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     {
         await using var cmd = new SqlCommand(tecnico is null ? SqlObterQualquer : SqlObter, conn);
         Texto(cmd, "@id", 25, id);
-        Veiculos(cmd);
         if (tecnico is not null) { Numero(cmd, "@tecno", tecnico.Tecno, 5); ParametroTecnos(cmd, tecnico.Tecno); }
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct) ? Ler(r) : null;
@@ -556,7 +552,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
         ParametroTecnos(cmd, tecnico.Tecno);
         Quando(cmd, "@ate", hoje.AddDays(cfg.Antecedencia));
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<IntervencaoDto>();
         while (await r.ReadAsync(ct)) lista.Add(Ler(r));
@@ -569,7 +564,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
         ParametroTecnos(cmd, tecnico.Tecno);
         Quando(cmd, "@desde", relogio.GetLocalNow().Date.AddDays(-dias));
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<IntervencaoDto>();
         while (await r.ReadAsync(ct)) lista.Add(Ler(r));
@@ -594,7 +588,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     public Task<IReadOnlyList<EquipamentoDto>> PesquisarEquipamentosAsync(string texto, CancellationToken ct) => Executar<IReadOnlyList<EquipamentoDto>>(async conn =>
     {
         await using var cmd = new SqlCommand(SqlPesquisaAvaria, conn);
-        Veiculos(cmd);
         Texto(cmd, "@texto", 130, Padrao(texto));
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<EquipamentoDto>();
@@ -605,7 +598,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     public Task<IReadOnlyList<EquipamentoDto>> ListarEquipamentosAsync(FiltroEquipamentos filtro, CancellationToken ct) => Executar<IReadOnlyList<EquipamentoDto>>(async conn =>
     {
         await using var cmd = new SqlCommand(SqlEquipamentos, conn);
-        Veiculos(cmd);
         cmd.Parameters.Add("@obsoletos", SqlDbType.Bit).Value = filtro.Obsoletos;
         Parametro(cmd, "@tipo", SqlDbType.NVarChar, RegrasManutencao.TamanhoTipo, filtro.Tipo);
         Parametro(cmd, "@local", SqlDbType.NVarChar, RegrasManutencao.TamanhoLocal, filtro.Local);
@@ -622,7 +614,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         await using (var cmd = new SqlCommand(SqlEquipamento, conn))
         {
             Texto(cmd, "@id", 25, id);
-            Veiculos(cmd);
             await using var r = await cmd.ExecuteReaderAsync(ct);
             equipamento = await r.ReadAsync(ct) ? LerEquipamento(r) : null;
         }
@@ -671,7 +662,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         cmd.Parameters.Add("@soPorSupervisionar", SqlDbType.Bit).Value = filtro.SoPorSupervisionar;
         Parametro(cmd, "@tipo", SqlDbType.VarChar, 20, filtro.Tipo?.ToString() ?? "");
         Texto(cmd, "@exato", 20, filtro.Texto.Length <= 20 ? filtro.Texto : "");
-        Veiculos(cmd);
         Parametro(cmd, "@estado", SqlDbType.VarChar, 20, filtro.Estado?.ToString() ?? "");
         Quando(cmd, "@desde", filtro.Desde?.ToDateTime(TimeOnly.MinValue) ?? SemData);
         Quando(cmd, "@ate", filtro.Ate?.AddDays(1).ToDateTime(TimeOnly.MinValue) ?? new DateTime(2999, 12, 31));
@@ -742,14 +732,11 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     {
         if (opId is not null)
         {
-            var marcador = RegrasIntervencao.Marcador(opId);
             await using var procura = new SqlCommand(SqlAvariaPorOp, conn);
             Numero(procura, "@tecno", tecnico.Tecno, 5);
-            procura.Parameters.Add("@tam", SqlDbType.Int).Value = marcador.Length;
-            Texto(procura, "@marcador", 40, marcador);
+            Texto(procura, "@opid", RegrasIntervencao.MaxOpId, opId);
             if (await procura.ExecuteScalarAsync(ct) is string existente && await LerUmaAsync(conn, existente.Trim(), ct) is { } ficha)
                 return (ResultadoIntervencao.Ok, ficha);
-            anomalia += marcador;
         }
         var agora = await AgoraAsync(conn, ct);
         var no = await ProximoNumeroAsync(conn, agora.Agora.Year, ct);
@@ -758,8 +745,8 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         Texto(cmd, "@stamp", 25, stamp);
         Numero(cmd, "@no", no, 10);
         Texto(cmd, "@anomalia", 200, anomalia);
+        Texto(cmd, "@opid", RegrasIntervencao.MaxOpId, opId ?? "");
         Texto(cmd, "@equipamento", 25, equipamentoId);
-        Veiculos(cmd);
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
         Texto(cmd, "@tecnome", 45, tecnico.Nome);
         Auditoria(cmd, tecnico.Codigo, agora);
@@ -832,7 +819,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     {
         var cfg = await LerConfiguracaoAsync(conn, ct);
         await using var cmd = new SqlCommand(SqlPorValidar, conn);
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<IntervencaoDto>();
         while (lista.Count < 300 && await r.ReadAsync(ct))
@@ -884,7 +870,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     public Task<IReadOnlyList<IntervencaoDto>> ListarPlaneadasAsync(CancellationToken ct) => Executar<IReadOnlyList<IntervencaoDto>>(async conn =>
     {
         await using var cmd = new SqlCommand(SqlPlaneadas, conn);
-        Veiculos(cmd);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var lista = new List<IntervencaoDto>();
         while (lista.Count < 500 && await r.ReadAsync(ct)) lista.Add(LerPlaneada(r));
@@ -948,7 +933,6 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         await using (var cmd = new SqlCommand(SqlCandidatas, conn))
         {
             Texto(cmd, "@tarefa", 25, tarefa);
-            Veiculos(cmd);
             Texto(cmd, "@foraServico", 20, RegrasManutencao.StatusForaServico); // equipamento parado não gera
             await using var r = await cmd.ExecuteReaderAsync(ct);
             while (await r.ReadAsync(ct))

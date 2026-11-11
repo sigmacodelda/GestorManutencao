@@ -73,10 +73,6 @@ public static class RegrasGestao
     public const string AvisoInstrucaoObsoleta = "A tarefa ficou gravada, mas esta versão da instrução está obsoleta e não gera planeadas.",
         AvisoEquipamentoObsoleto = "A tarefa ficou gravada, mas o equipamento está obsoleto e não gera planeadas.";
 
-    // "Veículos", "veiculos" e "VEÍCULOS" são todos viaturas (sem distinguir acentos nem maiúsculas).
-    public static bool EhViatura(string? tipo) =>
-        string.Compare((tipo ?? "").Trim(), RegrasManutencao.TipoVeiculos, System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.CompareOptions.IgnoreNonSpace | System.Globalization.CompareOptions.IgnoreCase) == 0;
 
     // null se o valor não é um dos estados; sem texto vale o primeiro (em serviço) só na criação.
     public static string? NormalizarEstado(string? estado) => Estados.FirstOrDefault(e => string.Equals(e, (estado ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
@@ -90,7 +86,6 @@ public static class RegrasGestao
         if (novo && string.IsNullOrWhiteSpace(p.Design)) return "Indique a designação.";
         if (p.Ref is not null && p.Ref.Trim().Length == 0) return "Indique o nº da infraestrutura.";
         if (p.Design is not null && p.Design.Trim().Length == 0) return "Indique a designação.";
-        if (EhViatura(p.Tipo)) return "As viaturas não são geridas neste módulo.";
         var erro = Tamanho(p.Ref, Ref, "O nº") ?? Tamanho(p.Design, Design, "A designação") ?? Tamanho(p.Tipo, Tipo, "O tipo") ?? Tamanho(p.Marca, Marca, "A marca")
             ?? Tamanho(p.Modelo, Modelo, "O modelo") ?? Tamanho(p.Serie, Serie, "O nº de série") ?? Tamanho(p.Local, Local, "O local")
             ?? Tamanho(p.ManualPdf, ManualPdf, "O manual") ?? Tamanho(p.Email, Email, "O e-mail");

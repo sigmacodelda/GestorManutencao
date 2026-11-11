@@ -133,13 +133,10 @@ public static class RegrasIntervencao
     // Limites das colunas da ficha de intervenção no PHC.
     public const int MaxAnomalia = 200, MaxFeito = 254;
 
-    // Com o identificador da operação (avaria registada sem rede) o servidor guarda no máximo 200 - 6 - 32 letras; a UI usa sempre este limite.
-    public const int MaxAnomaliaComOpId = 162;
-
     public static string? ValidarAvaria(string? equipamento, string? anomalia) =>
         string.IsNullOrWhiteSpace(equipamento) ? "Escolha o equipamento."
         : string.IsNullOrWhiteSpace(anomalia) ? "Descreva o problema."
-        : anomalia.Trim().Length > MaxAnomaliaComOpId ? $"Escreva menos: no máximo {MaxAnomaliaComOpId} letras."
+        : anomalia.Trim().Length > MaxAnomalia ? $"Escreva menos: no máximo {MaxAnomalia} letras."
         : null;
 
     public static string? ValidarConclusao(string? feito, TimeOnly? inicio, TimeOnly? fim) =>

@@ -168,16 +168,6 @@ public class RegrasGestaoTests
         Assert.NotNull(RegrasGestao.ValidarEquipamento(new PedidoEquipamento(Ref: "  "), false));
     }
 
-    [Theory]
-    [InlineData("Veículos")]
-    [InlineData(" veículos ")]
-    [InlineData("VEÍCULOS")]
-    public void Viaturas_sao_recusadas(string tipo)
-    {
-        Assert.True(RegrasGestao.EhViatura(tipo));
-        Assert.NotNull(RegrasGestao.ValidarEquipamento(Valido() with { Tipo = tipo }, true));
-    }
-
     [Fact]
     public void Tamanhos_maximos_iguais_aos_do_landeiro()
     {

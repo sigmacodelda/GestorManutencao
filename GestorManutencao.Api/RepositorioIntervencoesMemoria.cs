@@ -52,6 +52,9 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
     }
 
     // UltimaIntervencao e FichasAbertas calculam-se a partir das fichas, como no SQL. A lista é do repositório porque a gestão cria e edita equipamentos.
+    private static readonly HashSet<string> ForaDoModulo = ["E8"];
+    private static bool Gerido(EquipamentoDto e) => !ForaDoModulo.Contains(e.Id);
+
     private readonly List<EquipamentoDto> Equipamentos =
     [
         new("E1", "Compressor de ar 02", "Produção", "CMP-02", 2, "Compressor", "Atlas Copco", "GA 30", "AC-77120"),
@@ -61,7 +64,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
         new("E5", "Balança 03", "Expedição", "BAL-03", 3, "Balança", "Mettler", "IND-570", "MT-8841"),
         new("E6", "Porta seccionada 07", "Armazém", "PRT-07", 7, "Portas", "Hormann", "SPU-40", "HR-5522", ForaDeServico: true),
         new("E7", "Serra de fita antiga", "Produção", "SRF-01", 9, "Serra", "Bomar", "STG-280", "BM-0042", Obsoleto: true),
-        // Viatura: fora do módulo (nunca aparece nem se gere), como no SQL.
+        // Viatura (u_equip.tipoequip <> 1 no PHC): fora do módulo, nunca aparece nem se gere. Ver ForaDoModulo.
         new("E8", "Carrinha 01", "Armazém", "VT-01", 6, "Veículos", "Renault", "Master", "VT-1")
     ];
 
@@ -167,7 +170,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
     {
         lock (Trinco())
             return Task.FromResult<IReadOnlyList<EquipamentoDto>>(Equipamentos
-                .Where(e => !RegrasGestao.EhViatura(e.Tipo) && (filtro.Obsoletos || !e.Obsoleto)
+                .Where(e => Gerido(e) && (filtro.Obsoletos || !e.Obsoleto)
                     && (filtro.Tipo.Length == 0 || string.Equals(e.Tipo, filtro.Tipo, StringComparison.OrdinalIgnoreCase))
                     && (filtro.Local.Length == 0 || string.Equals(e.Zona, filtro.Local, StringComparison.OrdinalIgnoreCase))
                     && (filtro.Texto.Length == 0 || Contem(e.Nome, filtro.Texto) || Contem(e.Ref, filtro.Texto) || Contem(e.Marca, filtro.Texto) || Contem(e.Modelo, filtro.Texto)))
@@ -176,7 +179,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
 
     public Task<IReadOnlyList<EquipamentoDto>> PesquisarEquipamentosAsync(string texto, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<EquipamentoDto>>(Equipamentos
-            .Where(e => !e.Obsoleto && !RegrasGestao.EhViatura(e.Tipo) && (Contem(e.Nome, texto) || Contem(e.Ref, texto)))
+            .Where(e => !e.Obsoleto && Gerido(e) && (Contem(e.Nome, texto) || Contem(e.Ref, texto)))
             .OrderBy(e => e.Nome, StringComparer.CurrentCultureIgnoreCase).Take(RegrasManutencao.MaxPesquisaAvaria)
             .Select(e => new EquipamentoDto(e.Id, e.Nome, e.Zona)).ToList());
 
@@ -184,7 +187,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
     {
         lock (Trinco())
         {
-            var e = Equipamentos.FirstOrDefault(x => x.Id == id && !RegrasGestao.EhViatura(x.Tipo));
+            var e = Equipamentos.FirstOrDefault(x => x.Id == id && Gerido(x));
             if (e is null) return Task.FromResult<FichaEquipamentoDto?>(null);
 
             var tarefas = Tarefas.Where(t => t.EquipamentoId == id && !InstrucaoObsoleta(t.InstrucaoId)).Select(t =>
@@ -254,7 +257,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct, string? opId = null)
     {
-        var e = Equipamentos.FirstOrDefault(x => x.Id == equipamentoId && !x.Obsoleto && !RegrasGestao.EhViatura(x.Tipo));
+        var e = Equipamentos.FirstOrDefault(x => x.Id == equipamentoId && !x.Obsoleto && Gerido(x));
         if (e is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
         var agora = relogio.GetLocalNow().DateTime;
         var nova = new Ficha

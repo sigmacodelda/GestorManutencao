@@ -157,12 +157,9 @@ public class ApiOfflineTests : IDisposable
         var ana = await ComoAsync("482913");
         var opId = new string('a', RegrasIntervencao.MaxOpId);
 
-        Assert.Equal(162, RegrasIntervencao.MaxAnomaliaComOpId);
-        Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync("/intervencoes/avaria", new PedidoAvaria("E5", new string('x', 162), opId))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PostAsJsonAsync("/intervencoes/avaria", new PedidoAvaria("E5", new string('x', 163), opId))).StatusCode);
-        // Com um OpId mais curto o marcador ocupa menos e cabe mais texto; sem OpId o limite continua a ser 200.
-        Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync("/intervencoes/avaria", new PedidoAvaria("E5", new string('x', 186), "abcdefgh"))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PostAsJsonAsync("/intervencoes/avaria", new PedidoAvaria("E5", new string('x', 187), "abcdefgh"))).StatusCode);
+        // O OpId vai num campo próprio: o limite é 200 com ou sem OpId.
+        Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync("/intervencoes/avaria", new PedidoAvaria("E5", new string('x', 200), opId))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PostAsJsonAsync("/intervencoes/avaria", new PedidoAvaria("E5", new string('x', 201), opId))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync("/intervencoes/avaria", new PedidoAvaria("E5", new string('x', 200)))).StatusCode);
     }
 
