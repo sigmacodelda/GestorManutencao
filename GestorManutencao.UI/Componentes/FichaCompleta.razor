@@ -167,7 +167,7 @@
             {
                 <p class="alerta alerta-pendente" role="status"><Icone Nome="clock" /><span>Alterações por guardar</span></p>
             }
-            <button type="submit" class="btn btn-primario" disabled="@(_ocupado || !TemAlteracoes)"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Guardar alterações")</span></button>
+            <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@(_ocupado || !TemAlteracoes)"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Guardar alterações")</span></button>
             @if (TemAlteracoes)
             {
                 <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="Descartar">Descartar alterações</button>

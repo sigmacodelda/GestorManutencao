@@ -67,6 +67,26 @@
             }
         </dl>
 
+        @if (Sessao.PodeSerSupervisor && _instrucaoAtiva is not null)
+        {
+            <section aria-labelledby="titulo-tarefas-gestao">
+                <h2 id="titulo-tarefas-gestao" class="titulo-grupo"><Icone Nome="list" /> Tarefas de manutenção <span class="contagem">@_tarefasGestao.Count</span></h2>
+                @if (_tarefasGestao.Count == 0) { <p class="estado-lista" role="status">Esta versão ainda não tem tarefas.</p> }
+                <ul class="lista-intervencoes">
+                    @foreach (var t in _tarefasGestao)
+                    {
+                        <li class="intervencao">
+                            <span class="intervencao-titulo">@(string.IsNullOrWhiteSpace(t.Periodo) ? "Sem periodicidade" : t.Periodo)</span>
+                            <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(t.Responsabilidade) ? "Sem responsabilidade" : t.Responsabilidade)@(string.IsNullOrWhiteSpace(t.Responsavel) ? "" : " · " + t.Responsavel)</span>
+                            <TextoLongo Texto="@t.Descricao" Classe="ficha-texto" />
+                            <a class="btn btn-secundario" href="instrucoes/@_instrucaoAtiva/tarefas?equipamento=@Uri.EscapeDataString(Id)&editar=@Uri.EscapeDataString(t.Id)&de=ficha"><Icone Nome="wrench" /><span>Editar</span></a>
+                        </li>
+                    }
+                </ul>
+                <a class="btn btn-primario" href="instrucoes/@_instrucaoAtiva/tarefas?equipamento=@Uri.EscapeDataString(Id)&de=ficha"><Icone Nome="plus" /><span>Nova tarefa</span></a>
+            </section>
+        }
+
         <section aria-labelledby="titulo-tarefas">
             <h2 id="titulo-tarefas" class="titulo-grupo"><Icone Nome="calendar" /> Tarefas planeadas <span class="contagem">@_ficha.Tarefas.Count</span></h2>
             @if (_ficha.Tarefas.Count == 0)
@@ -126,7 +146,8 @@
 
     private FichaEquipamento? _ficha;
     private IReadOnlyList<HistoricoEstado> _estados = [];
-    private string? _avisoGestao;
+    private string? _avisoGestao, _instrucaoAtiva;
+    private IReadOnlyList<TarefaManutencao> _tarefasGestao = [];
     private bool _a_carregar = true, _falhou, _indisponivel;
     private DateOnly _hoje = DateOnly.FromDateTime(DateTime.Today);
 
@@ -136,7 +157,7 @@
     {
         _a_carregar = true; _falhou = false; _indisponivel = false; _ficha = null;
         _hoje = DateOnly.FromDateTime(DateTime.Today);
-        _estados = []; _avisoGestao = null;
+        _estados = []; _avisoGestao = null; _instrucaoAtiva = null; _tarefasGestao = [];
         try { _ficha = await Servico.ObterFichaAsync(Id); }
         catch (NotSupportedException) { _indisponivel = true; }
         catch (Exception) { _falhou = true; }
@@ -146,5 +167,13 @@
             try { _estados = await Gestao.ListarHistoricoAsync(Id); }
             catch (InvalidOperationException ex) { _avisoGestao = ex.Message; }
             catch (Exception) { _avisoGestao = "Não foi possível carregar o histórico de estado."; }
+        // Tarefas da versão em uso, para gerir logo na ficha; sem rede fica só a lista planeada.
+        if (_ficha is not null && Sessao.PodeSerSupervisor)
+            try
+            {
+                var ativa = (await Gestao.ListarInstrucoesAsync(Id)).Where(i => !i.Obsoleta).OrderByDescending(i => i.Data).FirstOrDefault();
+                if (ativa is not null) { _tarefasGestao = await Gestao.ListarTarefasAsync(ativa.Id); _instrucaoAtiva = ativa.Id; }
+            }
+            catch (Exception) { _instrucaoAtiva = null; _tarefasGestao = []; }
     }
 }

@@ -7,7 +7,7 @@
 
 <section class="conteudo">
     <div class="boas-vindas">
-        <a class="voltar" href="@(string.IsNullOrWhiteSpace(EquipamentoId) ? "equipamentos" : $"equipamentos/{Uri.EscapeDataString(EquipamentoId)}/instrucoes")"><Icone Nome="arrow-left" /><span>@(string.IsNullOrWhiteSpace(EquipamentoId) ? "Equipamentos" : "Instruções")</span></a>
+        <a class="voltar" href="@(string.IsNullOrWhiteSpace(EquipamentoId) ? "equipamentos" : DaFicha ? $"equipamentos/{Uri.EscapeDataString(EquipamentoId!)}" : $"equipamentos/{Uri.EscapeDataString(EquipamentoId)}/instrucoes")"><Icone Nome="arrow-left" /><span>@(string.IsNullOrWhiteSpace(EquipamentoId) ? "Equipamentos" : DaFicha ? "Equipamento" : "Instruções")</span></a>
         <h1 tabindex="-1">Tarefas de manutenção</h1>
     </div>
 
@@ -115,6 +115,11 @@
     // Vem do ecrã das instruções, para o botão de voltar levar de volta a elas.
     [SupplyParameterFromQuery(Name = "equipamento")] public string? EquipamentoId { get; set; }
 
+    // Vem da ficha do equipamento: abre já a editar essa tarefa e o botão de voltar leva de volta à ficha.
+    [SupplyParameterFromQuery(Name = "editar")] public string? TarefaParaEditar { get; set; }
+    [SupplyParameterFromQuery(Name = "de")] public string? Origem { get; set; }
+    private bool DaFicha => Origem == "ficha" && !string.IsNullOrWhiteSpace(EquipamentoId);
+
     private IReadOnlyList<TarefaManutencao> _tarefas = [];
     private IReadOnlyList<string> _periodos = [];
     private TarefaManutencao? _editar;
@@ -137,6 +142,7 @@
             catch (InvalidOperationException) { throw; }
             catch (Exception) { _periodos = []; }
             Limpar();
+            if (!string.IsNullOrWhiteSpace(TarefaParaEditar) && _tarefas.FirstOrDefault(x => x.Id == TarefaParaEditar) is { } pedida) Editar(pedida);
         }
         catch (Exception ex) { _falhou = MensagensGestao.Para(ex, "Não foi possível carregar as tarefas."); }
         finally { _a_carregar = false; }

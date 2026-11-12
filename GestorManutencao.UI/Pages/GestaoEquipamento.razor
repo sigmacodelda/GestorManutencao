@@ -165,16 +165,16 @@
             }
             else
             {
-                <div class="dialogo-acoes">
+                <div class="dialogo-acoes barra-fixa">
                     @if (_passo < PassosEquipamento.Titulos.Length - 1)
                     {
-                        <button type="submit" class="btn btn-primario">Seguinte</button>
+                        <button type="submit" class="btn btn-primario btn-grande">Seguinte</button>
                     }
                     else
                     {
-                        <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@_a_guardar"><Icone Nome="check" /><span>@(_a_guardar ? "A guardar…" : "Feito")</span></button>
+                        <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_guardar"><Icone Nome="check" /><span>@(_a_guardar ? "A guardar…" : "Feito")</span></button>
                     }
-                    @if (_passo > 0) { <button type="button" class="btn btn-secundario" @onclick="() => _passo--">Anterior</button> }
+                    @if (_passo > 0) { <button type="button" class="btn btn-secundario btn-grande" @onclick="() => _passo--">Anterior</button> }
                 </div>
             }
         </form>
