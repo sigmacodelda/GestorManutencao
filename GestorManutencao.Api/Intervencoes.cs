@@ -9,6 +9,7 @@ public enum EstadoIntervencao { Planeada, EmCurso, Concluida, Validada, Cancelad
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TipoIntervencao { Preventiva, Curativa }
 
+// PodePausar: ficha em curso e o utilizador que consulta tem linha de tempo aberta (só então pausa/retoma); EmPausa é a pausa dessa linha (só vale com PodePausar).
 // Última, Cancelada e DataPrevista só vêm nas planeadas. Tecno é o número de utilizador do PHC de quem tem a ficha (0 = sem dono). PodeValidar só conta na lista de validação.
 // Motivo só vem nas fichas devolvidas pelo supervisor (em curso com observação gravada). Adicionais: técnicos além do principal (omissão = nenhum).
 public sealed record IntervencaoDto(
@@ -17,7 +18,7 @@ public sealed record IntervencaoDto(
     string? Tecnico = null, int Tecno = 0, bool PodeValidar = true,
     DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null,
     bool PodeAbrir = false, string? Motivo = null, IReadOnlyList<TecnicoFichaDto>? Adicionais = null,
-    int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false);
+    int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false, bool EmPausa = false, bool PodePausar = false);
 
 // Técnico adicional da intervenção: o número vem do memo tecnos da ficha e o nome resolve-se na API (nunca fica gravado na ficha).
 public sealed record TecnicoFichaDto(int Tecno, string Nome);
@@ -186,6 +187,9 @@ public interface IRepositorioIntervencoes
     Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct, string? opId = null);
     Task<(ResultadoIntervencao, IntervencaoDto?)> IniciarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirAsync(string id, TecnicoAtual tecnico, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct);
+    // Pausa da ficha em curso (o estado não muda): repetir o pedido é idempotente; concluir em pausa fecha a pausa.
+    Task<(ResultadoIntervencao, IntervencaoDto?)> PausarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
+    Task<(ResultadoIntervencao, IntervencaoDto?)> RetomarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
 
     // Supervisor: fichas concluídas por validar, validação e devolução (volta a "em curso" com o motivo).
     Task<IReadOnlyList<IntervencaoDto>> ListarPorValidarAsync(TecnicoAtual supervisor, CancellationToken ct);
@@ -350,6 +354,12 @@ public static partial class EndpointsIntervencoes
 
         g.MapPost("/intervencoes/{id}/iniciar", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             ComoTecnico(eu, utilizadores, ct, async t => Resposta(await repo.IniciarAsync(id, t, ct))));
+
+        g.MapPost("/intervencoes/{id}/pausar", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoTecnico(eu, utilizadores, ct, async t => Resposta(await repo.PausarAsync(id, t, ct))));
+
+        g.MapPost("/intervencoes/{id}/retomar", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoTecnico(eu, utilizadores, ct, async t => Resposta(await repo.RetomarAsync(id, t, ct))));
 
         g.MapPost("/intervencoes/{id}/concluir", (string id, PedidoConclusao p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             RegrasIntervencao.ValidarConclusao(p.Feito, p.Inicio, p.Fim) is not null

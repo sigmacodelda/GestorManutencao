@@ -1,6 +1,6 @@
 namespace GestorManutencao.UI.Offline;
 
-public enum TipoOperacao { RegistarAvaria, Iniciar, Concluir, AdicionarMaterial, ApagarMaterial, AdicionarFoto, ApagarFoto }
+public enum TipoOperacao { RegistarAvaria, Iniciar, Concluir, AdicionarMaterial, ApagarMaterial, AdicionarFoto, ApagarFoto, Pausar, Retomar }
 
 // Pendente: por enviar. Incerta: pode já ter chegado ao servidor (material e foto); verifica-se antes de reenviar.
 // Conflito: o servidor recusou; já não se envia e fica a aguardar que o técnico veja o aviso.

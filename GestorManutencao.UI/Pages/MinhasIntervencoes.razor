@@ -50,6 +50,7 @@
                                 <span class="chips">
                                     @if (atrasada) { <span class="chip chip-erro">Atrasada</span> }
                                     @if (i.Estado == EstadoIntervencao.EmCurso) { <span class="chip chip-curso">Em curso</span> }
+                                    @if (i.EmPausa) { <span class="chip chip-aviso">Em pausa</span> }
                                     @if (i.Pendente) { <span class="chip chip-pendente">Por enviar</span> }
                                     <span class="chip @(i.Tipo == TipoIntervencao.Curativa ? "chip-aviso" : "")">@(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
                                 </span>

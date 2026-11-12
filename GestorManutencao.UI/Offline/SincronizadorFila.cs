@@ -98,8 +98,13 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
             }
             catch (Exception e) when (e is not OperationCanceledException && Recusa(e))
             {
-                await MarcarConflitoAsync(operacao, Motivo(e), dono, ct);
-                bloqueadas.Add(operacao.FichaId);
+                // Pausar/Retomar recusados são só descartados: não marcam nem bloqueiam as outras operações da ficha (Concluir, material, fotos).
+                if (operacao.Tipo is TipoOperacao.Pausar or TipoOperacao.Retomar) await DescartarPausaAsync(operacao, dono, ct);
+                else
+                {
+                    await MarcarConflitoAsync(operacao, Motivo(e), dono, ct);
+                    bloqueadas.Add(operacao.FichaId);
+                }
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
@@ -150,6 +155,12 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
                 break;
             case TipoOperacao.Iniciar:
                 servidor[fichaId] = await remoto.IniciarAsync(fichaId, ct);
+                break;
+            case TipoOperacao.Pausar:
+                servidor[fichaId] = await remoto.PausarAsync(fichaId, ct);
+                break;
+            case TipoOperacao.Retomar:
+                servidor[fichaId] = await remoto.RetomarAsync(fichaId, ct);
                 break;
             case TipoOperacao.Concluir:
                 var conclusao = CargasFila.Ler<CargaConclusao>(operacao.Payload);
@@ -266,6 +277,25 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
         await fila.AdicionarAvisoAsync(aviso);
         foreach (var a in afetadas) await fila.AtualizarAsync(a with { Estado = EstadoOperacao.Conflito, AvisoId = aviso.Id, UltimoErro = motivo ?? NaoAceitou });
         await RefrescarDoServidorAsync(operacao.FichaId, dono, ct);
+    }
+
+    // Só a pausa da ficha volta ao que o servidor diz (sem mexer no resto da ficha, que pode ter operações por enviar).
+    private async Task DescartarPausaAsync(OperacaoSaida operacao, string dono, CancellationToken ct)
+    {
+        await fila.RemoverAsync(operacao.Id);
+        Intervencao? doServidor = null;
+        try
+        {
+            ConfirmarDono(dono, ct);
+            if (!IdLocal(operacao.FichaId)) doServidor = await remoto.ObterAsync(operacao.FichaId, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException) { }
+        await NoDonoAsync(dono, async () =>
+        {
+            if (await Cache.ObterFichaAsync(operacao.FichaId) is { Estado: EstadoIntervencao.EmCurso } local)
+                await Cache.GuardarFichasAsync([local with { EmPausa = doServidor?.EmPausa ?? false, PodePausar = doServidor?.PodePausar ?? false }]);
+            await mc.RecalcularPendenteAsync(dono, operacao.FichaId);
+        });
     }
 
     private static TextoDoTecnico? TextoDe(OperacaoSaida operacao) => operacao.Tipo switch

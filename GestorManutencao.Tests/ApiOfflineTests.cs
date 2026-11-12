@@ -206,6 +206,117 @@ public class ApiOfflineTests : IDisposable
     }
 
     [Fact]
+    public async Task Pausar_e_retomar_sao_idempotentes_e_o_estado_da_ficha_nao_muda()
+    {
+        var ana = await ComoAsync("482913");
+        await ana.PostAsync("/intervencoes/F1/iniciar", null);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var pausa = await ana.PostAsync("/intervencoes/F1/pausar", null);
+            Assert.Equal(HttpStatusCode.OK, pausa.StatusCode);
+            var ficha = (await pausa.Content.ReadFromJsonAsync<IntervencaoDto>())!;
+            Assert.True(ficha.EmPausa);
+            Assert.Equal(EstadoIntervencao.EmCurso, ficha.Estado);
+        }
+        Assert.True((await ana.GetFromJsonAsync<IntervencaoDto>("/intervencoes/F1"))!.EmPausa);
+        Assert.Contains(await Lista(ana, "/intervencoes"), x => x.Id == "F1" && x.EmPausa);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var retoma = await ana.PostAsync("/intervencoes/F1/retomar", null);
+            Assert.Equal(HttpStatusCode.OK, retoma.StatusCode);
+            Assert.False((await retoma.Content.ReadFromJsonAsync<IntervencaoDto>())!.EmPausa);
+        }
+        // Voltar a pausar depois de retomar é permitido.
+        Assert.True((await (await ana.PostAsync("/intervencoes/F1/pausar", null)).Content.ReadFromJsonAsync<IntervencaoDto>())!.EmPausa);
+    }
+
+    [Fact]
+    public async Task Pausar_so_com_a_ficha_em_curso_e_do_tecnico()
+    {
+        var ana = await ComoAsync("482913");
+        var rui = await ComoAsync("357159");
+
+        // Planeada: conflito, como o concluir.
+        Assert.Equal(HttpStatusCode.Conflict, (await ana.PostAsync("/intervencoes/F1/pausar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ana.PostAsync("/intervencoes/F1/retomar", null)).StatusCode);
+
+        await ana.PostAsync("/intervencoes/F1/iniciar", null);
+        // Ficha de outro técnico: não existe para o Rui.
+        Assert.Equal(HttpStatusCode.NotFound, (await rui.PostAsync("/intervencoes/F1/pausar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await rui.PostAsync("/intervencoes/F1/retomar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await ana.PostAsync("/intervencoes/NAO_EXISTE/pausar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _fabrica.CreateClient().PostAsync("/intervencoes/F1/pausar", null)).StatusCode);
+    }
+
+    private RepositorioIntervencoesMemoria Memoria => (RepositorioIntervencoesMemoria)_fabrica.Services.GetRequiredService<IRepositorioIntervencoes>();
+
+    [Fact]
+    public async Task A_pausa_e_de_cada_tecnico_com_linha_aberta_e_um_nao_ve_a_do_outro()
+    {
+        var ana = await ComoAsync("482913");
+        var rui = await ComoAsync("357159");
+        var chefe = await ComoAsync("603918");
+        await ana.PostAsync("/intervencoes/F1/iniciar", null);
+        Assert.Equal(HttpStatusCode.OK, (await chefe.PutAsJsonAsync("/planeadas/F1/tecnicos", new PedidoAdicionais([102]))).StatusCode);
+        await ana.PostAsync("/intervencoes/F1/pausar", null);
+
+        var daAna = (await ana.GetFromJsonAsync<IntervencaoDto>("/intervencoes/F1"))!;
+        Assert.True(daAna.PodePausar);
+        Assert.True(daAna.EmPausa);
+
+        // O adicional sem linha aberta não vê os botões nem a pausa da Ana e não pode pausar nem retomar.
+        var doRui = (await rui.GetFromJsonAsync<IntervencaoDto>("/intervencoes/F1"))!;
+        Assert.False(doRui.PodePausar);
+        Assert.False(doRui.EmPausa);
+        Assert.Equal(HttpStatusCode.Conflict, (await rui.PostAsync("/intervencoes/F1/pausar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await rui.PostAsync("/intervencoes/F1/retomar", null)).StatusCode);
+
+        // Com linha aberta o adicional pausa a sua, sem mexer na da Ana.
+        Memoria.SimularLinhaAberta("F1", 102, true);
+        doRui = (await rui.GetFromJsonAsync<IntervencaoDto>("/intervencoes/F1"))!;
+        Assert.True(doRui.PodePausar);
+        Assert.False(doRui.EmPausa);
+        Assert.Contains(await Lista(rui, "/intervencoes"), x => x.Id == "F1" && x.PodePausar && !x.EmPausa);
+        Assert.True((await (await rui.PostAsync("/intervencoes/F1/pausar", null)).Content.ReadFromJsonAsync<IntervencaoDto>())!.EmPausa);
+        Assert.False((await (await rui.PostAsync("/intervencoes/F1/retomar", null)).Content.ReadFromJsonAsync<IntervencaoDto>())!.EmPausa);
+        Assert.True((await ana.GetFromJsonAsync<IntervencaoDto>("/intervencoes/F1"))!.EmPausa);
+    }
+
+    [Fact]
+    public async Task Ficha_sem_linha_aberta_do_utilizador_nao_se_pausa_e_nao_mostra_o_botao()
+    {
+        var ana = await ComoAsync("482913");
+        await ana.PostAsync("/intervencoes/F1/iniciar", null);
+        Memoria.SimularLinhaAberta("F1", 101, false);
+
+        var ficha = (await ana.GetFromJsonAsync<IntervencaoDto>("/intervencoes/F1"))!;
+        Assert.False(ficha.PodePausar);
+        Assert.False(ficha.EmPausa);
+        Assert.Equal(HttpStatusCode.Conflict, (await ana.PostAsync("/intervencoes/F1/pausar", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ana.PostAsync("/intervencoes/F1/retomar", null)).StatusCode);
+        // Concluir continua a funcionar.
+        Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync("/intervencoes/F1/concluir", new PedidoConclusao("Feito", new TimeOnly(8, 0), new TimeOnly(9, 0)))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Concluir_em_pausa_conclui_sem_pausa_e_depois_ja_nao_se_pausa()
+    {
+        var ana = await ComoAsync("482913");
+        await ana.PostAsync("/intervencoes/F1/iniciar", null);
+        await ana.PostAsync("/intervencoes/F1/pausar", null);
+
+        var concluida = await ana.PostAsJsonAsync("/intervencoes/F1/concluir", new PedidoConclusao("Limpeza feita", new TimeOnly(8, 0), new TimeOnly(9, 0)));
+
+        Assert.Equal(HttpStatusCode.OK, concluida.StatusCode);
+        var ficha = (await concluida.Content.ReadFromJsonAsync<IntervencaoDto>())!;
+        Assert.Equal(EstadoIntervencao.Concluida, ficha.Estado);
+        Assert.False(ficha.EmPausa);
+        Assert.Equal(HttpStatusCode.Conflict, (await ana.PostAsync("/intervencoes/F1/pausar", null)).StatusCode);
+    }
+
+    [Fact]
     public async Task Concluir_repetido_com_texto_ou_horas_diferentes_continua_conflito()
     {
         var ana = await ComoAsync("482913");

@@ -55,7 +55,7 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
 
     public static Intervencao NovaFicha(string id, string equipamento, EstadoIntervencao estado, DateOnly data, string? anomalia = null) =>
         new(id, equipamento, "Produção", anomalia is null ? TipoIntervencao.Preventiva : TipoIntervencao.Curativa, data, estado, anomalia, null,
-            estado == EstadoIntervencao.EmCurso ? new TimeOnly(8, 0) : null);
+            estado == EstadoIntervencao.EmCurso ? new TimeOnly(8, 0) : null, PodePausar: estado == EstadoIntervencao.EmCurso);
 
     public Task<IReadOnlyList<Intervencao>> ListarMinhasAsync(CancellationToken ct = default)
     {
@@ -124,10 +124,25 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
             var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
             if (f.Estado == EstadoIntervencao.EmCurso)
             {
-                f = Fichas[id] = f with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim };
+                f = Fichas[id] = f with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim, EmPausa = false, PodePausar = false };
             }
             else if (f.Estado != EstadoIntervencao.Concluida) throw new InvalidOperationException(MensagensIntervencao.Mudou);
             return Task.FromResult(f);
+        }
+    }
+
+    public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) => Pausa("Pausar", id, true);
+
+    public Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default) => Pausa("Retomar", id, false);
+
+    private Task<Intervencao> Pausa(string metodo, string id, bool pausar)
+    {
+        Entrar(metodo, id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            if (f is not { Estado: EstadoIntervencao.EmCurso, PodePausar: true }) throw new InvalidOperationException(MensagensIntervencao.NaoPausa);
+            return Task.FromResult(Fichas[id] = f with { EmPausa = pausar });
         }
     }
 

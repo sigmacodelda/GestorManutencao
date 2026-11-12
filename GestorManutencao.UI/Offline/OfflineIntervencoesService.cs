@@ -162,7 +162,7 @@ public sealed class OfflineIntervencoesService(
 
         var equipamento = await ProcurarEquipamentoAsync(equipamentoId) ?? throw FichaMudou();
         var local = new Intervencao(NovoIdLocal(), equipamento.Nome, equipamento.Zona, TipoIntervencao.Curativa, DateOnly.FromDateTime(tempo.GetLocalNow().DateTime),
-            EstadoIntervencao.EmCurso, texto, null, TimeOnly.FromDateTime(tempo.GetLocalNow().DateTime), Tecnico: dono, Pendente: true);
+            EstadoIntervencao.EmCurso, texto, null, TimeOnly.FromDateTime(tempo.GetLocalNow().DateTime), Tecnico: dono, Pendente: true, PodePausar: true);
         await mc.ComTrincoAsync(async () =>
         {
             await fila.AdicionarAsync(NovaOperacao(dono, TipoOperacao.RegistarAvaria, local.Id, CargasFila.Escrever(new CargaAvaria(equipamentoId, texto)), opId, false));
@@ -190,6 +190,7 @@ public sealed class OfflineIntervencoesService(
 
         return await EnfileirarFichaAsync(dono, id, TipoOperacao.Iniciar, "{}", f => f.Estado switch
         {
+            // PodePausar só se confirma com o servidor: iniciar offline não garante que o utilizador seja o técnico principal.
             EstadoIntervencao.Planeada => f with { Estado = EstadoIntervencao.EmCurso, HoraInicio = TimeOnly.FromDateTime(tempo.GetLocalNow().DateTime) },
             EstadoIntervencao.EmCurso => f,
             _ => throw FichaMudou()
@@ -212,8 +213,31 @@ public sealed class OfflineIntervencoesService(
 
         return await EnfileirarFichaAsync(dono, id, TipoOperacao.Concluir, CargasFila.Escrever(new CargaConclusao(feito.Trim(), inicio, fim)), f =>
             f.Estado == EstadoIntervencao.EmCurso
-                ? f with { Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null }
+                ? f with { Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null, EmPausa = false, PodePausar = false }
                 : throw FichaMudou());
+    }
+
+    public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) => PausaAsync(id, true, ct);
+
+    public Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default) => PausaAsync(id, false, ct);
+
+    // Como Começar/Feito: online se der, senão fila com alteração otimista (só a ficha em curso tem pausa).
+    private async Task<Intervencao> PausaAsync(string id, bool pausar, CancellationToken ct)
+    {
+        if (await mc.GarantirDonoAsync() is not { } dono) return await (pausar ? remoto.PausarAsync(id, ct) : remoto.RetomarAsync(id, ct));
+        id = await mc.ResolverIdAsync(id);
+        if (await PodeOnlineAsync(dono, id))
+            try
+            {
+                var ficha = await mc.GuardarFichaServidorAsync(await (pausar ? remoto.PausarAsync(id, ct) : remoto.RetomarAsync(id, ct)));
+                AvisarEscrita();
+                return ficha;
+            }
+            catch (Exception e) when (FalhaDeRede(e, ct)) { }
+
+        return await EnfileirarFichaAsync(dono, id, pausar ? TipoOperacao.Pausar : TipoOperacao.Retomar, "{}", f =>
+            f is { Estado: EstadoIntervencao.EmCurso, PodePausar: true } ? f with { EmPausa = pausar }
+                : throw new InvalidOperationException(pausar ? MensagensIntervencao.NaoPausa : MensagensIntervencao.NaoRetoma));
     }
 
     private async Task<Intervencao> EnfileirarFichaAsync(string dono, string id, TipoOperacao tipo, string payload, Func<Intervencao, Intervencao> otimista)

@@ -47,6 +47,11 @@
             </div>
         }
 
+        @if (_i.Estado == EstadoIntervencao.EmCurso && _i.PodePausar && _i.EmPausa)
+        {
+            <div class="chips"><span class="chip chip-aviso" role="status"><Icone Nome="pause" /> Em pausa</span></div>
+        }
+
         <dl class="ficha">
             @if (!string.IsNullOrWhiteSpace(_i.Zona)) { <dt>Zona</dt><dd>@_i.Zona</dd> }
             <dt>Tipo</dt><dd>@(_i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</dd>
@@ -226,7 +231,18 @@
         else if (_i.Estado == EstadoIntervencao.EmCurso)
         {
             <p class="campo-erro" role="alert">@_erro</p>
-            <button type="button" class="btn btn-primario btn-grande btn-fixo" disabled="@_a_gravar" @onclick="ConcluirAsync"><Icone Nome="check" /><span>@(_a_gravar ? "A guardar…" : "Feito")</span></button>
+            @* Feito à direita (row-reverse); Pausar/Retomar ao lado, ambos fixos ao fundo. *@
+            <div class="barra-fixa">
+                <button type="button" class="btn btn-primario btn-grande" disabled="@_a_gravar" @onclick="ConcluirAsync"><Icone Nome="check" /><span>@(_a_gravar && _pausa is null ? "A guardar…" : "Feito")</span></button>
+                @if (_i.PodePausar && _i.EmPausa)
+                {
+                    <button type="button" class="btn btn-secundario btn-grande" disabled="@_a_gravar" @onclick="RetomarAsync"><Icone Nome="play" /><span>@(_pausa == false ? "A retomar…" : "Retomar")</span></button>
+                }
+                else if (_i.PodePausar)
+                {
+                    <button type="button" class="btn btn-secundario btn-grande" disabled="@_a_gravar" @onclick="PausarAsync"><Icone Nome="pause" /><span>@(_pausa == true ? "A pausar…" : "Pausar")</span></button>
+                }
+            </div>
         }
         else
         {
@@ -456,6 +472,25 @@
     }
 
     private async Task IniciarAsync() => await Gravar(() => Intervencoes.IniciarAsync(Id));
+
+    // true = a pausar, false = a retomar, null = não está a pausar nem a retomar (o texto "A guardar…" é só do Feito).
+    private bool? _pausa;
+
+    private async Task PausarAsync()
+    {
+        _pausa = true;
+        try { await Gravar(() => Intervencoes.PausarAsync(Id)); }
+        finally { _pausa = null; }
+        if (_erro.Length == 0 && _i is { EmPausa: true }) Toast.Sucesso("Intervenção em pausa");
+    }
+
+    private async Task RetomarAsync()
+    {
+        _pausa = false;
+        try { await Gravar(() => Intervencoes.RetomarAsync(Id)); }
+        finally { _pausa = null; }
+        if (_erro.Length == 0 && _i is { EmPausa: false }) Toast.Sucesso("Intervenção retomada");
+    }
 
     private async Task ConcluirAsync()
     {

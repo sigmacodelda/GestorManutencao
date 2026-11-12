@@ -13,6 +13,8 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
         public List<(FotoDto Foto, byte[] Dados)> Fotos { get; } = [];
         public string Motivo { get; set; } = "";
         public string? OpId { get; set; }
+        // Linhas de tempo abertas (u_tempinterv) por técnico; o valor é "em pausa". Só existem com a ficha em curso.
+        public Dictionary<int, bool> Linhas { get; } = [];
 
         // Campos da ficha completa. Antiga = ficha do PHC sem estado (D.Estado já vem como Validada ou Concluida).
         public int Numero { get; set; }
@@ -115,11 +117,17 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
         ];
 
     // O motivo da devolução só se vê enquanto a ficha está em curso, como no SQL.
-    private IntervencaoDto Ver(Ficha f, bool podeValidar = true) => f.D with
+    // PodePausar/EmPausa são do utilizador (tecno): a sua linha de tempo aberta numa ficha em curso; sem tecno (listas do supervisor) ficam falsos.
+    private IntervencaoDto Ver(Ficha f, bool podeValidar = true, int tecno = 0)
     {
-        Tecno = f.Tecno, PodeValidar = podeValidar, Adicionais = RegrasIntervencao.AdicionaisDe(f.Tecnos, f.Tecno),
-        Motivo = f.D.Estado == EstadoIntervencao.EmCurso && f.Motivo.Length > 0 ? f.Motivo : null
-    };
+        var linha = f.D.Estado == EstadoIntervencao.EmCurso && tecno > 0 && f.Linhas.TryGetValue(tecno, out var pausa) ? (bool?)pausa : null;
+        return f.D with
+        {
+            Tecno = f.Tecno, PodeValidar = podeValidar, Adicionais = RegrasIntervencao.AdicionaisDe(f.Tecnos, f.Tecno),
+            Motivo = f.D.Estado == EstadoIntervencao.EmCurso && f.Motivo.Length > 0 ? f.Motivo : null,
+            PodePausar = linha is not null, EmPausa = linha == true
+        };
+    }
 
     private static bool Minha(Ficha f, TecnicoAtual t) => RegrasIntervencao.PodeMexer(f.Tecno, f.Tecnos, t.Tecno);
 
@@ -129,6 +137,17 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
 
     private static (ResultadoIntervencao, T?) Falha<T>(ResultadoIntervencao r) => (r, default);
 
+    // Para testes: abre ou fecha a linha de tempo do técnico na ficha (fichas antigas, devolvidas ou adicionais sem linha).
+    public void SimularLinhaAberta(string id, int tecno, bool aberta)
+    {
+        lock (Trinco())
+            if (_lista.FirstOrDefault(x => x.D.Id == id) is { } f)
+            {
+                if (aberta) f.Linhas.TryAdd(tecno, false);
+                else f.Linhas.Remove(tecno);
+            }
+    }
+
     public Task<IReadOnlyList<IntervencaoDto>> ListarAsync(TecnicoAtual tecnico, CancellationToken ct)
     {
         lock (Trinco())
@@ -136,7 +155,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
             var ate = Hoje.AddDays(_cfg.Antecedencia);
             return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista
                 .Where(f => Aberta(f) && (Pertence(f, tecnico.Tecno) || (f.Tecno == 0 && f.D.DataPlaneada <= ate)))
-                .OrderBy(f => f.D.DataPlaneada).Select(f => Ver(f)).ToList());
+                .OrderBy(f => f.D.DataPlaneada).Select(f => Ver(f, tecno: tecnico.Tecno)).ToList());
         }
     }
 
@@ -153,7 +172,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
 
     public Task<IntervencaoDto?> ObterAsync(string id, TecnicoAtual tecnico, CancellationToken ct)
     {
-        lock (Trinco()) return Task.FromResult(_lista.Where(f => f.D.Id == id && Minha(f, tecnico)).Select(f => (IntervencaoDto?)Ver(f)).FirstOrDefault());
+        lock (Trinco()) return Task.FromResult(_lista.Where(f => f.D.Id == id && Minha(f, tecnico)).Select(f => (IntervencaoDto?)Ver(f, tecno: tecnico.Tecno)).FirstOrDefault());
     }
 
     private static bool Contem(string? valor, string texto) => valor?.Contains(texto, StringComparison.OrdinalIgnoreCase) == true;
@@ -266,15 +285,16 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
                 anomalia, null, TimeOnly.FromDateTime(agora), null, tecnico.Nome, tecnico.Tecno),
             Tecno = tecnico.Tecno,
             OpId = opId,
-            Numero = ProximoNumero()
+            Numero = ProximoNumero(),
+            Linhas = { [tecnico.Tecno] = false }
         };
         lock (Trinco())
         {
             if (opId is not null && _lista.FirstOrDefault(x => x.OpId == opId && x.Tecno == tecnico.Tecno) is { } repetida)
-                return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(repetida)));
+                return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(repetida, tecno: tecnico.Tecno)));
             _lista.Add(nova);
         }
-        return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(nova)));
+        return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(nova, tecno: tecnico.Tecno)));
     }
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> IniciarAsync(string id, TecnicoAtual tecnico, CancellationToken ct)
@@ -285,7 +305,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
             if (f is null || !Minha(f, tecnico)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
             // Repetição do mesmo pedido (a resposta perdeu-se): a ficha já está em curso e é do mesmo técnico.
             if (f.D.Estado == EstadoIntervencao.EmCurso && Pertence(f, tecnico.Tecno))
-                return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
+                return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f, tecno: tecnico.Tecno)));
             if (f.D.Estado != EstadoIntervencao.Planeada) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
 
             // A primeira planeada da fila da mesma zona, por data.
@@ -300,7 +320,9 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
                 Tecnico = semDono ? tecnico.Nome : f.D.Tecnico
             };
             if (semDono) f.Tecno = tecnico.Tecno;
-            return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
+            // Como no SQL: ao começar abre-se a linha do técnico (se a ficha ainda não tem nenhuma).
+            if (f.Linhas.Count == 0) f.Linhas[tecnico.Tecno] = false;
+            return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f, tecno: tecnico.Tecno)));
         }
     }
 
@@ -315,9 +337,29 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
                 return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
             if (f.D.Estado != EstadoIntervencao.EmCurso) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
 
+            // Concluir em pausa fecha a pausa.
             f.D = f.D with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim, DataPlaneada = Hoje };
+            f.Linhas.Clear();
             GerarSeguinte(f);
             return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
+        }
+    }
+
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> PausarAsync(string id, TecnicoAtual tecnico, CancellationToken ct) => Pausa(id, tecnico, true);
+
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> RetomarAsync(string id, TecnicoAtual tecnico, CancellationToken ct) => Pausa(id, tecnico, false);
+
+    // Só a ficha em curso e do técnico; repetir o pedido (já está nesse estado) devolve a ficha como está.
+    private Task<(ResultadoIntervencao, IntervencaoDto?)> Pausa(string id, TecnicoAtual tecnico, bool pausar)
+    {
+        lock (Trinco())
+        {
+            var f = _lista.FirstOrDefault(x => x.D.Id == id);
+            if (f is null || !Minha(f, tecnico)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
+            // A pausa é da linha de tempo aberta do próprio utilizador; sem ela, conflito.
+            if (f.D.Estado != EstadoIntervencao.EmCurso || !Pertence(f, tecnico.Tecno) || !f.Linhas.ContainsKey(tecnico.Tecno)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
+            f.Linhas[tecnico.Tecno] = pausar;
+            return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f, tecno: tecnico.Tecno)));
         }
     }
 

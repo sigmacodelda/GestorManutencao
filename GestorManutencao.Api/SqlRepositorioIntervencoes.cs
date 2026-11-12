@@ -38,12 +38,28 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string EmTecnos = "cast(f." + ColunaTecnos + " as varchar(max)) like @padrao";
     private const string EmTecnosSemAlias = "cast(" + ColunaTecnos + " as varchar(max)) like @padrao";
 
-    private const string Selecao =
+    // Pausa (coluna 14), relativa ao utilizador (@tecno): a sua linha de tempo aberta (a primeira, como SqlLinhaPausa) numa ficha em curso.
+    // 0 = sem linha aberta (não se pausa), 1 = linha aberta sem pausa, 2 = em pausa (pausaini preenchido e pausafim vazio).
+    // Só as consultas que têm @tecno a calculam; as outras (listas do supervisor, histórico) devolvem 0.
+    private const string PausaSel =
+        "case when rtrim(f.estado) = 'EmCurso' then isnull((select top 1 case when t.pausaini > '19000101' and t.pausafim <= t.pausaini then 2 else 1 end " +
+        "from u_tempinterv t with (nolock) where t.u_fichaintstamp = f.u_fichaintstamp and t.no = @tecno and t.dataini > '19000101' and t.datafim <= '19000101' " +
+        "order by t.dataini, t.u_tempintervstamp), 0) else 0 end";
+
+    private const string SelecaoCampos =
         $"""
         select f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
                f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, {HIniSel}, {HFimSel}, f.tecnome, f.tecno, isnull(f.valobs, ''), {TecnosSel}
+        """;
+
+    private const string SelecaoDe = """
+
         from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
         """;
+
+    private const string Selecao = SelecaoCampos + ", " + PausaSel + SelecaoDe;
+
+    private const string SelecaoSemPausa = SelecaoCampos + ", 0" + SelecaoDe;
 
     // Do técnico, principal ou adicional (ou sem dono e já dentro da antecedência); em curso e planeadas, sem viaturas.
     private const string SqlListar = Selecao +
@@ -60,7 +76,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         where f.u_fichaintstamp = @id and f.obsoleto = 0 and e.tipoequip = 1 and (f.tecno = @tecno or f.tecno = 0 or {EmTecnos})
         """;
 
-    private const string SqlObterQualquer = Selecao +
+    private const string SqlObterQualquer = SelecaoSemPausa +
         """
 
         where f.u_fichaintstamp = @id and f.obsoleto = 0 and e.tipoequip = 1
@@ -70,7 +86,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string SqlPlaneadas =
         $"""
         select f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
-               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, {HIniSel}, {HFimSel}, f.tecnome, f.tecno, isnull(f.valobs, ''), {TecnosSel},
+               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, {HIniSel}, {HFimSel}, f.tecnome, f.tecno, isnull(f.valobs, ''), {TecnosSel}, 0,
                coalesce(c.feita, lg.ultima), c.cancelada, isnull(pp.unidade, ''), isnull(pp.intervalo, 0)
         from u_fichaint f with (nolock)
         left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
@@ -92,7 +108,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         order by f.data, f.ordem, f.no
         """;
 
-    private const string SqlPorValidar = Selecao +
+    private const string SqlPorValidar = SelecaoSemPausa +
         """
 
         where f.estado = 'Concluida' and f.obsoleto = 0 and e.tipoequip = 1
@@ -199,7 +215,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string CamposFichaBase =
         " f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''), f.tipointerv, f.data, " + EstadoEfetivo +
-        ", f.problema, f.resolucao, " + HIniSel + ", " + HFimSel + ", f.tecnome, f.tecno, isnull(f.valobs, ''), " + TecnosSel;
+        ", f.problema, f.resolucao, " + HIniSel + ", " + HFimSel + ", f.tecnome, f.tecno, isnull(f.valobs, ''), " + TecnosSel + ", 0";
 
     private const string FromFicha = " from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp";
 
@@ -311,12 +327,47 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         where u_fichaintstamp = @id and fechada = 0 and obsoleto = 0 and estado = 'EmCurso' and (tecno = @tecno or tecno = 0 or {EmTecnosSemAlias})
         """;
 
-    // Fecha a linha aberta do técnico: início e fim indicados, tempo líquido de pausas e custo ao custo/hora do técnico.
+    // Pausa: um só par pausaini/pausafim por linha, por isso (pausafim - pausaini) é sempre o total pausado.
+    // Pausar depois de já ter retomado desloca pausaini para (agora - pausa anterior) e limpa pausafim; retomar põe pausafim = agora.
+    // Só a linha aberta do técnico (sem datafim) de uma ficha em curso; o UPDATE é idempotente (não repete uma pausa já aberta).
+    // A decisão (SqlLinhaPausa) e os UPDATE atuam sempre na mesma linha: a aberta do técnico com menor dataini.
+    private const string LinhaAberta =
+        "select top 1 t.u_tempintervstamp from u_tempinterv t where t.u_fichaintstamp = @id and t.no = @tecno " +
+        "and t.dataini > '19000101' and t.datafim <= '19000101' order by t.dataini, t.u_tempintervstamp";
+
+    private const string SqlLinhaPausa =
+        """
+        select top 1 pausaini, pausafim from u_tempinterv with (nolock)
+        where u_fichaintstamp = @id and no = @tecno and dataini > '19000101' and datafim <= '19000101'
+        order by dataini, u_tempintervstamp
+        """;
+
+    private const string SqlPausar =
+        $"""
+        update u_tempinterv set
+               pausaini = case when pausaini > '19000101' and pausafim > pausaini then dateadd(second, -datediff(second, pausaini, pausafim), @agora) else @agora end,
+               pausafim = '19000101', usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        where u_tempintervstamp = ({LinhaAberta})
+          and not (pausaini > '19000101' and pausafim <= pausaini)
+          and exists (select 1 from u_fichaint where u_fichaintstamp = u_tempinterv.u_fichaintstamp and estado = 'EmCurso' and obsoleto = 0 and fechada = 0)
+        """;
+
+    // Também usada ao concluir em pausa: fecha a pausa antes de calcular o tempo.
+    private const string SqlRetomar =
+        $"""
+        update u_tempinterv set pausafim = @agora, usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        where u_tempintervstamp = ({LinhaAberta})
+          and pausaini > '19000101' and pausafim <= pausaini
+          and exists (select 1 from u_fichaint where u_fichaintstamp = u_tempinterv.u_fichaintstamp and estado = 'EmCurso' and obsoleto = 0 and fechada = 0)
+        """;
+
+    // Fecha a linha aberta do técnico: início e fim indicados, tempo líquido de pausas (nunca negativo) e custo ao custo/hora do técnico.
     private const string SqlFecharLinha =
         """
         update u_tempinterv set dataini = @inicio, datafim = @fim,
-               tempo = cast(case when datediff(second, @inicio, @fim) > 0 then datediff(second, @inicio, @fim) / 3600.0 else 0 end
-                            - case when pausaini > '19000101' and pausafim > pausaini then datediff(second, pausaini, pausafim) / 3600.0 else 0 end as numeric(16,3)),
+               tempo = cast(case when datediff(second, @inicio, @fim) - case when pausaini > '19000101' and pausafim > pausaini then datediff(second, pausaini, pausafim) else 0 end > 0
+                            then (datediff(second, @inicio, @fim) - case when pausaini > '19000101' and pausafim > pausaini then datediff(second, pausaini, pausafim) else 0 end) / 3600.0
+                            else 0 end as numeric(16,3)),
                usrinis = @codigo, usrdata = @dia, usrhora = @hora
         where u_fichaintstamp = @id and no = @tecno and dataini > '19000101' and datafim <= '19000101';
         if @@ROWCOUNT > 0
@@ -535,17 +586,18 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
             hini > SemData ? TimeOnly.FromDateTime(hini) : null, hfim > SemData ? TimeOnly.FromDateTime(hfim) : null,
             Vazio(r.GetString(10)), (int)r.GetDecimal(11), podeValidar,
             Motivo: estado == EstadoIntervencao.EmCurso ? Vazio(r.GetString(12)) : null,
-            Adicionais: RegrasIntervencao.AdicionaisDe(r.GetString(13), (int)r.GetDecimal(11)));
+            Adicionais: RegrasIntervencao.AdicionaisDe(r.GetString(13), (int)r.GetDecimal(11)),
+            EmPausa: r.GetInt32(14) == 2, PodePausar: r.GetInt32(14) >= 1);
     }
 
     // Data prevista = a mais recente entre a última feita e a última cancelada (cancelar salta uma ocorrência) + periodicidade.
     private static IntervencaoDto LerPlaneada(SqlDataReader r)
     {
-        var feita = r.IsDBNull(14) ? (DateTime?)null : r.GetDateTime(14);
-        var cancelada = r.IsDBNull(15) ? (DateTime?)null : r.GetDateTime(15);
+        var feita = r.IsDBNull(15) ? (DateTime?)null : r.GetDateTime(15);
+        var cancelada = r.IsDBNull(16) ? (DateTime?)null : r.GetDateTime(16);
         var baseData = cancelada.HasValue && (!feita.HasValue || cancelada > feita) ? cancelada : feita;
         var prevista = baseData.HasValue
-            ? RegrasManutencao.ProximaDepoisDaUltima(baseData.Value, RegrasManutencao.LerUnidade(r.GetString(16)), (int)r.GetDecimal(17))
+            ? RegrasManutencao.ProximaDepoisDaUltima(baseData.Value, RegrasManutencao.LerUnidade(r.GetString(17)), (int)r.GetDecimal(18))
             : null;
         return Ler(r) with
         {
@@ -716,7 +768,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
             if (lidas++ < saltar) continue;
             itens.Add(ComPermissao(Ler(r), supervisor.Tecno) with
             {
-                Numero = (int)Dec(r, 14), Total = Dec(r, 15), Fechada = Bool(r, 16), PorSupervisionar = !Bool(r, 17), ForaDeOrdem = Bool(r, 18), Antiga = Dec(r, 19) == 1
+                Numero = (int)Dec(r, 15), Total = Dec(r, 16), Fechada = Bool(r, 17), PorSupervisionar = !Bool(r, 18), ForaDeOrdem = Bool(r, 19), Antiga = Dec(r, 20) == 1
             });
         }
         // A ficha a mais lida (topo = página + 1) só serve para saber se há mais.
@@ -775,7 +827,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
             await using var procura = new SqlCommand(SqlAvariaPorOp, conn);
             Numero(procura, "@tecno", tecnico.Tecno, 5);
             Texto(procura, "@opid", RegrasIntervencao.MaxOpId, opId);
-            if (await procura.ExecuteScalarAsync(ct) is string existente && await LerUmaAsync(conn, existente.Trim(), ct) is { } ficha)
+            if (await procura.ExecuteScalarAsync(ct) is string existente && await LerUmaAsync(conn, existente.Trim(), ct, tecnico) is { } ficha)
                 return (ResultadoIntervencao.Ok, ficha);
         }
         var agora = await AgoraAsync(conn, ct);
@@ -792,14 +844,14 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         Texto(cmd, "@tempostamp", 25, NovoStamp());
         Auditoria(cmd, tecnico.Codigo, agora);
         if (await cmd.ExecuteNonQueryAsync(ct) == 0) return (ResultadoIntervencao.NaoExiste, null);
-        return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, stamp, ct));
+        return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, stamp, ct, tecnico));
     }
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> IniciarAsync(string id, TecnicoAtual tecnico, CancellationToken ct) => Executar<(ResultadoIntervencao, IntervencaoDto?)>(async conn =>
     {
         if (await LerAtualAsync(conn, id, ct) is not { } a || !Minha(a, tecnico)) return (ResultadoIntervencao.NaoExiste, null);
         // Repetição do mesmo pedido (a resposta perdeu-se): já está em curso e é do mesmo técnico.
-        if (a.Estado == "EmCurso" && Pertence(a, tecnico.Tecno)) return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct));
+        if (a.Estado == "EmCurso" && Pertence(a, tecnico.Tecno)) return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct, tecnico));
         if (a.Estado != "Planeada") return (ResultadoIntervencao.Conflito, null);
 
         // A ficha deve ser a primeira planeada da fila da zona, salvo se a configuração deixar avançar fora de ordem.
@@ -819,7 +871,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         cmd.Parameters.Add("@fora", SqlDbType.Bit).Value = foraOrdem;
         Texto(cmd, "@tempostamp", 25, NovoStamp());
         Auditoria(cmd, tecnico.Codigo, agora);
-        return await Resultado(conn, cmd, id, ct);
+        return await Resultado(conn, cmd, id, ct, tecnico);
     });
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirAsync(string id, TecnicoAtual tecnico, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct) => Executar<(ResultadoIntervencao, IntervencaoDto?)>(async conn =>
@@ -843,6 +895,14 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         var custoHora = await CustoHoraDoTecnicoAsync(conn, tecnico.Tecno, ct);
 
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
+        // Concluir em pausa: fecha a pausa (ainda com a ficha em curso) para as horas não contarem esse tempo.
+        await using (var retoma = new SqlCommand(SqlRetomar, conn, tx))
+        {
+            Texto(retoma, "@id", 25, id);
+            Numero(retoma, "@tecno", tecnico.Tecno, 5);
+            Auditoria(retoma, tecnico.Codigo, agora);
+            await retoma.ExecuteNonQueryAsync(ct);
+        }
         await using var cmd = new SqlCommand(SqlConcluir, conn, tx);
         Texto(cmd, "@id", 25, id);
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
@@ -885,11 +945,47 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct));
     });
 
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> PausarAsync(string id, TecnicoAtual tecnico, CancellationToken ct) => Pausa(id, tecnico, true, ct);
+
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> RetomarAsync(string id, TecnicoAtual tecnico, CancellationToken ct) => Pausa(id, tecnico, false, ct);
+
+    // Só a ficha em curso e do técnico (como Concluir), na linha de tempo aberta do próprio utilizador. Já estar no estado pedido é ok
+    // (a resposta pode ter-se perdido); sem linha aberta do utilizador (ficha devolvida, antiga, adicional sem linha), conflito.
+    private Task<(ResultadoIntervencao, IntervencaoDto?)> Pausa(string id, TecnicoAtual tecnico, bool pausar, CancellationToken ct) => Executar<(ResultadoIntervencao, IntervencaoDto?)>(async conn =>
+    {
+        if (await LerAtualAsync(conn, id, ct) is not { } a || !Minha(a, tecnico)) return (ResultadoIntervencao.NaoExiste, null);
+        if (a.Estado != "EmCurso" || !Pertence(a, tecnico.Tecno)) return (ResultadoIntervencao.Conflito, null);
+
+        if (await LerPausaAsync(conn, id, tecnico.Tecno, ct) is not { } antes) return (ResultadoIntervencao.Conflito, null);
+        if (antes == pausar) return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct, tecnico));
+
+        await using var cmd = new SqlCommand(pausar ? SqlPausar : SqlRetomar, conn);
+        Texto(cmd, "@id", 25, id);
+        Numero(cmd, "@tecno", tecnico.Tecno, 5);
+        Auditoria(cmd, tecnico.Codigo, await AgoraAsync(conn, ct));
+        if (await cmd.ExecuteNonQueryAsync(ct) > 0) return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct, tecnico));
+        // Outro pedido igual chegou primeiro: já está no estado pedido.
+        return await LerPausaAsync(conn, id, tecnico.Tecno, ct) == pausar ? (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct, tecnico)) : (ResultadoIntervencao.Conflito, null);
+    });
+
+    // null = o técnico não tem linha aberta nesta ficha; true = em pausa (pausaini preenchido e pausafim vazio).
+    private static async Task<bool?> LerPausaAsync(SqlConnection conn, string id, int tecno, CancellationToken ct)
+    {
+        await using var cmd = new SqlCommand(SqlLinhaPausa, conn);
+        Texto(cmd, "@id", 25, id);
+        Numero(cmd, "@tecno", tecno, 5);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct)) return null;
+        var ini = r.GetDateTime(0);
+        return ini > SemData && r.GetDateTime(1) <= ini;
+    }
+
     private static string NovoStamp() => Guid.NewGuid().ToString("N")[..25].ToUpperInvariant();
 
-    private async Task<(ResultadoIntervencao, IntervencaoDto?)> Resultado(SqlConnection conn, SqlCommand cmd, string id, CancellationToken ct)
+    // Com tecnico, a ficha devolvida traz a pausa desse utilizador.
+    private async Task<(ResultadoIntervencao, IntervencaoDto?)> Resultado(SqlConnection conn, SqlCommand cmd, string id, CancellationToken ct, TecnicoAtual? tecnico = null)
     {
-        if (await cmd.ExecuteNonQueryAsync(ct) > 0) return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct));
+        if (await cmd.ExecuteNonQueryAsync(ct) > 0) return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct, tecnico));
         return (await LerAtualAsync(conn, id, ct) is null ? ResultadoIntervencao.NaoExiste : ResultadoIntervencao.Conflito, null);
     }
 

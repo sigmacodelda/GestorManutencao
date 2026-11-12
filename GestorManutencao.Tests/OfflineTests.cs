@@ -425,6 +425,119 @@ public class OfflineTests
     }
 
     [Fact]
+    public async Task Pausar_e_retomar_online_vao_ao_servidor_e_ficam_na_cache()
+    {
+        var c = new Cenario();
+        await c.SemearEmCacheAsync("T1", "Compressor de ar 02", EstadoIntervencao.EmCurso);
+
+        var pausada = await c.Svc.PausarAsync("T1");
+        Assert.True(pausada.EmPausa);
+        Assert.False(pausada.Pendente);
+        Assert.True((await c.Cache.ObterFichaAsync("T1"))!.EmPausa);
+
+        Assert.False((await c.Svc.RetomarAsync("T1")).EmPausa);
+        Assert.Equal(1, c.Remoto.Contar("Pausar"));
+        Assert.Equal(1, c.Remoto.Contar("Retomar"));
+        Assert.Equal(0, await c.Fila.ContarPendentesAsync("ana"));
+    }
+
+    [Fact]
+    public async Task Pausar_e_retomar_offline_ficam_na_fila_com_estado_otimista_e_sincronizam_por_ordem()
+    {
+        var c = new Cenario();
+        await c.SemearEmCacheAsync("T1", "Compressor de ar 02", EstadoIntervencao.EmCurso);
+        c.Rede.Definir(false);
+
+        var pausada = await c.Svc.PausarAsync("T1");
+        Assert.True(pausada.EmPausa);
+        Assert.True(pausada.Pendente);
+        Assert.Equal(1, await c.Fila.ContarPendentesAsync("ana"));
+        Assert.True((await c.Svc.ObterAsync("T1"))!.EmPausa);
+
+        Assert.False((await c.Svc.RetomarAsync("T1")).EmPausa);
+        await c.Svc.PausarAsync("T1");
+        Assert.Equal(3, await c.Fila.ContarPendentesAsync("ana"));
+        Assert.Equal(0, c.Remoto.Contar("Pausar"));
+
+        c.Rede.Definir(true);
+        await c.Sinc.SincronizarAsync();
+
+        var chamadas = c.Remoto.Chamadas.Where(x => x.StartsWith("Pausar") || x.StartsWith("Retomar")).ToList();
+        Assert.Equal(["Pausar:T1", "Retomar:T1", "Pausar:T1"], chamadas);
+        Assert.Equal(0, c.Sinc.PendentesCount);
+        Assert.Empty(await c.Sinc.ListarAvisosAsync());
+        Assert.True(c.Remoto.Fichas["T1"].EmPausa);
+        Assert.False((await c.Cache.ObterFichaAsync("T1"))!.Pendente);
+    }
+
+    [Fact]
+    public async Task Pausar_ficha_que_nao_esta_em_curso_e_recusado_sem_ir_para_a_fila()
+    {
+        var c = new Cenario();
+        await c.SemearEmCacheAsync("T1", "Compressor de ar 02", EstadoIntervencao.Planeada);
+        c.Rede.Definir(false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.PausarAsync("T1"));
+        Assert.Equal(0, await c.Fila.ContarPendentesAsync("ana"));
+    }
+
+    [Fact]
+    public async Task Concluir_offline_em_pausa_limpa_a_pausa_e_sincroniza_pausar_e_concluir_por_ordem()
+    {
+        var c = new Cenario();
+        await c.SemearEmCacheAsync("T1", "Compressor de ar 02", EstadoIntervencao.EmCurso);
+        c.Rede.Definir(false);
+        await c.Svc.PausarAsync("T1");
+
+        var concluida = await c.Svc.ConcluirAsync("T1", "Limpeza", new TimeOnly(8, 0), new TimeOnly(9, 0));
+        Assert.Equal(EstadoIntervencao.Concluida, concluida.Estado);
+        Assert.False(concluida.EmPausa);
+
+        c.Rede.Definir(true);
+        await c.Sinc.SincronizarAsync();
+
+        Assert.Equal(["Pausar:T1", "Concluir:T1"], c.Remoto.Chamadas.Where(x => x.StartsWith("Pausar") || x.StartsWith("Concluir")).ToList());
+        Assert.Equal(EstadoIntervencao.Concluida, c.Remoto.Fichas["T1"].Estado);
+        Assert.False(c.Remoto.Fichas["T1"].EmPausa);
+    }
+
+    [Fact]
+    public async Task Pausar_offline_recusado_e_descartado_sem_bloquear_o_concluir_da_mesma_ficha()
+    {
+        var c = new Cenario();
+        await c.SemearEmCacheAsync("T1", "Compressor de ar 02", EstadoIntervencao.EmCurso);
+        c.Rede.Definir(false);
+        await c.Svc.PausarAsync("T1");
+        await c.Svc.ConcluirAsync("T1", "Limpeza", new TimeOnly(8, 0), new TimeOnly(9, 0));
+        c.Rede.Definir(true);
+        c.Remoto.Falha = m => m == "Pausar" ? new InvalidOperationException(MensagensIntervencao.NaoPausa) : null;
+
+        await c.Sinc.SincronizarAsync();
+
+        Assert.Equal(1, c.Remoto.Contar("Concluir"));
+        Assert.Equal(EstadoIntervencao.Concluida, c.Remoto.Fichas["T1"].Estado);
+        Assert.Empty(await c.Sinc.ListarAvisosAsync());
+        Assert.Equal(0, c.Sinc.PendentesCount);
+        Assert.Equal(EstadoSincronizacao.Sincronizado, c.Sinc.Estado);
+        Assert.False((await c.Cache.ObterFichaAsync("T1"))!.Pendente);
+    }
+
+    [Fact]
+    public async Task Pausar_sem_PodePausar_na_cache_e_recusado_com_mensagem_propria()
+    {
+        var c = new Cenario();
+        c.Semear(Ficha("T1", "Compressor de ar 02", EstadoIntervencao.EmCurso) with { PodePausar = false });
+        await c.Svc.ListarMinhasAsync();
+        c.Rede.Definir(false);
+
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.PausarAsync("T1"));
+        Assert.Equal(MensagensIntervencao.NaoPausa, e.Message);
+        e = await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.RetomarAsync("T1"));
+        Assert.Equal(MensagensIntervencao.NaoRetoma, e.Message);
+        Assert.Equal(0, await c.Fila.ContarPendentesAsync("ana"));
+    }
+
+    [Fact]
     public async Task Sem_utilizador_passa_direto_ao_servidor_sem_cache()
     {
         var c = new Cenario();

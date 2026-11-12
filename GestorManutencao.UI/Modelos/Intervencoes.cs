@@ -28,7 +28,8 @@ public sealed record Intervencao(
     bool PodeAbrir = false, string? Motivo = null,
     bool Pendente = false,
     IReadOnlyList<TecnicoFicha>? Adicionais = null,
-    int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false)
+    int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false,
+    bool EmPausa = false, bool PodePausar = false)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 

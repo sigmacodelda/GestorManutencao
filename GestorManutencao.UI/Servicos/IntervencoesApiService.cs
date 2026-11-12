@@ -44,6 +44,19 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/concluir", new { feito, inicio, fim }, ct);
 
+    public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) =>
+        PausaAsync($"intervencoes/{Uri.EscapeDataString(id)}/pausar", MensagensIntervencao.NaoPausa, ct);
+
+    public Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default) =>
+        PausaAsync($"intervencoes/{Uri.EscapeDataString(id)}/retomar", MensagensIntervencao.NaoRetoma, ct);
+
+    // Recusa (404/409) tem mensagem própria, não a genérica de "já mudou".
+    private async Task<Intervencao> PausaAsync(string url, string recusada, CancellationToken ct)
+    {
+        try { return await AlterarAsync(HttpMethod.Post, url, null, ct); }
+        catch (InvalidOperationException e) when (e.Message == MensagensIntervencao.Mudou) { throw new InvalidOperationException(recusada); }
+    }
+
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"validacao/{Uri.EscapeDataString(id)}/devolver", new { motivo }, ct);
 

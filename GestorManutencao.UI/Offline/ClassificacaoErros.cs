@@ -18,7 +18,7 @@ internal static class ClassificacaoErros
     // Só texto em português escrito por nós; as mensagens das exceções do .NET (inglês) nunca chegam ao técnico.
     private static readonly HashSet<string> MensagensProprias =
     [
-        MensagensIntervencao.Mudou, FotoJaNaoExiste, OperacaoInvalida, FotoDemasiadoGrande, "A foto é demasiado grande.",
+        MensagensIntervencao.Mudou, MensagensIntervencao.NaoPausa, MensagensIntervencao.NaoRetoma, FotoJaNaoExiste, OperacaoInvalida, FotoDemasiadoGrande, "A foto é demasiado grande.",
         .. new[] { "fora_de_ordem", "externa_sem_documento", "propria", "limite_fotos" }.Select(MensagensIntervencao.Para)
     ];
 

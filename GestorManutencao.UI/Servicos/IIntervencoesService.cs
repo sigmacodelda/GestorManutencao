@@ -12,6 +12,9 @@ public interface IIntervencoesService
     Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default);
     Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default);
     Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default);
+    // Pausa e retoma a ficha em curso (o estado não muda; Intervencao.EmPausa diz se está em pausa). Repetir o pedido é inofensivo.
+    Task<Intervencao> PausarAsync(string id, CancellationToken ct = default);
+    Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default);
     // Só para supervisores: fichas concluídas por validar e a validação (quem concluiu não valida a sua).
     Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default);
     Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default);
@@ -71,6 +74,8 @@ public static class MensagensIntervencao
     public const string Mudou = "Esta intervenção já mudou. Volte à lista e abra-a outra vez.";
     public const string SemRede = "Sem ligação. Esta ação só funciona com rede.";
     public const string SemRedeAMeio = "Sem ligação. Pode ter ficado gravado; confirme antes de repetir.";
+    public const string NaoPausa = "Não é possível pausar esta intervenção.";
+    public const string NaoRetoma = "Não é possível retomar esta intervenção.";
     public const string ComPendentes = "Esta intervenção tem alterações por enviar. Tente outra vez depois de serem enviadas.";
 
     public static string Para(string? codigo) => codigo switch
@@ -131,7 +136,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         _lista =
         [
             new("T1", "Compressor de ar 02", "Produção", TipoIntervencao.Preventiva, hoje.AddDays(-3), EstadoIntervencao.Planeada),
-            new("T2", "Empilhador 05", "Armazém", TipoIntervencao.Curativa, hoje, EstadoIntervencao.EmCurso, "Trava a meio da subida", null, new TimeOnly(8, 30)),
+            new("T2", "Empilhador 05", "Armazém", TipoIntervencao.Curativa, hoje, EstadoIntervencao.EmCurso, "Trava a meio da subida", null, new TimeOnly(8, 30), PodePausar: true),
             new("T3", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje, EstadoIntervencao.Planeada),
             new("T4", "Linha de embalagem", "Produção", TipoIntervencao.Preventiva, hoje.AddDays(4), EstadoIntervencao.Planeada),
             new("T5", "Balança 03", "Expedição", TipoIntervencao.Preventiva, hoje.AddDays(-10), EstadoIntervencao.Concluida, null, "Trocado o cabo de ligação", new TimeOnly(9, 0), new TimeOnly(10, 15), "Operador de Teste", 101),
@@ -141,7 +146,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
             new("H2", "Empilhador 05", "Armazém", TipoIntervencao.Curativa, hoje.AddDays(-120), EstadoIntervencao.Validada, "Não arranca", "Substituída a bateria", new TimeOnly(14, 0), new TimeOnly(16, 30), "Chefe de Turno", 100),
             new("H3", "Câmara de frio 01", "Frio", TipoIntervencao.Preventiva, hoje.AddDays(-60), EstadoIntervencao.Cancelada),
             new("T7", "Linha de embalagem", "Produção", TipoIntervencao.Preventiva, hoje.AddDays(-1), EstadoIntervencao.EmCurso, null, "Limpeza feita", new TimeOnly(7, 30), null, "Operador de Teste", 101,
-                Motivo: "Falta indicar o material usado.")
+                Motivo: "Falta indicar o material usado.", PodePausar: true)
         ];
     }
 
@@ -170,16 +175,22 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     }
 
     public Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default) =>
-        Alterar(id, EstadoIntervencao.Planeada, i => i with { Estado = EstadoIntervencao.EmCurso, HoraInicio = TimeOnly.FromDateTime(DateTime.Now) });
+        Alterar(id, EstadoIntervencao.Planeada, i => i with { Estado = EstadoIntervencao.EmCurso, HoraInicio = TimeOnly.FromDateTime(DateTime.Now), PodePausar = true });
 
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default)
     {
         if (RegrasIntervencao.ValidarConclusao(feito, inicio, fim) is not null) throw new InvalidOperationException(MensagensIntervencao.Mudou);
         return Alterar(id, EstadoIntervencao.EmCurso, i => i with
         {
-            Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null
+            Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null, EmPausa = false, PodePausar = false
         });
     }
+
+    public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) =>
+        Alterar(id, EstadoIntervencao.EmCurso, i => i.PodePausar ? i with { EmPausa = true } : throw new InvalidOperationException(MensagensIntervencao.NaoPausa));
+
+    public Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default) =>
+        Alterar(id, EstadoIntervencao.EmCurso, i => i.PodePausar ? i with { EmPausa = false } : throw new InvalidOperationException(MensagensIntervencao.NaoRetoma));
 
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default)
     {
@@ -505,6 +516,8 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
