@@ -49,10 +49,10 @@
                 </select>
             </div>
             <div class="campo">
-                <label for="nf-periodo">Periodicidade (se houver)</label>
-                <select id="nf-periodo" @bind="_periodo" disabled="@(_escolhido is null)">
+                <label for="nf-periodo">Tarefa (se houver)</label>
+                <select id="nf-periodo" @bind="_tarefaId" disabled="@(_escolhido is null)">
                     <option value="">Nenhuma</option>
-                    @foreach (var p in _periodos) { <option value="@p">@p</option> }
+                    @foreach (var t in _tarefas) { <option value="@t.Id">@(t.Periodicidade.Length > 0 ? $"{t.Periodicidade} - {t.Descricao}" : t.Descricao)</option> }
                 </select>
             </div>
         </div>
@@ -75,10 +75,10 @@
 
     [SupplyParameterFromQuery(Name = "equipamento")] public string? EquipamentoId { get; set; }
 
-    private string _texto = "", _problema = "", _erro = "", _tipoManut = "Interna", _periodo = "";
+    private string _texto = "", _problema = "", _erro = "", _tipoManut = "Interna", _tarefaId = "";
     private TipoIntervencao _tipo = TipoIntervencao.Preventiva;
     private IReadOnlyList<Equipamento> _opcoes = [];
-    private IReadOnlyList<string> _periodos = [];
+    private IReadOnlyList<TarefaPlaneada> _tarefas = [];
     private Equipamento? _escolhido;
     private bool _a_guardar;
     // Um por formulário: repetir o envio depois de uma falha a meio não cria outra ficha.
@@ -95,19 +95,19 @@
             if (await Equipamentos.ObterFichaAsync(EquipamentoId) is { } ficha)
             {
                 _escolhido = ficha.Equipamento; _texto = ficha.Equipamento.Nome;
-                _periodos = Periodos(ficha);
+                _tarefas = Tarefas(ficha);
             }
         }
         catch (Exception) { /* escolhe-se à mão */ }
     }
 
-    private static IReadOnlyList<string> Periodos(FichaEquipamento f) =>
-        f.Tarefas.Select(t => t.Periodicidade).Where(p => p.Length > 0).Distinct().Order().ToList();
+    private static IReadOnlyList<TarefaPlaneada> Tarefas(FichaEquipamento f) =>
+        f.Tarefas.OrderBy(t => t.Periodicidade).ThenBy(t => t.Descricao).ToList();
 
     private async Task PesquisarAsync(ChangeEventArgs e)
     {
         _texto = e.Value?.ToString() ?? "";
-        _escolhido = null; _periodos = []; _periodo = ""; _erro = "";
+        _escolhido = null; _tarefas = []; _tarefaId = ""; _erro = "";
         _espera?.Cancel();
         _espera = new CancellationTokenSource();
         var cancelamento = _espera.Token;
@@ -126,14 +126,15 @@
     private async Task EscolherAsync(Equipamento e)
     {
         _espera?.Cancel();
-        _escolhido = e; _texto = e.Nome; _opcoes = []; _erro = ""; _periodo = "";
-        try { _periodos = await Equipamentos.ObterFichaAsync(e.Id) is { } f ? Periodos(f) : []; }
-        catch (Exception) { _periodos = []; }
+        _escolhido = e; _texto = e.Nome; _opcoes = []; _erro = ""; _tarefaId = "";
+        try { _tarefas = await Equipamentos.ObterFichaAsync(e.Id) is { } f ? Tarefas(f) : []; }
+        catch (Exception) { _tarefas = []; }
     }
 
     private async Task GuardarAsync()
     {
-        var ficha = new NovaFichaModelo(_escolhido?.Id ?? "", _tipo, _tipoManut, _periodo, _problema.Trim(), _opId);
+        var periodo = _tarefas.FirstOrDefault(t => t.Id == _tarefaId)?.Periodicidade ?? "";
+        var ficha = new NovaFichaModelo(_escolhido?.Id ?? "", _tipo, _tipoManut, periodo,_problema.Trim(), _opId);
         _erro = RegrasFichaDetalhe.ValidarNova(ficha) ?? "";
         if (_erro.Length > 0) return;
         _a_guardar = true;

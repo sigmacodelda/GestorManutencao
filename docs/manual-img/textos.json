@@ -1,0 +1,240 @@
+{
+ "desktop-sem-login.png": {
+  "url": "/login",
+  "texto": "GESTOR DE MANUTENÇÃO\nAs intervenções do seu turno, num só sítio.\nOlá! Escreva o seu PIN\nSão 4 números.\n1\n2\n3\n4\n5\n6\n7\n8\n9\n0\nSem acesso ou esqueceu o PIN? Fale com o seu supervisor.\nDesenvolvido por SigmaCode"
+ },
+ "mobile-sem-login.png": {
+  "url": "/login",
+  "texto": "Olá! Escreva o seu PIN\nSão 4 números.\n1\n2\n3\n4\n5\n6\n7\n8\n9\n0\nSem acesso ou esqueceu o PIN? Fale com o seu supervisor.\nDesenvolvido por SigmaCode"
+ },
+ "desktop-tecnico-inicio.png": {
+  "rota": "/",
+  "url": "/",
+  "texto": "AS\nAna Silva\nInício\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nOperador\nAS\nAna Silva\nQuinta-feira, 12 de novembro\n0\nEm curso\n0\nAtrasadas\n1\nPara fazer\nAs minhas intervenções\nO que tenho para fazer hoje\nRegistar avaria\nAvisar de um problema no equipamento\nEquipamentos\nConsultar fichas e histórico\nNotificações10\npor ler\nTem avisos novos"
+ },
+ "desktop-tecnico-avaria.png": {
+  "rota": "/avaria",
+  "url": "/avaria",
+  "texto": "AS\nAna Silva\nInício\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nRegistar avaria\nEquipamento\nQual é o problema?\n0 de 200 letras\nFalar\nFeito"
+ },
+ "desktop-tecnico-intervencoes.png": {
+  "rota": "/intervencoes",
+  "url": "/intervencoes",
+  "texto": "AS\nAna Silva\nInício\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nAs minhas intervenções\nPara fazer\n1\nCompressor de ar 02\nProdução\nPreventiva\nHoje"
+ },
+ "desktop-tecnico-equipamentos.png": {
+  "rota": "/equipamentos",
+  "url": "/equipamentos",
+  "texto": "AS\nAna Silva\nInício\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nEquipamentos\nPesquisar\nFiltros\n6\nAtivos\n1\nCom fichas abertas\n1\nFora de serviço\n3\nSem intervenção +1 ano\nOrdenar por\nNome\nReferência\nTipo\nLocal\nÚltima intervenção\nFichas abertas\nDo maior para o menor\n6 equipamentos\nBalança 03\nBAL-03 · Balança · Mettler IND-570 · Expedição\n1 ficha aberta\n12/11/2026\nCâmara de frio 01\nCF-01 · Frio · Kide CF-500 · Frio\nSem registo\nCompressor de ar 02\nCMP-02 · Compressor · Atlas Copco GA 30 · Produção\n08/10/2026\nEmpilhador 05\nEMP-05 · Empilhador · Toyota 8FBE15 · Armazém\n15/07/2026\nLinha de embalagem\nLE-01 · Linha · Cavanna LP-2 · Produção\nSem registo\nPorta seccionada 07\nPRT-07 · Portas · Hormann SPU-40 · Armazém\nFora de serviço\nSem registo"
+ },
+ "desktop-tecnico-mais.png": {
+  "rota": "/mais",
+  "url": "/mais",
+  "texto": "AS\nAna Silva\nInício\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nMais\nEsta área é só para supervisores."
+ },
+ "desktop-tecnico-avisos.png": {
+  "rota": "/notificacoes",
+  "url": "/notificacoes",
+  "texto": "AS\nAna Silva\nInício\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nNotificações\nMais recentes\n10\nMarcar todas como lidas\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n12:17\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n12:17\nResumo do dia\n1 para hoje\nNova\n12:17\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n11/11\nResumo do dia\n1 para hoje\nNova\n11/11\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n10/11\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n10/11\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n10/11\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n10/11\nResumo do dia\n1 para hoje\nNova\n10/11"
+ },
+ "desktop-tecnico-pin.png": {
+  "rota": "/pin",
+  "url": "/pin",
+  "texto": "AS\nAna Silva\nInício\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nEscolha o seu PIN\nO PIN que recebeu é provisório. Escolha um só seu, com 4 números, que mais ninguém conheça.\nPIN que recebeu\nPIN novo\nRepita o PIN novo\nGuardar PIN"
+ },
+ "mobile-tecnico-inicio.png": {
+  "rota": "/",
+  "url": "/",
+  "texto": "Início\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nOperador\nAS\nAna Silva\nQuinta-feira, 12 de novembro\n0\nEm curso\n0\nAtrasadas\n1\nPara fazer\nAs minhas intervenções\nO que tenho para fazer hoje\nRegistar avaria\nAvisar de um problema no equipamento\nEquipamentos\nConsultar fichas e histórico\nNotificações10\npor ler\nTem avisos novos"
+ },
+ "mobile-tecnico-avaria.png": {
+  "rota": "/avaria",
+  "url": "/avaria",
+  "texto": "Início\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nRegistar avaria\nEquipamento\nQual é o problema?\n0 de 200 letras\nFalar\nFeito"
+ },
+ "mobile-tecnico-intervencoes.png": {
+  "rota": "/intervencoes",
+  "url": "/intervencoes",
+  "texto": "Início\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nAs minhas intervenções\nPara fazer\n1\nCompressor de ar 02\nProdução\nPreventiva\nHoje"
+ },
+ "mobile-tecnico-equipamentos.png": {
+  "rota": "/equipamentos",
+  "url": "/equipamentos",
+  "texto": "Início\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nEquipamentos\nPesquisar\nFiltros\n6\nAtivos\n1\nCom fichas abertas\n1\nFora de serviço\n3\nSem intervenção +1 ano\nOrdenar por\nNome\nReferência\nTipo\nLocal\nÚltima intervenção\nFichas abertas\nDo maior para o menor\n6 equipamentos\nBalança 03\nBAL-03 · Balança · Mettler IND-570 · Expedição\n1 ficha aberta\n12/11/2026\nCâmara de frio 01\nCF-01 · Frio · Kide CF-500 · Frio\nSem registo\nCompressor de ar 02\nCMP-02 · Compressor · Atlas Copco GA 30 · Produção\n08/10/2026\nEmpilhador 05\nEMP-05 · Empilhador · Toyota 8FBE15 · Armazém\n15/07/2026\nLinha de embalagem\nLE-01 · Linha · Cavanna LP-2 · Produção\nSem registo\nPorta seccionada 07\nPRT-07 · Portas · Hormann SPU-40 · Armazém\nFora de serviço\nSem registo"
+ },
+ "mobile-tecnico-mais.png": {
+  "rota": "/mais",
+  "url": "/mais",
+  "texto": "Início\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nMais\nEsta área é só para supervisores."
+ },
+ "mobile-tecnico-avisos.png": {
+  "rota": "/notificacoes",
+  "url": "/notificacoes",
+  "texto": "Início\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nInício\nNotificações\nMais recentes\n10\nMarcar todas como lidas\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n12:17\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n12:17\nResumo do dia\n1 para hoje\nNova\n12:17\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n11/11\nResumo do dia\n1 para hoje\nNova\n11/11\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n10/11\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n10/11\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n10/11\nIntervenção devolvida\nBalança 03: Falta apertar o retentor (E2E)\nNova\n10/11\nResumo do dia\n1 para hoje\nNova\n10/11"
+ },
+ "mobile-tecnico-pin.png": {
+  "rota": "/pin",
+  "url": "/pin",
+  "texto": "Início\nIntervenções\nAvaria\nMáquinas\n9+\nAvisos\n(10 por ler)\nEscolha o seu PIN\nO PIN que recebeu é provisório. Escolha um só seu, com 4 números, que mais ninguém conheça.\nPIN que recebeu\nPIN novo\nRepita o PIN novo\nGuardar PIN"
+ },
+ "desktop-supervisor-inicio.png": {
+  "rota": "/",
+  "url": "/",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nSupervisor\nCT\nChefe de Turno\nQuinta-feira, 12 de novembro\n1\nPor validar\n1\nAtrasadas\nOperador\nSupervisor\nPlaneadas1\nem atraso\nIntervenções por atribuir e em atraso\nValidação1\npor validar\nFichas concluídas a validar\nNova ficha\nCriar uma ficha de intervenção\nEquipamentos\nFichas, histórico e instruções de cada equipamento\nNovo equipamento\nRegistar um equipamento novo\nPeriodicidades\nUnidade, intervalo e aviso\nTodas as fichas\nPesquisar fichas de qualquer estado\nEquipa\nUtilizadores e PINs\nConfiguração\nRegras da manutenção\nNotificações\nSem avisos novos"
+ },
+ "desktop-supervisor-avaria.png": {
+  "rota": "/avaria",
+  "url": "/avaria",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nRegistar avaria\nNova ficha completa\nEquipamento\nQual é o problema?\n0 de 200 letras\nFalar\nFeito"
+ },
+ "desktop-supervisor-intervencoes.png": {
+  "rota": "/intervencoes",
+  "url": "/intervencoes",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nAs minhas intervenções\nPara fazer\n1\nCompressor de ar 02\nProdução\nPreventiva\nHoje"
+ },
+ "desktop-supervisor-equipamentos.png": {
+  "rota": "/equipamentos",
+  "url": "/equipamentos",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nEquipamentos\nNovo equipamento\nPesquisar\nFiltros\n6\nAtivos\n1\nCom fichas abertas\n1\nFora de serviço\n3\nSem intervenção +1 ano\nOrdenar por\nNome\nReferência\nTipo\nLocal\nÚltima intervenção\nFichas abertas\nDo maior para o menor\n6 equipamentos\nBalança 03\nBAL-03 · Balança · Mettler IND-570 · Expedição\n1 ficha aberta\n12/11/2026\nCâmara de frio 01\nCF-01 · Frio · Kide CF-500 · Frio\nSem registo\nCompressor de ar 02\nCMP-02 · Compressor · Atlas Copco GA 30 · Produção\n08/10/2026\nEmpilhador 05\nEMP-05 · Empilhador · Toyota 8FBE15 · Armazém\n15/07/2026\nLinha de embalagem\nLE-01 · Linha · Cavanna LP-2 · Produção\nSem registo\nPorta seccionada 07\nPRT-07 · Portas · Hormann SPU-40 · Armazém\nFora de serviço\nSem registo"
+ },
+ "desktop-supervisor-mais.png": {
+  "rota": "/mais",
+  "url": "/mais",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nMais\nTodas as fichas\nPesquisar fichas de qualquer estado\nPeriodicidades\nUnidade, intervalo e aviso de cada periodicidade\nEquipa\nUtilizadores e PINs\nConfiguração\nRegras da manutenção"
+ },
+ "desktop-supervisor-avisos.png": {
+  "rota": "/notificacoes",
+  "url": "/notificacoes",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nNotificações\nMais recentes\n37\nMarcar todas como lidas\nFicha por validar\nBalança 03 · Ana Silva\nNova\n12:17\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n12:17\nFicha por validar\nBalança 03 · Ana Silva\nNova\n12:17\nFicha em atraso\nCompressor de ar 02 · devia ter sido feita a 08/11\nNova\n12:14\nFicha sem técnico\nCompressor de ar 02 · hoje\nNova\n12:14\nFicha por validar\nBalança 03 · Ana Silva\nNova\n12:14\nResumo do dia\n2 para hoje, 2 por validar, 1 em atraso\nNova\n12:14\nAvaria registada\nBalança 03: TESTE-E2E-06qs45 avaria B\nNova\n11/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n11/11\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n11/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n11/11\nFicha em atraso\nCompressor de ar 02 · devia ter sido feita a 07/11\nNova\n11/11\nFicha sem técnico\nCompressor de ar 02 · hoje\nNova\n11/11\nResumo do dia\n2 para hoje, 1 por validar, 1 em atraso\nNova\n11/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por valida"
+ },
+ "desktop-supervisor-pin.png": {
+  "rota": "/pin",
+  "url": "/pin",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nEscolha o seu PIN\nO PIN que recebeu é provisório. Escolha um só seu, com 4 números, que mais ninguém conheça.\nPIN que recebeu\nPIN novo\nRepita o PIN novo\nGuardar PIN"
+ },
+ "desktop-supervisor-validacao.png": {
+  "rota": "/validacao",
+  "url": "/validacao",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nValidação\nPor validar\n1\nBalança 03\nExpedição · Ana Silva\nConcluída\nAvaria\n12/11\nProblema: Mostrador apagado\nFeito: Trocado o cabo (08:00–09:00)\nValidar\nDevolver"
+ },
+ "desktop-supervisor-por-rever.png": {
+  "rota": "/por-rever",
+  "url": "/por-rever",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nPor rever\nNão há nada por rever."
+ },
+ "desktop-supervisor-fichas.png": {
+  "rota": "/fichas",
+  "url": "/fichas",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nMais\nTodas as fichas\nAbertas\nFechadas\nTodas\nPesquisar\nFiltros\nCâmara de frio 01\nPreventiva · Sem técnico\nPlaneada\nNº 4 · 12/12/2026 · 0,00 €\nBalança 03\nAvaria · Ana Silva\nPor validar\nNº 3 · 12/11/2026 · 0,00 €\nTrocado o cabo\nCâmara de frio 01\nPreventiva · Outra Pessoa\nPlaneada\nNº 2 · 12/11/2026 · 0,00 €\nCompressor de ar 02\nPreventiva · Sem técnico\nPlaneada\nNº 1 · 12/11/2026 · 0,00 €"
+ },
+ "desktop-supervisor-planeadas.png": {
+  "rota": "/planeadas",
+  "url": "/planeadas",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nPlaneadas\n3\nEm aberto\n1\nFora de prazo\n2\nA vencer (7 dias)\n0\nEm curso\nZona\nTodas\nFrio\nProdução\nPesquisar\nFrio\n2\nCâmara de frio 01\nOutra Pessoa\nPreventiva\nHoje\nÚltima intervenção: sem registo\nTécnico\nSem técnico\nOutra Pessoa\nAna Silva\nChefe de Turno\nOutros técnicos\nCâmara de frio 01\nSem técnico\nPreventiva\nDia 12/12\nÚltima intervenção: sem registo\nTécnico\nSem técnico\nAna Silva\nChefe de Turno\nProdução\n1\nCompressor de ar 02\nSem técnico\nFora de prazo\nPreventiva\nHoje\nÚltima intervenção: sem registo\nFora de prazo desde 08/11/2026\nTécnico\nSem técnico\nAna Silva\nChefe de Turno"
+ },
+ "desktop-supervisor-equipa.png": {
+  "rota": "/equipa",
+  "url": "/equipa",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nEquipa\nNovo operador\nNome\nCódigo curto (sem espaços)\nNúmero do utilizador no PHC\nFeito\nAna Silva\nOperador · PHC 101\nNovo PIN\nMudar o número do PHC\nChefe de Turno\nSupervisor · PHC 100\nMudar o número do PHC"
+ },
+ "desktop-supervisor-configuracao.png": {
+  "rota": "/configuracao",
+  "url": "/configuracao",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nMais\nConfiguração\nDias de antecedência\nCom quantos dias de avanço as planeadas sem técnico aparecem aos operadores (0 a 90).\nGerar a planeada seguinte ao concluir uma ficha\nDeixar começar fichas fora da ordem da zona\nDeixar validar as fichas feitas pelo próprio supervisor\nManutenção externa só conclui com fornecedor e documento\nContar as compras ligadas nos totais da ficha\nGuardar"
+ },
+ "desktop-supervisor-periodicidades.png": {
+  "rota": "/periodicidades",
+  "url": "/periodicidades",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nMais\nPeriodicidades\nAqui só se mudam a unidade, o intervalo e o aviso; as periodicidades não se criam nem se apagam.\nDiária\ntodos os dias\nEditar\nSemanal\nde 7 em 7 dias\nEditar\nQuinzenal\nde 14 em 14 dias\nEditar\nMensal\ntodos os meses\nEditar\nTrimestral\nde 3 em 3 meses\nEditar\nSemestral\nde 6 em 6 meses\nEditar\nAnual\nde 12 em 12 meses\nEditar\nDe acordo com proced\nsem intervalo fixo\nEditar\nRegular\nsem intervalo fixo\nEditar\nSempre que necessári\nsem intervalo fixo\nEditar"
+ },
+ "desktop-supervisor-nova-ficha.png": {
+  "rota": "/nova-ficha",
+  "url": "/nova-ficha",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nNova ficha de intervenção\nEquipamento\nTipo\nPreventiva\nCurativa (avaria)\nManutenção\nInterna\nExterna\nPeriodicidade (se houver)\nNenhuma\nProblema (se houver)\n0 de 200 letras\nFalar\nFeito"
+ },
+ "desktop-supervisor-equipamento-novo.png": {
+  "rota": "/equipamentos/novo",
+  "url": "/equipamentos/novo",
+  "texto": "CT\nChefe de Turno\nInício\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nEquipamentos\nNovo equipamento\n1. Identificação\n2. Aquisição\n3. Estado e manual\nNº da infraestrutura\nDesignação\nTipo\nMarca\nModelo\nNº de série\nLocal\nSeguinte"
+ },
+ "mobile-supervisor-inicio.png": {
+  "rota": "/",
+  "url": "/",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nSupervisor\nCT\nChefe de Turno\nQuinta-feira, 12 de novembro\n1\nPor validar\n1\nAtrasadas\nOperador\nSupervisor\nPlaneadas1\nem atraso\nIntervenções por atribuir e em atraso\nValidação1\npor validar\nFichas concluídas a validar\nNova ficha\nCriar uma ficha de intervenção\nEquipamentos\nFichas, histórico e instruções de cada equipamento\nNovo equipamento\nRegistar um equipamento novo\nPeriodicidades\nUnidade, intervalo e aviso\nTodas as fichas\nPesquisar fichas de qualquer estado\nEquipa\nUtilizadores e PINs\nConfiguração\nRegras da manutenção\nNotificações32\npor ler\nTem avisos novos"
+ },
+ "mobile-supervisor-avaria.png": {
+  "rota": "/avaria",
+  "url": "/avaria",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nRegistar avaria\nNova ficha completa\nEquipamento\nQual é o problema?\n0 de 200 letras\nFalar\nFeito"
+ },
+ "mobile-supervisor-intervencoes.png": {
+  "rota": "/intervencoes",
+  "url": "/intervencoes",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nAs minhas intervenções\nPara fazer\n1\nCompressor de ar 02\nProdução\nPreventiva\nHoje"
+ },
+ "mobile-supervisor-equipamentos.png": {
+  "rota": "/equipamentos",
+  "url": "/equipamentos",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nEquipamentos\nNovo equipamento\nPesquisar\nFiltros\n6\nAtivos\n1\nCom fichas abertas\n1\nFora de serviço\n3\nSem intervenção +1 ano\nOrdenar por\nNome\nReferência\nTipo\nLocal\nÚltima intervenção\nFichas abertas\nDo maior para o menor\n6 equipamentos\nBalança 03\nBAL-03 · Balança · Mettler IND-570 · Expedição\n1 ficha aberta\n12/11/2026\nCâmara de frio 01\nCF-01 · Frio · Kide CF-500 · Frio\nSem registo\nCompressor de ar 02\nCMP-02 · Compressor · Atlas Copco GA 30 · Produção\n08/10/2026\nEmpilhador 05\nEMP-05 · Empilhador · Toyota 8FBE15 · Armazém\n15/07/2026\nLinha de embalagem\nLE-01 · Linha · Cavanna LP-2 · Produção\nSem registo\nPorta seccionada 07\nPRT-07 · Portas · Hormann SPU-40 · Armazém\nFora de serviço\nSem registo"
+ },
+ "mobile-supervisor-mais.png": {
+  "rota": "/mais",
+  "url": "/mais",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nMais\nTodas as fichas\nPesquisar fichas de qualquer estado\nPeriodicidades\nUnidade, intervalo e aviso de cada periodicidade\nEquipa\nUtilizadores e PINs\nConfiguração\nRegras da manutenção"
+ },
+ "mobile-supervisor-avisos.png": {
+  "rota": "/notificacoes",
+  "url": "/notificacoes",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nNotificações\nMais recentes\n37\nMarcar todas como lidas\nFicha por validar\nBalança 03 · Ana Silva\nNova\n12:17\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n12:17\nFicha por validar\nBalança 03 · Ana Silva\nNova\n12:17\nFicha em atraso\nCompressor de ar 02 · devia ter sido feita a 08/11\nNova\n12:14\nFicha sem técnico\nCompressor de ar 02 · hoje\nNova\n12:14\nFicha por validar\nBalança 03 · Ana Silva\nNova\n12:14\nResumo do dia\n2 para hoje, 2 por validar, 1 em atraso\nNova\n12:14\nAvaria registada\nBalança 03: TESTE-E2E-06qs45 avaria B\nNova\n11/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n11/11\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n11/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n11/11\nFicha em atraso\nCompressor de ar 02 · devia ter sido feita a 07/11\nNova\n11/11\nFicha sem técnico\nCompressor de ar 02 · hoje\nNova\n11/11\nResumo do dia\n2 para hoje, 1 por validar, 1 em atraso\nNova\n11/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nCompressor de ar 02 · Ana Silva\nNova\n10/11\nFicha por validar\nBalança 03 · Ana Silva\nNova\n10/11\nFicha por validar\nCompressor de ar"
+ },
+ "mobile-supervisor-pin.png": {
+  "rota": "/pin",
+  "url": "/pin",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nEscolha o seu PIN\nO PIN que recebeu é provisório. Escolha um só seu, com 4 números, que mais ninguém conheça.\nPIN que recebeu\nPIN novo\nRepita o PIN novo\nGuardar PIN"
+ },
+ "mobile-supervisor-validacao.png": {
+  "rota": "/validacao",
+  "url": "/validacao",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nValidação\nPor validar\n1\nBalança 03\nExpedição · Ana Silva\nConcluída\nAvaria\n12/11\nProblema: Mostrador apagado\nFeito: Trocado o cabo (08:00–09:00)\nValidar\nDevolver"
+ },
+ "mobile-supervisor-por-rever.png": {
+  "rota": "/por-rever",
+  "url": "/por-rever",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nPor rever\nNão há nada por rever."
+ },
+ "mobile-supervisor-fichas.png": {
+  "rota": "/fichas",
+  "url": "/fichas",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nMais\nTodas as fichas\nAbertas\nFechadas\nTodas\nPesquisar\nFiltros\nCâmara de frio 01\nPreventiva · Sem técnico\nPlaneada\nNº 4 · 12/12/2026 · 0,00 €\nBalança 03\nAvaria · Ana Silva\nPor validar\nNº 3 · 12/11/2026 · 0,00 €\nTrocado o cabo\nCâmara de frio 01\nPreventiva · Outra Pessoa\nPlaneada\nNº 2 · 12/11/2026 · 0,00 €\nCompressor de ar 02\nPreventiva · Sem técnico\nPlaneada\nNº 1 · 12/11/2026 · 0,00 €"
+ },
+ "mobile-supervisor-planeadas.png": {
+  "rota": "/planeadas",
+  "url": "/planeadas",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nPlaneadas\n3\nEm aberto\n1\nFora de prazo\n2\nA vencer (7 dias)\n0\nEm curso\nZona\nTodas\nFrio\nProdução\nPesquisar\nFrio\n2\nCâmara de frio 01\nOutra Pessoa\nPreventiva\nHoje\nÚltima intervenção: sem registo\nTécnico\nSem técnico\nOutra Pessoa\nAna Silva\nChefe de Turno\nOutros técnicos\nCâmara de frio 01\nSem técnico\nPreventiva\nDia 12/12\nÚltima intervenção: sem registo\nTécnico\nSem técnico\nAna Silva\nChefe de Turno\nProdução\n1\nCompressor de ar 02\nSem técnico\nFora de prazo\nPreventiva\nHoje\nÚltima intervenção: sem registo\nFora de prazo desde 08/11/2026\nTécnico\nSem técnico\nAna Silva\nChefe de Turno"
+ },
+ "mobile-supervisor-equipa.png": {
+  "rota": "/equipa",
+  "url": "/equipa",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nEquipa\nNovo operador\nNome\nCódigo curto (sem espaços)\nNúmero do utilizador no PHC\nFeito\nAna Silva\nOperador · PHC 101\nNovo PIN\nMudar o número do PHC\nChefe de Turno\nSupervisor · PHC 100\nMudar o número do PHC"
+ },
+ "mobile-supervisor-configuracao.png": {
+  "rota": "/configuracao",
+  "url": "/configuracao",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nMais\nConfiguração\nDias de antecedência\nCom quantos dias de avanço as planeadas sem técnico aparecem aos operadores (0 a 90).\nGerar a planeada seguinte ao concluir uma ficha\nDeixar começar fichas fora da ordem da zona\nDeixar validar as fichas feitas pelo próprio supervisor\nManutenção externa só conclui com fornecedor e documento\nContar as compras ligadas nos totais da ficha\nGuardar"
+ },
+ "mobile-supervisor-periodicidades.png": {
+  "rota": "/periodicidades",
+  "url": "/periodicidades",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nMais\nPeriodicidades\nAqui só se mudam a unidade, o intervalo e o aviso; as periodicidades não se criam nem se apagam.\nDiária\ntodos os dias\nEditar\nSemanal\nde 7 em 7 dias\nEditar\nQuinzenal\nde 14 em 14 dias\nEditar\nMensal\ntodos os meses\nEditar\nTrimestral\nde 3 em 3 meses\nEditar\nSemestral\nde 6 em 6 meses\nEditar\nAnual\nde 12 em 12 meses\nEditar\nDe acordo com proced\nsem intervalo fixo\nEditar\nRegular\nsem intervalo fixo\nEditar\nSempre que necessári\nsem intervalo fixo\nEditar"
+ },
+ "mobile-supervisor-nova-ficha.png": {
+  "rota": "/nova-ficha",
+  "url": "/nova-ficha",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nInício\nNova ficha de intervenção\nEquipamento\nTipo\nPreventiva\nCurativa (avaria)\nManutenção\nInterna\nExterna\nPeriodicidade (se houver)\nNenhuma\nProblema (se houver)\n0 de 200 letras\nFalar\nFeito"
+ },
+ "mobile-supervisor-equipamento-novo.png": {
+  "rota": "/equipamentos/novo",
+  "url": "/equipamentos/novo",
+  "texto": "Início\nPlaneadas\nValidação\nMáquinas\nMais\n9+\nAvisos\n(32 por ler)\nEquipamentos\nNovo equipamento\n1. Identificação\n2. Aquisição\n3. Estado e manual\nNº da infraestrutura\nDesignação\nTipo\nMarca\nModelo\nNº de série\nLocal\nSeguinte"
+ }
+}
