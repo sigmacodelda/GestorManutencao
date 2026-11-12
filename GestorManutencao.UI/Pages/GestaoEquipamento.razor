@@ -3,6 +3,7 @@
 @inject IGestaoService Gestao
 @inject SessaoService Sessao
 @inject NavigationManager Nav
+@inject ToastService Toast
 
 <PageTitle>@(Id is null ? "Novo equipamento" : "Editar equipamento") · Gestor de Manutenção</PageTitle>
 
@@ -171,7 +172,7 @@
                     }
                     else
                     {
-                        <button type="submit" class="btn btn-primario" disabled="@_a_guardar"><Icone Nome="check" /><span>@(_a_guardar ? "A guardar…" : "Guardar equipamento")</span></button>
+                        <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@_a_guardar"><Icone Nome="check" /><span>@(_a_guardar ? "A guardar…" : "Feito")</span></button>
                     }
                     @if (_passo > 0) { <button type="button" class="btn btn-secundario" @onclick="() => _passo--">Anterior</button> }
                 </div>
@@ -248,11 +249,13 @@
                 return;
             }
             var edicao = _form.ParaEdicao(_original);
-            if (edicao is null) { _guardado = true; Nav.NavigateTo($"equipamentos/{Id}"); return; }
+            if (edicao is null) { _guardado = true; Nav.NavigateTo("equipamentos"); return; }
             if (planeadasConfirmadas is not null) edicao = edicao with { PlaneadasConfirmadas = planeadasConfirmadas };
-            var gravado = await Gestao.GravarEquipamentoAsync(Id, edicao);
+            await Gestao.GravarEquipamentoAsync(Id, edicao);
             _guardado = true;
-            Nav.NavigateTo($"equipamentos/{gravado.Id}");
+            // Volta à lista de equipamentos e confirma com um aviso de 2 s.
+            Toast.Sucesso(Id is null ? "Equipamento criado" : "Equipamento guardado");
+            Nav.NavigateTo("equipamentos");
         }
         catch (InvalidOperationException ex)
         {

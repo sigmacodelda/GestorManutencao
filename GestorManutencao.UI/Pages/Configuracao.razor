@@ -1,5 +1,7 @@
 @page "/configuracao"
 @inject SessaoService Sessao
+@inject ToastService Toast
+@inject NavigationManager Nav
 @inject IIntervencoesService Intervencoes
 
 <PageTitle>Configuração · Gestor de Manutenção</PageTitle>
@@ -112,7 +114,8 @@
         try
         {
             Aplicar(await Intervencoes.GuardarConfiguracaoAsync(new ConfiguracaoManutencao(dias!.Value, _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt)));
-            _guardada = true;
+            Toast.Sucesso("Configuração guardada");
+            Nav.NavigateTo("mais");
         }
         catch (InvalidOperationException ex) { _erro = ex.Message; }
         catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }

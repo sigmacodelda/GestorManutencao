@@ -15,6 +15,23 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private static readonly SemaphoreSlim AvariaOp = new(1, 1);
     private static readonly DateTime SemData = new(1900, 1, 1);
 
+    // Início e fim da ficha deixaram de estar em u_fichaint: vêm das linhas de u_tempinterv (dataini/datafim). Uma ficha por concluir não tem fim.
+    private const string HIniSel =
+        "isnull((select min(t.dataini) from u_tempinterv t with (nolock) where t.u_fichaintstamp = f.u_fichaintstamp and t.dataini > '19000101'), '19000101')";
+    private const string HFimSel =
+        "case when rtrim(f.estado) in ('Planeada', 'EmCurso') then cast('19000101' as datetime) " +
+        "else isnull((select max(t.datafim) from u_tempinterv t with (nolock) where t.u_fichaintstamp = f.u_fichaintstamp and t.datafim > '19000101'), '19000101') end";
+
+    // Ao começar, abre-se a linha de tempo do técnico (dataini = agora). Vem logo a seguir ao comando que cria/inicia a ficha, que define @ficha e @n.
+    private const string SqlAbrirLinha =
+        """
+
+        if @n > 0 and not exists (select 1 from u_tempinterv with (nolock) where u_fichaintstamp = @ficha and dataini > '19000101')
+            insert into u_tempinterv (u_tempintervstamp, u_fichaintstamp, no, responsavel, tempo, custo, ref, dataini, datafim, pausaini, pausafim,
+                                      ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
+            values (@tempostamp, @ficha, @tecno, @tecnome, 0, 0, '', @agora, '19000101', '19000101', '19000101', @codigo, @dia, @hora, @codigo, @dia, @hora)
+        """;
+
     // Técnicos adicionais: memo tecnos (";12;45;"). O LIKE com ";n;" não confunde o 12 com o 123.
     private const string ColunaTecnos = RegrasIntervencao.ColunaTecnos;
     private const string TecnosSel = "isnull(cast(f." + ColunaTecnos + " as varchar(max)), '')";
@@ -24,7 +41,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string Selecao =
         $"""
         select f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
-               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno, isnull(f.valobs, ''), {TecnosSel}
+               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, {HIniSel}, {HFimSel}, f.tecnome, f.tecno, isnull(f.valobs, ''), {TecnosSel}
         from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
         """;
 
@@ -53,7 +70,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string SqlPlaneadas =
         $"""
         select f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
-               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno, isnull(f.valobs, ''), {TecnosSel},
+               f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, {HIniSel}, {HFimSel}, f.tecnome, f.tecno, isnull(f.valobs, ''), {TecnosSel},
                coalesce(c.feita, lg.ultima), c.cancelada, isnull(pp.unidade, ''), isnull(pp.intervalo, 0)
         from u_fichaint f with (nolock)
         left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
@@ -84,7 +101,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlAtual =
         $"""
-        select rtrim(f.estado), f.uitmanutlistamp, f.tipomanut, f.nofornec, f.docexterno, f.tecno, isnull(e.[local], ''), f.hini, {TecnosSel}
+        select rtrim(f.estado), f.uitmanutlistamp, f.tipomanut, f.nofornec, f.docexterno, f.tecno, isnull(e.[local], ''), {HIniSel}, {TecnosSel}
         from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
         where f.u_fichaintstamp = @id and f.obsoleto = 0 and e.tipoequip = 1
         """;
@@ -182,7 +199,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string CamposFichaBase =
         " f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''), f.tipointerv, f.data, " + EstadoEfetivo +
-        ", f.problema, f.resolucao, f.hini, f.hfim, f.tecnome, f.tecno, isnull(f.valobs, ''), " + TecnosSel;
+        ", f.problema, f.resolucao, " + HIniSel + ", " + HFimSel + ", f.tecnome, f.tecno, isnull(f.valobs, ''), " + TecnosSel;
 
     private const string FromFicha = " from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp";
 
@@ -259,12 +276,13 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlAvaria =
         """
-        insert into u_fichaint (u_fichaintstamp, no, ref, design, tipointerv, tipomanut, problema, data, estado, u_equipstamp, hini, tecno, tecnome, opid,
+        insert into u_fichaint (u_fichaintstamp, no, ref, design, tipointerv, tipomanut, problema, data, estado, u_equipstamp, tecno, tecnome, opid,
                                 ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        select @stamp, @no, left(e.ref, 20), left(e.design, 45), 'Curativa', 'Interna', @anomalia, @dia, 'EmCurso', e.u_equipstamp, @agora, @tecno, @tecnome, @opid,
+        select @stamp, @no, left(e.ref, 20), left(e.design, 45), 'Curativa', 'Interna', @anomalia, @dia, 'EmCurso', e.u_equipstamp, @tecno, @tecnome, @opid,
                @codigo, @dia, @hora, @codigo, @dia, @hora
-        from u_equip e where e.u_equipstamp = @equipamento and e.obsoleto = 0 and e.tipoequip = 1
-        """;
+        from u_equip e where e.u_equipstamp = @equipamento and e.obsoleto = 0 and e.tipoequip = 1;
+        declare @n int = @@ROWCOUNT, @ficha varchar(25) = @stamp;
+        """ + SqlAbrirLinha;
 
     private const string SqlPrimeiraDaZona =
         """
@@ -278,18 +296,40 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
     private const string SqlIniciar =
         $"""
         update u_fichaint set estado = 'EmCurso',
-               hini = case when hini <= '19000101' then @agora else hini end,
                tecno = case when tecno = 0 then @tecno else tecno end,
                tecnome = case when tecno = 0 then @tecnome else tecnome end,
                foraordem = @fora, usrinis = @codigo, usrdata = @dia, usrhora = @hora
-        where u_fichaintstamp = @id and fechada = 0 and obsoleto = 0 and estado = 'Planeada' and (tecno = @tecno or tecno = 0 or {EmTecnosSemAlias})
-        """;
+        where u_fichaintstamp = @id and fechada = 0 and obsoleto = 0 and estado = 'Planeada' and (tecno = @tecno or tecno = 0 or {EmTecnosSemAlias});
+        declare @n int = @@ROWCOUNT, @ficha varchar(25) = @id;
+        """ + SqlAbrirLinha;
 
+    // As horas já não vão para a ficha: fecham a linha de tempo do técnico (SqlFecharLinha / SqlNovaLinhaHoras).
     private const string SqlConcluir =
         $"""
-        update u_fichaint set estado = 'Concluida', resolucao = @feito, hini = @inicio, hfim = @fim, data = @dataficha,
+        update u_fichaint set estado = 'Concluida', resolucao = @feito, data = @dataficha,
                usrinis = @codigo, usrdata = @dia, usrhora = @hora
         where u_fichaintstamp = @id and fechada = 0 and obsoleto = 0 and estado = 'EmCurso' and (tecno = @tecno or tecno = 0 or {EmTecnosSemAlias})
+        """;
+
+    // Fecha a linha aberta do técnico: início e fim indicados, tempo líquido de pausas e custo ao custo/hora do técnico.
+    private const string SqlFecharLinha =
+        """
+        update u_tempinterv set dataini = @inicio, datafim = @fim,
+               tempo = cast(case when datediff(second, @inicio, @fim) > 0 then datediff(second, @inicio, @fim) / 3600.0 else 0 end
+                            - case when pausaini > '19000101' and pausafim > pausaini then datediff(second, pausaini, pausafim) / 3600.0 else 0 end as numeric(16,3)),
+               usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        where u_fichaintstamp = @id and no = @tecno and dataini > '19000101' and datafim <= '19000101';
+        if @@ROWCOUNT > 0
+            update u_tempinterv set custo = cast(case when tempo > 0 then tempo * @custohora else 0 end as numeric(16,3))
+            where u_fichaintstamp = @id and no = @tecno and datafim = @fim;
+        """;
+
+    // Sem linha aberta (ficha de antes desta alteração): cria-se já fechada.
+    private const string SqlNovaLinhaHoras =
+        """
+        insert into u_tempinterv (u_tempintervstamp, u_fichaintstamp, no, responsavel, tempo, custo, ref, dataini, datafim, pausaini, pausafim,
+                                  ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
+        values (@tempostamp, @id, @tecno, @tecnome, @horas, @custo, '', @inicio, @fim, '19000101', '19000101', @codigo, @dia, @hora, @codigo, @dia, @hora)
         """;
 
     private const string SqlValidar =
@@ -310,7 +350,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlDevolver =
         """
-        update u_fichaint set estado = 'EmCurso', valobs = @motivo, hfim = '19000101', usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        update u_fichaint set estado = 'EmCurso', valobs = @motivo, usrinis = @codigo, usrdata = @dia, usrhora = @hora
         where u_fichaintstamp = @id and estado = 'Concluida'
         """;
 
@@ -749,6 +789,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         Texto(cmd, "@equipamento", 25, equipamentoId);
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
         Texto(cmd, "@tecnome", 45, tecnico.Nome);
+        Texto(cmd, "@tempostamp", 25, NovoStamp());
         Auditoria(cmd, tecnico.Codigo, agora);
         if (await cmd.ExecuteNonQueryAsync(ct) == 0) return (ResultadoIntervencao.NaoExiste, null);
         return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, stamp, ct));
@@ -776,6 +817,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         ParametroTecnos(cmd, tecnico.Tecno);
         Texto(cmd, "@tecnome", 45, tecnico.Nome);
         cmd.Parameters.Add("@fora", SqlDbType.Bit).Value = foraOrdem;
+        Texto(cmd, "@tempostamp", 25, NovoStamp());
         Auditoria(cmd, tecnico.Codigo, agora);
         return await Resultado(conn, cmd, id, ct);
     });
@@ -795,19 +837,55 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         // As horas ficam no dia em que a ficha foi iniciada; a data da ficha passa a ser esse dia (base da próxima).
         var agora = await AgoraAsync(conn, ct);
         var dia = a.Hini > SemData ? a.Hini.Date : agora.Dia;
-        await using var cmd = new SqlCommand(SqlConcluir, conn);
+        var dataInicio = dia + inicio.ToTimeSpan();
+        var dataFim = dia + fim.ToTimeSpan();
+        // O custo/hora lê-se antes da transação (todos os comandos da ligação têm de levar a transação).
+        var custoHora = await CustoHoraDoTecnicoAsync(conn, tecnico.Tecno, ct);
+
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
+        await using var cmd = new SqlCommand(SqlConcluir, conn, tx);
         Texto(cmd, "@id", 25, id);
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
         ParametroTecnos(cmd, tecnico.Tecno);
         Texto(cmd, "@feito", 254, feito);
-        Quando(cmd, "@inicio", dia + inicio.ToTimeSpan());
-        Quando(cmd, "@fim", dia + fim.ToTimeSpan());
         Quando(cmd, "@dataficha", dia);
         Auditoria(cmd, tecnico.Codigo, agora);
-        var resultado = await Resultado(conn, cmd, id, ct);
-        if (resultado.Item1 == ResultadoIntervencao.Ok) await GerarSeguinteAsync(conn, a.Tarefa, tecnico.Codigo, ct);
-        return resultado;
+        if (await cmd.ExecuteNonQueryAsync(ct) == 0)
+        {
+            await tx.RollbackAsync(ct);
+            return (await LerAtualAsync(conn, id, ct) is null ? ResultadoIntervencao.NaoExiste : ResultadoIntervencao.Conflito, null);
+        }
+
+        await using var fecha = new SqlCommand(SqlFecharLinha, conn, tx);
+        Texto(fecha, "@id", 25, id);
+        Numero(fecha, "@tecno", tecnico.Tecno, 5);
+        Quando(fecha, "@inicio", dataInicio);
+        Quando(fecha, "@fim", dataFim);
+        Numero(fecha, "@custohora", custoHora, 16, 3);
+        Auditoria(fecha, tecnico.Codigo, agora);
+        if (await fecha.ExecuteNonQueryAsync(ct) == 0)
+        {
+            var horas = Math.Max(0m, Math.Round((decimal)(dataFim - dataInicio).TotalHours, 3));
+            await using var nova = new SqlCommand(SqlNovaLinhaHoras, conn, tx);
+            Texto(nova, "@id", 25, id);
+            Texto(nova, "@tempostamp", 25, NovoStamp());
+            Numero(nova, "@tecno", tecnico.Tecno, 5);
+            Texto(nova, "@tecnome", RegrasManutencao.TamanhoNomeTecnico, tecnico.Nome);
+            Numero(nova, "@horas", horas, 16, 3);
+            Numero(nova, "@custo", RegrasManutencao.CustoTempo(horas, custoHora), 16, 3);
+            Quando(nova, "@inicio", dataInicio);
+            Quando(nova, "@fim", dataFim);
+            Auditoria(nova, tecnico.Codigo, agora);
+            await nova.ExecuteNonQueryAsync(ct);
+        }
+        await RecalcularTotaisAsync(conn, id, cfg.ComprasFichaInt, ct, tx);
+        await tx.CommitAsync(ct);
+
+        await GerarSeguinteAsync(conn, a.Tarefa, tecnico.Codigo, ct);
+        return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct));
     });
+
+    private static string NovoStamp() => Guid.NewGuid().ToString("N")[..25].ToUpperInvariant();
 
     private async Task<(ResultadoIntervencao, IntervencaoDto?)> Resultado(SqlConnection conn, SqlCommand cmd, string id, CancellationToken ct)
     {

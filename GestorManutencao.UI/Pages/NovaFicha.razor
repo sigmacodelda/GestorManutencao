@@ -4,6 +4,7 @@
 @inject IEquipamentosService Equipamentos
 @inject NavigationManager Nav
 @inject SessaoService Sessao
+@inject ToastService Toast
 
 <PageTitle>Nova ficha de intervenção · Gestor de Manutenção</PageTitle>
 
@@ -64,7 +65,7 @@
         </div>
 
         <p id="nf-erro" class="campo-erro" role="alert">@_erro</p>
-        <button type="submit" class="btn btn-primario" disabled="@_a_guardar">@(_a_guardar ? "A guardar…" : "Criar ficha")</button>
+        <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@_a_guardar"><Icone Nome="check" /><span>@(_a_guardar ? "A guardar…" : "Feito")</span></button>
     </form>
 </section>
 
@@ -138,8 +139,9 @@
         _a_guardar = true;
         try
         {
-            var criada = await Intervencoes.CriarFichaManualAsync(ficha);
-            Nav.NavigateTo($"intervencoes/{Uri.EscapeDataString(criada.Id)}");
+            await Intervencoes.CriarFichaManualAsync(ficha);
+            Toast.Sucesso("Ficha criada");
+            Nav.NavigateTo("planeadas");
         }
         catch (InvalidOperationException ex) { _erro = ex.Message; }
         catch (SemNumeroTecnicoException) { _erro = "Ainda não tem o número de técnico. Fale com o supervisor."; }

@@ -91,6 +91,7 @@
             }
             <div class="conteudo-wrap">@Body</div>
         </div>
+        <Toast />
         @if (_pendentesSaida > 0)
         {
             <ConfirmaSaida Pendentes="_pendentesSaida" Sair="TerminarSessaoAsync" Ficar="() => _pendentesSaida = 0" />

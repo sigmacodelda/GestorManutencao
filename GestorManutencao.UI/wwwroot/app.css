@@ -237,7 +237,7 @@ h1:focus-visible { outline: none; }
 .formulario textarea { resize: vertical; }
 .formulario input:focus, .formulario textarea:focus, .formulario select:focus { outline: none; border-color: var(--foco); box-shadow: 0 0 0 3px color-mix(in srgb, var(--foco) 35%, transparent); }
 .horas { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-3); }
-.btn-texto { align-self: flex-start; min-height: 44px; background: transparent; border: 0; color: var(--primario); font: 700 1rem var(--fonte-corpo); cursor: pointer; }
+.btn-texto { align-self: flex-start; min-height: 44px; min-width: 44px; padding-inline: var(--esp-2); background: transparent; border: 0; color: var(--primario); font: 700 1rem var(--fonte-corpo); cursor: pointer; }
 .opcoes { list-style: none; margin: 0; padding: 0; border: 1px solid var(--borda-suave); border-radius: var(--raio); overflow: hidden; }
 .opcao { width: 100%; min-height: var(--alvo); display: flex; justify-content: space-between; gap: var(--esp-3); align-items: center; padding: 0 var(--esp-3); background: var(--superficie); color: var(--texto); border: 0; border-bottom: 1px solid var(--borda-suave); font: 600 1rem var(--fonte-corpo); cursor: pointer; text-align: left; }
 .opcao-zona { color: var(--texto-suave); font-weight: 400; font-size: .875rem; }
@@ -661,6 +661,22 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 .faixa-fechar { flex: none; width: 48px; display: grid; place-items: center; background: transparent; color: inherit; border: 0; cursor: pointer; border-radius: 0 var(--raio) var(--raio) 0; }
 .faixa-fechar:hover { background: rgb(255 255 255 / .14); }
 
+/* ---------- Confirmação curta (2 s): por cima da barra de navegação no telemóvel, ao fundo no ecrã largo ---------- */
+.toast-zona {
+    position: fixed; z-index: 50; left: calc(12px + env(safe-area-inset-left)); right: calc(12px + env(safe-area-inset-right));
+    bottom: calc(var(--nav-h) + var(--esp-3) + env(safe-area-inset-bottom)); display: flex; justify-content: center; pointer-events: none;
+}
+.toast {
+    margin: 0; display: flex; align-items: center; gap: var(--esp-3); max-width: 480px; min-height: var(--alvo); padding: var(--esp-3) var(--esp-4);
+    background: var(--marca-fundo); color: var(--sobre-marca); border: 2px solid var(--primario); border-radius: var(--raio);
+    box-shadow: var(--painel-sombra); font: 700 1.0625rem var(--fonte-titulos); overflow-wrap: anywhere;
+    animation: toast-entra .22s cubic-bezier(.2,.8,.2,1) both;
+}
+.toast .icone { flex: none; color: var(--primario); width: 28px; height: 28px; }
+@keyframes toast-entra { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (min-width: 900px) { .toast-zona { bottom: var(--esp-5); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
 .alerta-devolvida { align-items: flex-start; }
 .alerta-devolvida p { margin: var(--esp-1) 0 0; font-weight: 600; overflow-wrap: anywhere; }
 
@@ -719,3 +735,7 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 .dialogo-acoes { display: grid; gap: var(--esp-3); }
 .dialogo-acoes .btn { width: 100%; }
 .btn + .btn-texto, a.btn + .btn-texto { margin-top: var(--esp-2); }
+
+/* Botão de Feito/criar sempre visível ao fundo, por cima da barra de navegação */
+.btn-fixo { position: sticky; bottom: calc(var(--nav-h) + var(--esp-4) + env(safe-area-inset-bottom)); z-index: 15; box-shadow: 0 6px 20px rgb(0 0 0 / .35); }
+@media (min-width: 900px) { .btn-fixo { bottom: var(--esp-4); } }

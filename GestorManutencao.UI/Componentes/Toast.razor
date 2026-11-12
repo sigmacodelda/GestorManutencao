@@ -1,0 +1,35 @@
+@implements IDisposable
+@inject ToastService Toasts
+
+@* A zona existe sempre, para o leitor de ecrã anunciar o texto quando ele aparece. *@
+<div class="toast-zona" role="status" aria-live="polite" aria-atomic="true">
+    @if (_atual is { } t)
+    {
+        <p class="toast" @key="t.Id"><Icone Nome="circle-check" /><span>@t.Texto</span></p>
+    }
+</div>
+
+@code {
+    private MensagemToast? _atual;
+    private CancellationTokenSource? _cts;
+
+    protected override void OnInitialized() => Toasts.Mostrado += Mostrar;
+
+    private void Mostrar(MensagemToast m) => InvokeAsync(async () =>
+    {
+        _cts?.Cancel();
+        var cts = _cts = new CancellationTokenSource();
+        _atual = m;
+        StateHasChanged();
+        try { await Task.Delay(ToastService.Milissegundos, cts.Token); }
+        catch (TaskCanceledException) { return; }
+        _atual = null;
+        StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        Toasts.Mostrado -= Mostrar;
+        _cts?.Cancel();
+    }
+}

@@ -12,7 +12,7 @@ public sealed partial class SqlRepositorioIntervencoes
         $"""
         select f.u_fichaintstamp, f.no, isnull(f.u_equipstamp, ''), case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
                isnull(f.ref, ''), isnull(f.tipointerv, ''), isnull(f.tipomanut, ''), isnull(f.periodo, ''), f.data, rtrim(f.estado), f.fechada, f.supervisao,
-               f.tecno, isnull(f.tecnome, ''), {TecnosSel}, f.hini, f.hfim, isnull(f.horasfrio, 0), isnull(f.horasconf, 0),
+               f.tecno, isnull(f.tecnome, ''), {TecnosSel}, {HIniSel}, {HFimSel}, isnull(f.horasfrio, 0), isnull(f.horasconf, 0),
                isnull(f.problema, ''), isnull(f.resolucao, ''), isnull(cast(f.obs as varchar(max)), ''), f.limrem,
                isnull(f.nofornec, 0), isnull(f.nomefornec, ''), isnull(f.docexterno, ''),
                isnull(f.mointerna, 0), isnull(f.moexterna, 0), isnull(f.matinterno, 0), isnull(f.matexterno, 0), isnull(f.totmo, 0), isnull(f.totref, 0), isnull(f.valobs, ''),
@@ -45,15 +45,57 @@ public sealed partial class SqlRepositorioIntervencoes
     // Como a avaria, mas com tipo, tipo de manutenção e periodicidade; a periodicidade tem de ser de uma tarefa do equipamento.
     private const string SqlFichaManual =
         """
-        insert into u_fichaint (u_fichaintstamp, no, ref, design, tipointerv, tipomanut, periodo, problema, data, estado, u_equipstamp, hini, tecno, tecnome, opid,
+        insert into u_fichaint (u_fichaintstamp, no, ref, design, tipointerv, tipomanut, periodo, problema, data, estado, u_equipstamp, tecno, tecnome, opid,
                                 ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        select @stamp, @no, left(e.ref, 20), left(e.design, 45), @tipo, @tipomanut, @periodo, @problema, @dia, 'EmCurso', e.u_equipstamp, @agora, @tecno, @tecnome, @opid,
+        select @stamp, @no, left(e.ref, 20), left(e.design, 45), @tipo, @tipomanut, @periodo, @problema, @dia, 'EmCurso', e.u_equipstamp, @tecno, @tecnome, @opid,
                @codigo, @dia, @hora, @codigo, @dia, @hora
         from u_equip e with (nolock)
         where e.u_equipstamp = @equipamento and e.obsoleto = 0 and e.tipoequip = 1
           and (@periodo = '' or exists (select 1 from u_itmanutli l with (nolock) join u_itmanut i with (nolock) on i.u_itmanutstamp = l.u_itmanutstamp
-                                        where i.u_equipstamp = e.u_equipstamp and i.obsoleto = 0 and ltrim(rtrim(l.periodo)) = @periodo))
+                                        where i.u_equipstamp = e.u_equipstamp and i.obsoleto = 0 and ltrim(rtrim(l.periodo)) = @periodo));
+        declare @n int = @@ROWCOUNT, @ficha varchar(25) = @stamp;
+        """ + SqlAbrirLinha;
+
+    // Editar início/fim da ficha: acerta a linha de tempo (a primeira para o início, a que tem o último fim para o fim); sem linhas, cria uma para o técnico da ficha.
+    private const string SqlAplicarHoras =
+        """
+        if @mudaIni = 1
+        begin
+            update u_tempinterv set dataini = @hini, usrinis = @codigo, usrdata = @dia, usrhora = @hora
+            where u_tempintervstamp = (select top 1 t.u_tempintervstamp from u_tempinterv t with (nolock) where t.u_fichaintstamp = @id
+                                       order by case when t.dataini > '19000101' then 0 else 1 end, t.dataini, t.ousrdata, t.ousrhora);
+            if @@ROWCOUNT = 0 and @hini > '19000101'
+                insert into u_tempinterv (u_tempintervstamp, u_fichaintstamp, no, responsavel, tempo, custo, ref, dataini, datafim, pausaini, pausafim,
+                                          ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
+                values (@novo1, @id, @tecno, @tecnome, 0, 0, '', @hini, '19000101', '19000101', '19000101', @codigo, @dia, @hora, @codigo, @dia, @hora);
+        end
+        if @mudaFim = 1
+        begin
+            update u_tempinterv set datafim = @hfim, usrinis = @codigo, usrdata = @dia, usrhora = @hora
+            where u_tempintervstamp = (select top 1 t.u_tempintervstamp from u_tempinterv t with (nolock) where t.u_fichaintstamp = @id
+                                       order by case when t.datafim > '19000101' then 0 else 1 end, t.datafim desc, t.dataini desc);
+            if @@ROWCOUNT = 0 and @hfim > '19000101'
+                insert into u_tempinterv (u_tempintervstamp, u_fichaintstamp, no, responsavel, tempo, custo, ref, dataini, datafim, pausaini, pausafim,
+                                          ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
+                values (@novo2, @id, @tecno, @tecnome, 0, 0, '', @hini, @hfim, '19000101', '19000101', @codigo, @dia, @hora, @codigo, @dia, @hora);
+        end
         """;
+
+    private static async Task AplicarHorasAsync(SqlConnection conn, SqlTransaction tx, string id, FichaLida nova, bool mudaIni, bool mudaFim, string codigo, Momento momento, CancellationToken ct)
+    {
+        await using var cmd = new SqlCommand(SqlAplicarHoras, conn, tx);
+        Texto(cmd, "@id", 25, id);
+        cmd.Parameters.Add("@mudaIni", SqlDbType.Bit).Value = mudaIni;
+        cmd.Parameters.Add("@mudaFim", SqlDbType.Bit).Value = mudaFim;
+        Quando(cmd, "@hini", nova.HIni);
+        Quando(cmd, "@hfim", nova.HFim);
+        Numero(cmd, "@tecno", nova.Tecno, 5);
+        Texto(cmd, "@tecnome", RegrasManutencao.TamanhoNomeTecnico, nova.Tecnome);
+        Texto(cmd, "@novo1", 25, NovoStamp());
+        Texto(cmd, "@novo2", 25, NovoStamp());
+        Auditoria(cmd, codigo, momento);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
 
     private const string SqlEquipamentoValido =
         "select count(*) from u_equip with (nolock) where u_equipstamp = @equipamento and obsoleto = 0 and tipoequip = 1";
@@ -226,14 +268,15 @@ public sealed partial class SqlRepositorioIntervencoes
             Mudou(nova.DocExterno != antes.DocExterno, "docexterno", "@doc", c => Texto(c, "@doc", RegrasManutencao.TamanhoDocExterno, nova.DocExterno));
             Mudou(nova.NoFornec != antes.NoFornec, "nofornec", "@nofornec", c => Numero(c, "@nofornec", nova.NoFornec, 16));
             Mudou(nova.NomeFornec != antes.NomeFornec, "nomefornec", "@nomefornec", c => Texto(c, "@nomefornec", RegrasManutencao.TamanhoNomeFornecedor, nova.NomeFornec));
-            Mudou(nova.HIni != antes.HIni, "hini", "@hini", c => Quando(c, "@hini", nova.HIni));
-            Mudou(nova.HFim != antes.HFim, "hfim", "@hfim", c => Quando(c, "@hfim", nova.HFim));
+            // Início e fim já não são campos da ficha: gravam-se na linha de tempo (AplicarHorasAsync), dentro da mesma transação.
+            var mudouIni = nova.HIni != antes.HIni;
+            var mudouFim = nova.HFim != antes.HFim;
             Mudou(nova.Tecno != antes.Tecno, "tecno", "@tecno", c => Numero(c, "@tecno", nova.Tecno, 5));
             Mudou(nova.Tecnome != antes.Tecnome, "tecnome", "@tecnome", c => Texto(c, "@tecnome", RegrasManutencao.TamanhoNomeTecnico, nova.Tecnome));
             Mudou(nova.Tecnos != antes.Tecnos, ColunaTecnos, "@tecnos", c => c.Parameters.Add("@tecnos", SqlDbType.VarChar, -1).Value = nova.Tecnos);
             Mudou(nova.MoExterna != antes.MoExterna, "moexterna", "@moexterna", c => Numero(c, "@moexterna", nova.MoExterna, 19, 6));
             Mudou(nova.MatExterno != antes.MatExterno, "matexterno", "@matexterno", c => Numero(c, "@matexterno", nova.MatExterno, 19, 6));
-            if (sets.Count == 0) return (ResultadoIntervencao.Ok, await MontarDetalheAsync(conn, id, quem, supervisor, ct));
+            if (sets.Count == 0 && !mudouIni && !mudouFim) return (ResultadoIntervencao.Ok, await MontarDetalheAsync(conn, id, quem, supervisor, ct));
 
             sets.Add("usrinis = @codigo"); sets.Add("usrdata = @dia"); sets.Add("usrhora = @hora");
             cmd.CommandText = "update u_fichaint set " + string.Join(", ", sets) + SqlGuardarFichaWhere;
@@ -241,11 +284,13 @@ public sealed partial class SqlRepositorioIntervencoes
             Texto(cmd, "@estado", 20, antes.Estado);
             Numero(cmd, "@tecnoLido", antes.Tecno, 5);
             Texto(cmd, "@versao", 20, pedido.Versao ?? "");
-            Auditoria(cmd, quem.Codigo, await AgoraAsync(conn, ct));
+            var momento = await AgoraAsync(conn, ct);
+            Auditoria(cmd, quem.Codigo, momento);
 
             await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
             cmd.Transaction = tx;
             if (await cmd.ExecuteNonQueryAsync(ct) == 0) { await tx.RollbackAsync(ct); return (ResultadoIntervencao.Conflito, null); }
+            if (mudouIni || mudouFim) await AplicarHorasAsync(conn, tx, id, nova, mudouIni, mudouFim, quem.Codigo, momento, ct);
             await RecalcularTotaisAsync(conn, id, cfg.ComprasFichaInt, ct, tx);
             await tx.CommitAsync(ct);
             return (ResultadoIntervencao.Ok, await MontarDetalheAsync(conn, id, quem, supervisor, ct));
@@ -303,6 +348,7 @@ public sealed partial class SqlRepositorioIntervencoes
         Texto(cmd, "@opid", RegrasIntervencao.MaxOpId, pedido.OpId ?? "");
         Numero(cmd, "@tecno", tecnico.Tecno, 5);
         Texto(cmd, "@tecnome", RegrasManutencao.TamanhoNomeTecnico, tecnico.Nome);
+        Texto(cmd, "@tempostamp", 25, NovoStamp());
         Auditoria(cmd, tecnico.Codigo, agora);
         if (await cmd.ExecuteNonQueryAsync(ct) > 0) return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, stamp, ct));
 

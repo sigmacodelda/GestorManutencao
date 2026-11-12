@@ -49,7 +49,7 @@
                     <label><input type="checkbox" @bind="_supervisor" /> Criar como supervisor</label>
                 </div>
             }
-            <button type="submit" class="btn btn-secundario" disabled="@_ocupado">Criar e dar PIN</button>
+            <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@_ocupado"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Feito")</span></button>
         </form>
 
         <p class="campo-erro" role="alert">@_erro</p>

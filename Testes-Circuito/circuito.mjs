@@ -293,7 +293,7 @@ async function pistaApp(ctx) {
     await opcao.click();
     await page.locator('.escolhido').waitFor({ timeout: 5000 });
     await page.locator('#anomalia').fill(`${MARCA} avaria A`);
-    await clicar(botao(page, 'Guardar avaria'), 'Guardar avaria');
+    await clicar(botao(page, 'Feito'), 'Guardar avaria');
     await page.locator('h1', { hasText: 'As minhas intervenções' }).waitFor({ timeout: 30000 });
   });
 
@@ -308,8 +308,8 @@ async function pistaApp(ctx) {
       await page.locator('#feito').waitFor({ timeout: 20000 });
       await page.locator('#feito').fill('Planeada feita no circuito E2E');
       await clicar(botao(page, 'Feito'), 'Feito');
-      await page.locator('.sucesso-titulo', { hasText: 'Feito! Obrigado.' }).waitFor({ timeout: 20000 });
-      await clicar(page.locator('a.btn', { hasText: 'Ver as minhas intervenções' }), 'Ver as minhas intervenções');
+      await page.locator('.toast', { hasText: 'Intervenção concluída' }).waitFor({ timeout: 20000 });
+      await page.locator('h1', { hasText: 'As minhas intervenções' }).waitFor({ timeout: 20000 });
     });
   }
 
@@ -330,11 +330,11 @@ async function pistaApp(ctx) {
     await page.locator('.material-linha', { hasText: 'Parafuso M8 E2E' }).waitFor({ timeout: 20000 });
     await page.locator('#feito').fill('Substituído o parafuso (E2E)');
     await clicar(botao(page, 'Feito'), 'Feito');
-    await page.locator('.sucesso-titulo', { hasText: 'Feito! Obrigado.' }).waitFor({ timeout: 20000 });
+    await page.locator('.toast', { hasText: 'Intervenção concluída' }).waitFor({ timeout: 20000 });
+    await page.locator('h1', { hasText: 'As minhas intervenções' }).waitFor({ timeout: 20000 });
   });
 
   await passo(P, 'Técnico consulta um equipamento e regista avaria a partir dele (já escolhido)', async () => {
-    await clicar(page.locator('a.btn', { hasText: 'Ver as minhas intervenções' }), 'Ver as minhas intervenções');
     await paraInicio(page);
     await abrirMosaico(page, 'Equipamentos', 'Equipamentos');
     await page.locator('a.intervencao[href^="equipamentos/"]').first().click();
@@ -366,7 +366,7 @@ async function pistaApp(ctx) {
     afirma((await cartao.innerText()).includes('Avaria'), 'o cartão devia dizer Avaria');
     await clicar(botao(cartao, 'Validar'), 'Validar');
     await clicar(botao(cartao, 'Confirmar'), 'Confirmar');
-    await page.locator('.alerta-pin').waitFor({ timeout: 20000 });
+    await page.locator('.toast', { hasText: 'Validada' }).waitFor({ timeout: 20000 });
     await ate(async () => (await cartao.count()) === 0, 20000, 'A sair da lista de validação');
     sinal.fichaAValidada.resolve();
   }) || sinal.fichaAValidada.rejeita(new Error('A não foi validada'));
@@ -406,9 +406,9 @@ async function pistaApp(ctx) {
     afirma((await alerta.innerText()).includes('Falta apertar o retentor'), 'o motivo da devolução não aparece ao técnico');
     await page.locator('#feito').fill('Retentor apertado (E2E)');
     await clicar(botao(page, 'Feito'), 'Feito');
-    await page.locator('.sucesso-titulo', { hasText: 'Feito! Obrigado.' }).waitFor({ timeout: 20000 });
+    await page.locator('.toast', { hasText: 'Intervenção concluída' }).waitFor({ timeout: 20000 });
     await sinal.fichaBConcluida.promessa;
-    await clicar(page.locator('a.btn', { hasText: 'Ver as minhas intervenções' }), 'Ver as minhas intervenções');
+    await page.locator('h1', { hasText: 'As minhas intervenções' }).waitFor({ timeout: 20000 });
     await paraInicio(page);
     await sairApp(page);
   });

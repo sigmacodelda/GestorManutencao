@@ -1,6 +1,7 @@
 @page "/equipamentos/{Id}/instrucoes"
 @inject IGestaoService Gestao
 @inject SessaoService Sessao
+@inject ToastService Toast
 
 <PageTitle>Instruções de manutenção · Gestor de Manutenção</PageTitle>
 
@@ -87,7 +88,7 @@
                 <textarea id="iv-obs" rows="3" @bind="_obs" @bind:event="oninput"></textarea>
                 <Microfone @bind-Texto="_obs" MaxLength="4000" />
             </div>
-            <button type="submit" class="btn btn-secundario" disabled="@_ocupado"><Icone Nome="@(_editar is null ? "plus" : "check")" /><span>@(_editar is null ? "Criar versão" : "Guardar versão")</span></button>
+            <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@_ocupado"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Feito")</span></button>
             @if (_editar is not null) { <button type="button" class="btn-texto" @onclick="Limpar">Deixar de editar</button> }
         </form>
     }
@@ -142,7 +143,7 @@
             _ocupado = false;
             return false;
         }
-        _aviso = sucesso;
+        Toast.Sucesso(sucesso);
         try { _instrucoes = await Gestao.ListarInstrucoesAsync(Id); }
         catch (Exception ex) { _erroLista = "A gravação foi feita, mas não foi possível atualizar a lista. " + MensagensGestao.Para(ex, "Volte a abrir o ecrã."); }
         _ocupado = false;

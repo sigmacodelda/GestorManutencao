@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @inject ICamara Camara
 @inject SessaoService Sessao
+@inject ToastService Toast
 
 <PageTitle>Intervenção · Gestor de Manutenção</PageTitle>
 
@@ -113,6 +114,31 @@
             </section>
         }
 
+        @if (!_viaDetalhe && _i.Estado == EstadoIntervencao.EmCurso)
+        {
+            <div class="formulario">
+                <div class="campo">
+                    <label for="feito">O que fez?</label>
+                    <textarea id="feito" rows="4" maxlength="254" @bind="_feito" @bind:event="oninput"></textarea>
+                    <Microfone @bind-Texto="_feito" MaxLength="254" />
+                </div>
+                @if (Sessao.Modo == ModoTrabalho.Supervisor)
+                {
+                    <div class="horas">
+                        <div class="campo">
+                            <label for="inicio">Hora de início</label>
+                            <input id="inicio" type="time" @bind="_inicio" />
+                        </div>
+                        <div class="campo">
+                            <label for="fim">Hora de fim</label>
+                            <input id="fim" type="time" @bind="_fim" />
+                            <button type="button" class="btn-texto" @onclick="() => _fim = TimeOnly.FromDateTime(DateTime.Now)">Agora</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
         @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
         {
             <section class="materiais" aria-labelledby="titulo-materiais">
@@ -199,29 +225,8 @@
         }
         else if (_i.Estado == EstadoIntervencao.EmCurso)
         {
-            <form class="formulario" @onsubmit="ConcluirAsync" novalidate>
-                <div class="campo">
-                    <label for="feito">O que fez?</label>
-                    <textarea id="feito" rows="4" maxlength="254" @bind="_feito" @bind:event="oninput"></textarea>
-                    <Microfone @bind-Texto="_feito" MaxLength="254" />
-                </div>
-                @if (Sessao.Modo == ModoTrabalho.Supervisor)
-                {
-                    <div class="horas">
-                        <div class="campo">
-                            <label for="inicio">Hora de início</label>
-                            <input id="inicio" type="time" @bind="_inicio" />
-                        </div>
-                        <div class="campo">
-                            <label for="fim">Hora de fim</label>
-                            <input id="fim" type="time" @bind="_fim" />
-                            <button type="button" class="btn-texto" @onclick="() => _fim = TimeOnly.FromDateTime(DateTime.Now)">Agora</button>
-                        </div>
-                    </div>
-                }
-                <p class="campo-erro" role="alert">@_erro</p>
-                <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_gravar"><Icone Nome="check" /><span>@(_a_gravar ? "A guardar…" : "Feito")</span></button>
-            </form>
+            <p class="campo-erro" role="alert">@_erro</p>
+            <button type="button" class="btn btn-primario btn-grande btn-fixo" disabled="@_a_gravar" @onclick="ConcluirAsync"><Icone Nome="check" /><span>@(_a_gravar ? "A guardar…" : "Feito")</span></button>
         }
         else
         {
@@ -464,6 +469,12 @@
         _erro = RegrasIntervencao.ValidarConclusao(_feito, _inicio, _fim) ?? "";
         if (_erro.Length > 0) return;
         await Gravar(() => Intervencoes.ConcluirAsync(Id, _feito, _inicio!.Value, _fim!.Value));
+        // Feito: volta à lista (a que o utilizador usa no terreno) e confirma com um aviso de 2 s, sem ecrã de sucesso a pedir mais um toque.
+        if (_erro.Length == 0 && _i is { Estado: EstadoIntervencao.Concluida })
+        {
+            Toast.Sucesso("Intervenção concluída");
+            Nav.NavigateTo(Sessao.Modo == ModoTrabalho.Supervisor ? "planeadas" : "intervencoes");
+        }
     }
 
     private async Task Gravar(Func<Task<Intervencao>> operacao)

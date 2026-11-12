@@ -84,7 +84,7 @@ public static class ServicosExtensions
     public static IServiceCollection AddManutencaoUI(this IServiceCollection services, string? tema = null)
     {
         services.AddSingleton(GestorManutencao.UI.Temas.Tema.Carregar(tema)).AddScoped<SessaoService>();
-        services.AddSingleton<CicloVidaApp>().AddScoped<NotificacaoService>();
+        services.AddSingleton<CicloVidaApp>().AddScoped<NotificacaoService>().AddScoped<ToastService>();
         services.TryAddSingleton<IAvisoSistema, AvisoSistemaNenhum>();
         services.TryAddSingleton<IArmazemAvisos, ArmazemAvisosMemoria>();
         services.TryAddSingleton<IDitado, DitadoNenhum>();

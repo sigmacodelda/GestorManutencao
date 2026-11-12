@@ -4,6 +4,7 @@
 @inject NavigationManager Nav
 @inject IGestorOffline Offline
 @inject SessaoService Sessao
+@inject ToastService Toast
 
 <PageTitle>Registar avaria · Gestor de Manutenção</PageTitle>
 
@@ -63,7 +64,7 @@
 
         <p id="erro-avaria" class="campo-erro" role="alert">@_erro</p>
 
-        <button type="submit" class="btn btn-primario" disabled="@_a_guardar">@(_a_guardar ? "A guardar…" : "Guardar avaria")</button>
+        <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@_a_guardar"><Icone Nome="check" /><span>@(_a_guardar ? "A guardar…" : "Feito")</span></button>
     </form>
     }
 </section>
@@ -130,8 +131,8 @@
         try
         {
             var ficha = await Intervencoes.RegistarAvariaAsync(_escolhido!.Id, _anomalia);
-            if (ficha.Pendente) _guardadoSemRede = true;
-            else Nav.NavigateTo("intervencoes");
+            Toast.Sucesso(ficha.Pendente ? "Avaria guardada. Segue quando houver rede" : "Avaria registada");
+            Nav.NavigateTo("intervencoes");
         }
         catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
         catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }

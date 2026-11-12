@@ -123,7 +123,17 @@ async function paraInicio() {
 }
 const mosaico = (titulo) => page.locator('a.mosaico-link', { has: page.locator('.mosaico-titulo', { hasText: new RegExp('^' + titulo + '([0-9]|[ \\u00a0]|$)') }) });
 async function abrirMosaico(titulo, h1) { await paraInicio(); await clicar(mosaico(titulo), `mosaico ${titulo}`); await page.locator('h1', { hasText: h1 }).first().waitFor({ timeout: 20000 }); await semErroBlazor(); }
-const sucesso = (texto) => page.locator('.alerta-pin, .sucesso, .alerta', { hasText: texto }).first().waitFor({ timeout: 20000 });
+const sucesso = (texto) => page.locator('.toast, .alerta-pin, .sucesso, .alerta', { hasText: texto }).first().waitFor({ timeout: 20000 });
+// Depois de gravar, a app volta à lista com um aviso de 2 s: o id do equipamento vem do link da lista.
+async function abrirEquipamentoCriado() {
+  await escrever('#eq-texto', MARCA); await clicar(page.locator('button[aria-label="Pesquisar"]'), 'Pesquisar');
+  const link = page.locator('a.intervencao[href^="equipamentos/"]', { hasText: NOME_EQ }).first();
+  await link.waitFor({ timeout: 20000 });
+  const id = decodeURIComponent((await link.getAttribute('href')).split('equipamentos/')[1].split(/[?#]/)[0]);
+  await link.click(); await page.locator('h1', { hasText: NOME_EQ }).waitFor({ timeout: 20000 });
+  return id;
+}
+const concluirEVoltar = async () => { await sucesso('Intervenção concluída'); await page.locator('h1', { hasText: 'As minhas intervenções' }).first().waitFor({ timeout: 20000 }); };
 
 // ------------------------------------------------------------------ circuitos
 const ctx = { eq: null, equipId: null, instrucaoId: null, planeadaId: null, fichaManual: null, avaria: null, loginT: null };
@@ -184,11 +194,12 @@ await circuito('02 Equipamento: criar, ver e editar (supervisor)', async () => {
     await escrever('#eq-ano', '2024'); await escrever('#eq-valor', '1500');
     await clicar(botao(page, 'Seguinte'), 'Seguinte 2');
     await page.locator('#eq-estado').waitFor({ timeout: 10000 });
-    await clicar(botao(page, 'Guardar equipamento'), 'Guardar equipamento');
-    await page.waitForURL(/equipamentos\/(?!novo)[^/]+$/, { timeout: 30000 });
-    ctx.equipId = decodeURIComponent(page.url().split('/equipamentos/')[1].split(/[?#]/)[0]);
+    await clicar(botao(page, 'Feito'), 'Guardar equipamento');
+    await sucesso('Equipamento criado');
+    await page.locator('h1', { hasText: 'Equipamentos' }).first().waitFor({ timeout: 20000 });
+    afirma(!/equipamentos\/novo/.test(page.url()), 'devia ter voltado à lista de equipamentos');
+    ctx.equipId = await abrirEquipamentoCriado();
     criados.equipamentos.push(ctx.equipId);
-    await page.locator('h1', { hasText: NOME_EQ }).waitFor({ timeout: 20000 });
   });
   await passo('Ficha do equipamento: dados gravados, botões do supervisor e histórico de estado', async () => {
     const txt = await page.locator('dl.ficha').innerText();
@@ -202,15 +213,17 @@ await circuito('02 Equipamento: criar, ver e editar (supervisor)', async () => {
     afirma((await page.locator('#eq-ref').inputValue()) === MARCA, 'a referência não veio preenchida');
     await escrever('#eq-marca', 'E2E-Editada');
     await clicar(botao(page, 'Seguinte'), 'Seguinte 1'); await clicar(botao(page, 'Seguinte'), 'Seguinte 2');
-    await clicar(botao(page, 'Guardar equipamento'), 'Guardar equipamento');
-    await page.waitForURL(/equipamentos\/[^/]+$/, { timeout: 30000 });
+    await clicar(botao(page, 'Feito'), 'Guardar equipamento');
+    await sucesso('Equipamento guardado');
+    await page.locator('h1', { hasText: 'Equipamentos' }).first().waitFor({ timeout: 20000 });
+    await abrirEquipamentoCriado();
     await page.locator('dl.ficha', { hasText: 'E2E-Editada' }).waitFor({ timeout: 20000 });
   });
   await passo('Referência repetida é recusada', async () => {
     await abrirMosaico('Novo equipamento', 'Novo equipamento');
     await escrever('#eq-ref', MARCA); await escrever('#eq-design', `${MARCA} duplicado`);
     await clicar(botao(page, 'Seguinte'), 'Seguinte 1'); await clicar(botao(page, 'Seguinte'), 'Seguinte 2');
-    await clicar(botao(page, 'Guardar equipamento'), 'Guardar equipamento');
+    await clicar(botao(page, 'Feito'), 'Guardar equipamento');
     await page.locator('p.campo-erro, .alerta').filter({ hasText: /\S/ }).first().waitFor({ timeout: 20000 });
     afirma(/equipamentos\/novo/.test(page.url()), 'não devia ter navegado');
     await page.goBack().catch(() => {});
@@ -230,7 +243,7 @@ await circuito('02b Periodicidade Mensal: configurar como 1 mês (a base de test
     await clicar(linha.getByRole('button', { name: 'Editar', exact: true }), 'Editar Mensal');
     await page.locator('#pe-unidade').selectOption('meses');
     await escrever('#pe-intervalo', '1');
-    await clicar(botao(page, 'Guardar'), 'Guardar');
+    await clicar(botao(page, 'Feito'), 'Guardar');
     await ate(async () => (await linha.locator('.intervencao-desc').innerText()).includes('todos os meses'), 20000, 'a descrição "todos os meses"');
   });
   await passo('Intervalo vazio com unidade "Meses" é recusado', async () => {
@@ -238,7 +251,7 @@ await circuito('02b Periodicidade Mensal: configurar como 1 mês (a base de test
     await clicar(linha.getByRole('button', { name: 'Editar', exact: true }), 'Editar Trimestral');
     await page.locator('#pe-unidade').selectOption('meses');
     await page.locator('#pe-intervalo').fill(''); await page.locator('#pe-intervalo').press('Tab');
-    await clicar(botao(page, 'Guardar'), 'Guardar (sem intervalo)');
+    await clicar(botao(page, 'Feito'), 'Guardar (sem intervalo)');
     await page.locator('p.campo-erro').filter({ hasText: /Indique o intervalo/ }).first().waitFor({ timeout: 15000 });
     await clicar(botao(page, 'Deixar de editar'), 'Deixar de editar');
   });
@@ -255,24 +268,24 @@ await circuito('03 Instruções e tarefas (supervisor)', async () => {
     }
     await page.locator('#iv-versao').waitFor({ timeout: 20000 });
     await escrever('#iv-versao', '1'); await escrever('#iv-obs', `${MARCA} instrução`);
-    await clicar(botao(page, 'Criar versão'), 'Criar versão');
+    await clicar(botao(page, 'Feito'), 'Criar versão');
     await sucesso('Versão criada.');
     await page.locator('li.intervencao', { hasText: 'Versão 1' }).waitFor({ timeout: 20000 });
   });
   await passo('Nova tarefa Mensal: descrição obrigatória e gravar', async () => {
     await clicar(page.locator('a', { hasText: 'Ver tarefas' }).first(), 'Ver tarefas');
     await page.locator('#ta-descricao').waitFor({ timeout: 20000 });
-    await clicar(botao(page, 'Guardar tarefa'), 'Guardar tarefa (vazia)');
+    await clicar(botao(page, 'Feito'), 'Guardar tarefa (vazia)');
     afirma((await page.locator('p.campo-erro').allInnerTexts()).join('').includes('Descreva a tarefa'), 'sem aviso "Descreva a tarefa."');
     await page.locator('#ta-periodo').selectOption({ label: 'Mensal' });
     await escrever('#ta-resp', 'Equipa interna'); await escrever('#ta-descricao', `${MARCA} verificar pressão`);
-    await clicar(botao(page, 'Guardar tarefa'), 'Guardar tarefa');
+    await clicar(botao(page, 'Feito'), 'Guardar tarefa');
     await sucesso('Tarefa criada.');
   });
   await passo('Editar a tarefa e guardar', async () => {
     await clicar(botao(page, 'Editar').first(), 'Editar tarefa');
     await escrever('#ta-descricao', `${MARCA} verificar pressão e óleo`);
-    await clicar(botao(page, 'Guardar tarefa'), 'Guardar tarefa (edição)');
+    await clicar(botao(page, 'Feito'), 'Guardar tarefa (edição)');
     await sucesso('Tarefa guardada.');
   });
   await passo('A tarefa gerou uma planeada para o equipamento (API do supervisor)', async () => {
@@ -341,12 +354,12 @@ await circuito('06 Periodicidades e Configuração (supervisor, repõe o origina
     const aviso = page.locator('#pe-aviso'); await aviso.waitFor({ timeout: 10000 });
     const antes = await aviso.isChecked();
     await aviso.setChecked(!antes);
-    await clicar(botao(page, 'Guardar'), 'Guardar');
+    await clicar(botao(page, 'Feito'), 'Guardar');
     await ate(async () => !(await page.locator('#pe-aviso').isVisible().catch(() => false)), 20000, 'sair da edição');
     await botao(page, 'Editar').first().click(); await page.locator('#pe-aviso').waitFor({ timeout: 10000 });
     afirma((await page.locator('#pe-aviso').isChecked()) === !antes, 'o aviso não ficou gravado');
     await page.locator('#pe-aviso').setChecked(antes);
-    await clicar(botao(page, 'Guardar'), 'Guardar (repor)');
+    await clicar(botao(page, 'Feito'), 'Guardar (repor)');
     await ate(async () => !(await page.locator('#pe-aviso').isVisible().catch(() => false)), 20000, 'sair da edição (repor)');
   });
   await passo('Configuração: antecedência inválida é recusada, válida grava e repõe', async () => {
@@ -356,9 +369,10 @@ await circuito('06 Periodicidades e Configuração (supervisor, repõe o origina
     await escrever('#cfg-antecedencia', '999'); await clicar(botao(page, 'Guardar'), 'Guardar (999)');
     await page.locator('p.campo-erro, .alerta').filter({ hasText: /entre 0 e 90/ }).first().waitFor({ timeout: 15000 });
     await escrever('#cfg-antecedencia', '9'); await clicar(botao(page, 'Guardar'), 'Guardar (9)');
-    await sucesso('Configuração guardada.');
+    await sucesso('Configuração guardada'); // volta ao menu "Mais" com o aviso de 2 s
+    await abrirMosaico('Configuração', 'Configuração');
     await escrever('#cfg-antecedencia', original || '7'); await clicar(botao(page, 'Guardar'), 'Guardar (repor)');
-    await sucesso('Configuração guardada.');
+    await sucesso('Configuração guardada');
   });
 });
 
@@ -370,14 +384,16 @@ await circuito('07 Ficha manual e ficha completa (supervisor)', async () => {
     await clicar(page.locator('.opcoes .opcao', { hasText: NOME_EQ }), 'equipamento de teste');
     await page.locator('#nf-tipo').selectOption({ label: 'Preventiva' });
     await escrever('#nf-problema', `${MARCA} ficha manual`);
-    await clicar(botao(page, 'Criar ficha'), 'Criar ficha');
-    await page.waitForURL(/intervencoes\/[^/]+$/, { timeout: 30000 });
-    ctx.fichaManual = page.url().split('/intervencoes/')[1].split(/[?#]/)[0]; criados.fichas.push(ctx.fichaManual);
-    await page.locator('#fc-tipo').waitFor({ timeout: 20000 });
+    await clicar(botao(page, 'Feito'), 'Criar ficha');
+    await sucesso('Ficha criada');
+    await page.locator('h1', { hasText: 'Planeadas' }).first().waitFor({ timeout: 20000 });
+    const s = await entrarApi(PIN_S);
+    const f = await ate(async () => itens((await http(s.token, 'GET', `/intervencoes/todas?q=${encodeURIComponent(MARCA + ' ficha manual')}`)).json).find((x) => (x.anomalia ?? '').includes(`${MARCA} ficha manual`)), 20000, 'a ficha manual aparecer');
+    ctx.fichaManual = f.id; criados.fichas.push(f.id);
   });
   await passo('Nova ficha sem equipamento é recusada', async () => {
     await paraInicio().catch(() => {}); await abrirMosaico('Nova ficha', 'Nova ficha');
-    await clicar(botao(page, 'Criar ficha'), 'Criar ficha (vazia)');
+    await clicar(botao(page, 'Feito'), 'Criar ficha (vazia)');
     afirma((await page.locator('#nf-erro').innerText()).includes('Escolha o equipamento'), 'sem aviso "Escolha o equipamento."');
   });
   await passo('Ficha completa: editar o problema e a resolução e guardar', async () => {
@@ -417,17 +433,17 @@ await circuito('08 Técnico: planeada atribuída e avaria com material', async (
     afirma((await page.locator('p.campo-erro').allInnerTexts()).join('').includes('Escreva o que foi feito'), 'sem aviso "Escreva o que foi feito."');
     await escrever('#feito', `${MARCA} planeada feita`);
     await clicar(botao(page, 'Feito'), 'Feito');
-    await page.locator('.sucesso-titulo', { hasText: 'Feito! Obrigado.' }).waitFor({ timeout: 20000 });
+    await concluirEVoltar();
   });
   await passo('Técnico regista uma avaria no equipamento de teste', async () => {
-    await clicar(page.locator('a.btn', { hasText: 'Ver as minhas intervenções' }), 'Ver as minhas intervenções');
     await abrirMosaico('Registar avaria', 'Registar avaria');
-    await clicar(botao(page, 'Guardar avaria'), 'Guardar avaria (vazia)');
+    await clicar(botao(page, 'Feito'), 'Guardar avaria (vazia)');
     afirma((await page.locator('#erro-avaria').innerText()).includes('Escolha o equipamento'), 'sem aviso "Escolha o equipamento."');
     await escrever('#equipamento', MARCA);
     await clicar(page.locator('.opcoes .opcao', { hasText: NOME_EQ }), 'equipamento de teste');
     await escrever('#anomalia', `${MARCA} avaria`);
-    await clicar(botao(page, 'Guardar avaria'), 'Guardar avaria');
+    await clicar(botao(page, 'Feito'), 'Guardar avaria');
+    await sucesso('Avaria registada');
     await page.locator('h1', { hasText: 'As minhas intervenções' }).waitFor({ timeout: 30000 });
     const s = await entrarApi(PIN_S);
     const f = await ate(async () => itens((await http(s.token, 'GET', `/intervencoes/todas?q=${encodeURIComponent(MARCA + ' avaria')}`)).json).find((x) => (x.anomalia ?? '').includes(`${MARCA} avaria`)), 20000, 'a avaria aparecer');
@@ -448,10 +464,9 @@ await circuito('08 Técnico: planeada atribuída e avaria com material', async (
     await clicar(botao(page, 'Juntar material'), 'Juntar material 2');
     await page.locator('.material-linha', { hasText: 'Retentor E2E' }).waitFor({ timeout: 20000 });
     await escrever('#feito', `${MARCA} avaria resolvida`); await clicar(botao(page, 'Feito'), 'Feito');
-    await page.locator('.sucesso-titulo', { hasText: 'Feito! Obrigado.' }).waitFor({ timeout: 20000 });
+    await concluirEVoltar();
   });
   await passo('Barra inferior do técnico e Notificações', async () => {
-    await clicar(page.locator('a.btn', { hasText: 'Ver as minhas intervenções' }), 'Ver as minhas intervenções');
     for (const [rotulo, h1] of [['Avaria', 'Registar avaria'], ['Máquinas', 'Equipamentos'], ['Avisos', 'Notificações'], ['Intervenções', 'As minhas intervenções'], ['Início', null]]) {
       await clicar(page.locator('nav.navegacao .nav-item', { has: page.locator('.nav-rotulo', { hasText: new RegExp('^[ \\n\\t]*' + rotulo) }) }), `nav ${rotulo}`);
       if (h1) await page.locator('h1', { hasText: h1 }).first().waitFor({ timeout: 15000 }); else await page.locator('.hero-texto').waitFor({ timeout: 15000 });
@@ -482,8 +497,7 @@ await circuito('09 Validação: devolver, reconcluir e validar', async () => {
     const a = page.locator('.alerta-devolvida'); await a.waitFor({ timeout: 20000 });
     afirma((await a.innerText()).includes('Falta limpar'), 'o motivo não aparece ao técnico');
     await escrever('#feito', `${MARCA} limpo`); await clicar(botao(page, 'Feito'), 'Feito');
-    await page.locator('.sucesso-titulo', { hasText: 'Feito! Obrigado.' }).waitFor({ timeout: 20000 });
-    await clicar(page.locator('a.btn', { hasText: 'Ver as minhas intervenções' }), 'Ver as minhas intervenções'); await paraInicio(); await sairApp();
+    await concluirEVoltar(); await paraInicio(); await sairApp();
   });
   await passo('Supervisor valida a avaria pela ficha completa ("Validar e fechar")', async () => {
     await sessaoComo('Supervisor'); await abrirMosaico('Todas as fichas', 'Todas as fichas');
@@ -503,24 +517,24 @@ await circuito('10 Equipamento obsoleto e Equipa/PIN (supervisor)', async () => 
     await clicar(page.locator('a.btn', { hasText: 'Editar equipamento' }), 'Editar equipamento');
     await clicar(botao(page, 'Seguinte'), 'Seguinte 1'); await clicar(botao(page, 'Seguinte'), 'Seguinte 2');
     await page.locator('#eq-obsoleto').check();
-    await clicar(botao(page, 'Guardar equipamento'), 'Guardar equipamento');
+    await clicar(botao(page, 'Feito'), 'Guardar equipamento');
     await page.getByText('Marcar como obsoleto?').first().waitFor({ timeout: 20000 });
     await clicar(botao(page, 'Confirmar e guardar'), 'Confirmar e guardar');
-    await page.waitForURL(/equipamentos\/[^/]+$/, { timeout: 30000 });
-    await page.getByText(/Obsoleto/i).first().waitFor({ timeout: 20000 });
+    await sucesso('Equipamento guardado'); // volta à lista de equipamentos com o aviso de 2 s
+    await page.locator('h1', { hasText: 'Equipamentos' }).first().waitFor({ timeout: 20000 });
   });
   await passo('Equipa: criar operador e receber o PIN provisório de 4 números', async () => {
     await abrirMosaico('Equipa', 'Equipa');
     const codigo = `e2e.n${RUN}`; criados.utilizadores.push(codigo);
     await escrever('#nome', `Teste E2E Novo ${RUN}`); await escrever('#codigo', codigo); await escrever('#tecno', '99005');
-    await clicar(botao(page, 'Criar e dar PIN'), 'Criar e dar PIN');
+    await clicar(botao(page, 'Feito'), 'Criar e dar PIN');
     const pin = await page.locator('.pin-grande').first().innerText({ timeout: 20000 });
     afirma(/^\d{4}$/.test(pin.trim()), `o PIN provisório devia ter 4 números (tem ${pin.trim().length})`);
     ctx.pinNovo = pin.trim();
     await clicar(botao(page, 'Já anotei, fechar'), 'Já anotei, fechar');
   });
   await passo('Equipa: dados repetidos e códigos inválidos são recusados', async () => {
-    await escrever('#nome', 'X'); await escrever('#codigo', 'a b'); await clicar(botao(page, 'Criar e dar PIN'), 'Criar (inválido)');
+    await escrever('#nome', 'X'); await escrever('#codigo', 'a b'); await clicar(botao(page, 'Feito'), 'Criar (inválido)');
     afirma((await page.locator('p.campo-erro').allInnerTexts()).join('').length > 0, 'sem aviso de validação');
   });
   await passo('O operador novo entra com o PIN provisório e é obrigado a definir um PIN de 4 números', async () => {

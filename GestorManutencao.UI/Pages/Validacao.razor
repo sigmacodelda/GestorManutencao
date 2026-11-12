@@ -1,5 +1,6 @@
 @page "/validacao"
 @inject SessaoService Sessao
+@inject ToastService Toast
 @inject IIntervencoesService Intervencoes
 
 <PageTitle>Validação · Gestor de Manutenção</PageTitle>
@@ -145,7 +146,7 @@
         {
             await acao();
             _fichas.Remove(f);
-            _aviso = sucesso;
+            Toast.Sucesso(sucesso);
         }
         catch (InvalidOperationException ex)
         {
