@@ -14,9 +14,12 @@
     <section class="conteudo">
         <div class="boas-vindas hero">
             <Engrenagem Classe="engr-hero" />
-            <button type="button" class="btn-icone hero-sair" aria-label="Terminar sessão" @onclick="Sair">
-                <Icone Nome="log-out" />
-            </button>
+            <div class="hero-acoes">
+                <ModoVisual />
+                <button type="button" class="btn-icone" aria-label="Terminar sessão" @onclick="Sair">
+                    <Icone Nome="log-out" />
+                </button>
+            </div>
             <div class="hero-texto">
                 <p class="sobretitulo">@(supervisor ? "Supervisor" : "Operador")</p>
                 <h1>@Saudacao(), @PrimeiroNome</h1>
