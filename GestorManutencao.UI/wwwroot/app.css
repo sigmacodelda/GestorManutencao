@@ -438,6 +438,7 @@ h1 { letter-spacing: -.015em; }
 /* ---------- Fichas de trabalho: corpo + talão ---------- */
 .titulo-grupo { font-size: 1.125rem; letter-spacing: -.005em; }
 .contagem { font: 700 .8125rem var(--fonte-titulos); padding: 1px 11px; background: var(--primario); color: var(--sobre-primario); box-shadow: 0 2px 0 var(--prim-aresta); }
+.mosaico-titulo .contagem { margin-left: var(--esp-2); }
 .intervencao, .ficha {
     background: var(--aco); border: 1px solid var(--borda-suave); border-radius: 14px;
     box-shadow: var(--bisel), var(--painel-sombra);
@@ -681,13 +682,13 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 .alerta-devolvida p { margin: var(--esp-1) 0 0; font-weight: 600; overflow-wrap: anywhere; }
 
 /* ---------- Telemóvel: sem cabeçalho de cima (logótipo); o início mostra o utilizador e termina a sessão ---------- */
-.hero-acoes, .hero-utilizador { display: none; }
+.hero-acoes { display: none; }
+.hero .hero-nome { display: flex; align-items: center; gap: var(--esp-3); max-width: 14ch; font-size: 1.5rem; margin-top: var(--esp-1); }
+.hero-nome .avatar { width: 40px; height: 40px; font-size: .9375rem; }
 @media (max-width: 719px) {
     .so-largo { display: none; }
     .conteudo-wrap { padding-top: calc(var(--esp-4) + env(safe-area-inset-top)); }
     .hero-acoes { display: flex; gap: var(--esp-1); position: absolute; top: var(--esp-3); right: var(--esp-3); z-index: 2; }
-    .hero-utilizador { display: flex; align-items: center; gap: var(--esp-2); margin-top: var(--esp-2); font-weight: 600; font-size: .9375rem; color: var(--sobre-marca); }
-    .hero-utilizador .avatar { width: 28px; height: 28px; font-size: .75rem; }
 }
 
 /* ---------- Ditado por voz ---------- */

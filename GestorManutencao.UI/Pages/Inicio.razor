@@ -22,11 +22,10 @@
             </div>
             <div class="hero-texto">
                 <p class="sobretitulo">@(supervisor ? "Supervisor" : "Operador")</p>
-                <h1>@Saudacao(), @PrimeiroNome</h1>
-                <p class="hero-utilizador">
+                <h1 class="hero-nome">
                     <span class="avatar" aria-hidden="true">@Sessao.Utilizador!.Iniciais</span>
                     <span>@Sessao.Utilizador.Nome</span>
-                </p>
+                </h1>
                 <p class="hero-data">@DataExtenso()</p>
             </div>
         </div>
@@ -168,12 +167,4 @@
         var s = DateTime.Now.ToString("dddd, d 'de' MMMM", new System.Globalization.CultureInfo("pt-PT"));
         return char.ToUpperInvariant(s[0]) + s[1..];
     }
-    private string PrimeiroNome => Sessao.Utilizador!.Nome.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
-
-    private static string Saudacao() => DateTime.Now.Hour switch
-    {
-        < 12 => "Bom dia",
-        < 20 => "Boa tarde",
-        _ => "Boa noite"
-    };
 }
