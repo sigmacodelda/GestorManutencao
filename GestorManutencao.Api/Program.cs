@@ -59,6 +59,21 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<EmissorToken>();
 builder.Services.AddSingleton<PinHasher>();
 
+// Push "acordar a app": tokens num ficheiro JSON (por omissão em dados/ ao lado da API) e só o caminho da chave Firebase na configuração.
+var ficheiroDispositivos = builder.Configuration["Push:FicheiroDispositivos"];
+ficheiroDispositivos = string.IsNullOrWhiteSpace(ficheiroDispositivos)
+    ? Path.Combine(builder.Environment.ContentRootPath, "dados", "dispositivos.json")
+    : Path.GetFullPath(ficheiroDispositivos, builder.Environment.ContentRootPath);
+builder.Services.AddSingleton<IRepositorioDispositivos>(sp => new RepositorioDispositivosFicheiro(ficheiroDispositivos, sp.GetRequiredService<TimeProvider>(),
+    sp.GetRequiredService<ILogger<RepositorioDispositivosFicheiro>>()));
+var chaveFirebase = builder.Configuration["Push:CaminhoChaveFirebase"];
+if (string.IsNullOrWhiteSpace(chaveFirebase)) builder.Services.AddSingleton<IEnviadorPush, EnviadorPushNulo>();
+else builder.Services.AddSingleton<IEnviadorPush>(sp => new EnviadorPushFirebase(Path.GetFullPath(chaveFirebase, builder.Environment.ContentRootPath),sp.GetRequiredService<IRepositorioDispositivos>(), sp.GetRequiredService<ILogger<EnviadorPushFirebase>>()));
+builder.Services.AddSingleton(sp => new NotificadorPush(sp.GetRequiredService<IRepositorioDispositivos>(), sp.GetRequiredService<IEnviadorPush>(),
+    sp.GetRequiredService<ILogger<NotificadorPush>>()));
+builder.Services.AddSingleton<INotificadorPush>(sp => sp.GetRequiredService<NotificadorPush>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<NotificadorPush>());
+
 // Sem cadeia de ligação só se aceita em desenvolvimento, e com utilizadores em memória.
 if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn")))
 {
@@ -217,6 +232,7 @@ static IResult RegistarPinEmUso(ILogger log, HttpContext http)
 }
 
 app.MapHub<AvisosHub>(AvisosHub.Rota).RequireAuthorization();
+app.MapDispositivos();
 app.MapIntervencoes();
 app.MapGestao();
 

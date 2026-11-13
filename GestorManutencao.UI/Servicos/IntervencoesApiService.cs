@@ -7,8 +7,23 @@ using GestorManutencao.UI.Offline;
 namespace GestorManutencao.UI.Servicos;
 
 // Intervenções e equipamentos através da API; o token vem da sessão atual.
-public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao) : IIntervencoesRemoto
+public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao) : IIntervencoesRemoto, IDispositivosRemoto
 {
+    public Task RegistarAsync(string jwt, string token, CancellationToken ct = default) => DispositivoAsync(HttpMethod.Post, jwt, token, ct);
+
+    public Task DesregistarAsync(string jwt, string token, CancellationToken ct = default) => DispositivoAsync(HttpMethod.Delete, jwt, token, ct);
+
+    private async Task DispositivoAsync(HttpMethod metodo, string jwt, string token, CancellationToken ct)
+    {
+        using var pedido = new HttpRequestMessage(metodo, "dispositivos")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", jwt) },
+            Content = JsonContent.Create(new { token })
+        };
+        using var resposta = await http.SendAsync(pedido, ct);
+        resposta.EnsureSuccessStatusCode();
+    }
+
     public async Task<IReadOnlyList<Intervencao>> ListarMinhasAsync(CancellationToken ct = default)
     {
         using var resposta = await EnviarAsync(HttpMethod.Get, "intervencoes", null, ct);

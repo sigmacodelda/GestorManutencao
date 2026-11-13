@@ -63,6 +63,9 @@ public sealed class CicloVidaApp
     // Botão Pausar/Retomar da notificação fixa: a plataforma só avisa, quem trata é o NotificacaoService.
     public event Action<string>? PausaPedida;
     public void PedirPausa(string fichaId) => PausaPedida?.Invoke(fichaId);
+
+    // Quem estiver a tratar a sessão em memória regista-se aqui; o push usa-o em vez de abrir uma sessão paralela.
+    public Func<CancellationToken, Task>? Verificador { get; set; }
 }
 
 // Avisos derivados do estado das fichas (nada é gravado no servidor). Só corre com a app aberta ou em segundo plano.
@@ -86,12 +89,13 @@ public sealed class NotificacaoService : IDisposable
     private CancellationTokenSource? _cts;
     private DateTime _ultimaVerificacao = DateTime.MinValue;
 
-    public NotificacaoService(SessaoService sessao, IIntervencoesService intervencoes, IArmazemAvisos armazem, IAvisoSistema sistema, CicloVidaApp ciclo, IServicoSegundoPlano? segundoPlano = null, ITempoReal? tempoReal = null, IAvisoEmCurso? emCurso = null)
-        : this(sessao, intervencoes, armazem, sistema, ciclo, () => DateTime.Now, segundoPlano, tempoReal, emCurso) { }
+    public NotificacaoService(SessaoService sessao, IIntervencoesService intervencoes, IArmazemAvisos armazem, IAvisoSistema sistema, CicloVidaApp ciclo, IServicoSegundoPlano? segundoPlano = null, ITempoReal? tempoReal = null, IAvisoEmCurso? emCurso = null, IPushToken? push = null, IDispositivosRemoto? dispositivos = null)
+        : this(sessao, intervencoes, armazem, sistema, ciclo, () => DateTime.Now, segundoPlano, tempoReal, emCurso, push, dispositivos) { }
 
-    public NotificacaoService(SessaoService sessao, IIntervencoesService intervencoes, IArmazemAvisos armazem, IAvisoSistema sistema, CicloVidaApp ciclo, Func<DateTime> agora, IServicoSegundoPlano? segundoPlano = null, ITempoReal? tempoReal = null, IAvisoEmCurso? emCurso = null)
+    public NotificacaoService(SessaoService sessao, IIntervencoesService intervencoes, IArmazemAvisos armazem, IAvisoSistema sistema, CicloVidaApp ciclo, Func<DateTime> agora, IServicoSegundoPlano? segundoPlano = null, ITempoReal? tempoReal = null, IAvisoEmCurso? emCurso = null, IPushToken? push = null, IDispositivosRemoto? dispositivos = null)
     {
         _sessao = sessao; _intervencoes = intervencoes; _armazem = armazem; _sistema = sistema; _ciclo = ciclo; _agora = agora;
+        _push = push; _dispositivos = dispositivos;
         _segundoPlano = segundoPlano ?? new ServicoSegundoPlanoNenhum();
         _tempoReal = tempoReal ?? new TempoRealNenhum();
         _emCurso = emCurso ?? new AvisoEmCursoNenhum();
@@ -99,6 +103,37 @@ public sealed class NotificacaoService : IDisposable
         _sessao.Alterada += AoMudarSessao;
         _ciclo.PrimeiroPlano += AoPrimeiroPlano;
         _ciclo.PausaPedida += AoPedirPausa;
+    }
+
+    private readonly IPushToken? _push;
+    private readonly IDispositivosRemoto? _dispositivos;
+    private string? _tokenRegistado, _jwtRegisto;
+    private Func<CancellationToken, Task>? _verificador;
+
+    // Regista o aparelho para o push, sem esperar e sem poder falhar. Se a sessão acabou entretanto, desfaz o registo.
+    private async Task RegistarPushAsync(string jwt, CancellationToken ct)
+    {
+        if (_push is null || _dispositivos is null) return;
+        try
+        {
+            var token = await _push.ObterAsync(ct); // sigma-ok: variável, não é um valor
+            if (string.IsNullOrEmpty(token) || ct.IsCancellationRequested) return;
+            await _dispositivos.RegistarAsync(jwt, token, ct);
+            _tokenRegistado = token; _jwtRegisto = jwt;
+            if (ct.IsCancellationRequested) DesregistarPush();
+        }
+        catch (Exception) { /* sem rede ou sem push: a app continua a verificar pelo ciclo e pelo canal em tempo real */ }
+    }
+
+    private void DesregistarPush()
+    {
+        var (token, jwt, dispositivos) = (_tokenRegistado, _jwtRegisto, _dispositivos);
+        _tokenRegistado = _jwtRegisto = null;
+        if (token is null || jwt is null || dispositivos is null) return;
+        _ = Task.Run(async () =>
+        {
+            try { await dispositivos.DesregistarAsync(jwt, token); } catch (Exception) { }
+        });
     }
 
     private readonly IAvisoEmCurso _emCurso;
@@ -149,7 +184,9 @@ public sealed class NotificacaoService : IDisposable
         // Com PIN provisório a API ainda não deixa consultar fichas.
         if (_cts is not null || !_sessao.TemSessao || _sessao.Utilizador?.PinProvisorio == true) return;
         _cts = new CancellationTokenSource();
-        _ = CicloAsync(_cts.Token);
+        _verificador = ct => VerificarAsync(ct);
+        _ciclo.Verificador = _verificador;
+        _ = CicloAsync(_cts.Token, _sessao.Utilizador?.Token);
         try { _ = _tempoReal.IniciarAsync(() => _sessao.Utilizador?.Token); } catch (Exception) { }
     }
 
@@ -164,6 +201,8 @@ public sealed class NotificacaoService : IDisposable
     {
         _cts?.Cancel();
         _cts = null;
+        LimparVerificador();
+        DesregistarPush();
         try { _segundoPlano.Parar(); } catch (Exception) { }
         try { _emCurso.Esconder(); } catch (Exception) { }
         _pausas = null; _emCursoAtual = null;
@@ -183,6 +222,8 @@ public sealed class NotificacaoService : IDisposable
     private void AoPrimeiroPlano()
     {
         if (DateTime.UtcNow - _ultimaVerificacao < TimeSpan.FromSeconds(3)) return;
+        // Sem rede no arranque o registo do aparelho falhou: volta a tentar (o pedido é idempotente).
+        if (_tokenRegistado is null && _cts is { } ciclo && _sessao.Utilizador?.Token is { Length: > 0 } jwt) _ = RegistarPushAsync(jwt, ciclo.Token);
         _ = VerificarSemFalharAsync();
     }
 
@@ -191,11 +232,18 @@ public sealed class NotificacaoService : IDisposable
         try { await VerificarAsync(); } catch (Exception) { }
     }
 
-    private async Task CicloAsync(CancellationToken ct)
+    private void LimparVerificador()
+    {
+        if (_verificador is not null && ReferenceEquals(_ciclo.Verificador, _verificador)) _ciclo.Verificador = null;
+        _verificador = null;
+    }
+
+    private async Task CicloAsync(CancellationToken ct, string? jwt)
     {
         try
         {
             try { await _sistema.PedirPermissaoAsync(); } catch (Exception) { /* sem permissão ficam só as faixas dentro da app */ }
+            if (!string.IsNullOrEmpty(jwt)) _ = RegistarPushAsync(jwt, ct);
             // Depois do pedido de permissão (para os diálogos não se sobreporem). Sem isto o Android suspende a app com o ecrã apagado.
             try { await _segundoPlano.IniciarAsync(); } catch (Exception) { }
             using var temporizador = new PeriodicTimer(Intervalo);
@@ -319,6 +367,7 @@ public sealed class NotificacaoService : IDisposable
         _ciclo.PrimeiroPlano -= AoPrimeiroPlano;
         _ciclo.PausaPedida -= AoPedirPausa;
         _tempoReal.FichasMudaram -= AoMudarFichas;
+        LimparVerificador();
         _cts?.Cancel();
         _trinco.Dispose();
     }

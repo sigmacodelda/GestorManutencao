@@ -86,6 +86,7 @@ public static class ServicosExtensions
         services.AddSingleton(GestorManutencao.UI.Temas.Tema.Carregar(tema)).AddScoped<SessaoService>();
         services.AddSingleton<CicloVidaApp>().AddScoped<NotificacaoService>().AddScoped<ToastService>();
         services.TryAddSingleton<IAvisoSistema, AvisoSistemaNenhum>();
+        services.TryAddSingleton<IPushToken, PushTokenNenhum>();
         services.TryAddSingleton<ITempoReal, TempoRealNenhum>();
         services.TryAddSingleton<IArmazemAvisos, ArmazemAvisosMemoria>();
         services.TryAddSingleton<IDitado, DitadoNenhum>();

@@ -34,7 +34,7 @@ Notas
 
 ## 2. O APK
 
-Ficheiro: `publicar-apk/v1.1/pt.sigmacode.gestormanutencao-Signed.apk` (versão 1.1, código 2). Fica fora do git.
+Ficheiro: `publicar-apk/v1.11/pt.sigmacode.gestormanutencao-Signed.apk` (versão 1.11, código 11; compilar com `dotnet publish GestorManutencao.App -f net10.0-android -c Release -p:RunAOTCompilation=false -p:AndroidPackageFormat=apk -o publicar-apk/v1.11`, porque a compilação AOT falha neste PC). Fica fora do git.
 
 1. Copiar o APK para o telemóvel (cabo, partilha de ficheiros ou e-mail).
 2. No Android, permitir "instalar apps de fontes desconhecidas" para a aplicação que vai abrir o ficheiro.
@@ -46,3 +46,10 @@ Cuidados
 - Utilizadores com PIN antigo de 6 números deixam de entrar pelo teclado do ecrã (só tem 4). O supervisor atribui-lhes um PIN novo em Equipa, que dá um provisório de 4 números.
 - O APK é assinado com a chave de depuração, o que serve para instalar à mão. Para a loja ou para distribuição gerida seria preciso uma chave própria de produção.
 - A app só aceita ligações seguras a este endereço e só confia no certificado `gestor.cer` incluído (e nos do sistema).
+
+## Notificações push (Firebase) com a app fechada
+
+- A chave privada da conta de serviço do Firebase **vai dentro da publicação**, em `segredos/firebase-adminsdk.json` (o `web.config` da API esconde as pastas `segredos` e `dados`, por isso o IIS nunca as serve). Origem: `C:\ProgramData\GestorManutencao\segredos\firebase-adminsdk.json` (fora do repositório; copiada para `publicar-api\segredos\` ao publicar, que também está fora do git).
+- No `appsettings.json` do servidor: `"Push": { "CaminhoChaveFirebase": "segredos/firebase-adminsdk.json" }` (relativo à pasta do site). Sem este caminho a API não envia pushes e não rebenta.
+- Os tokens dos aparelhos ficam em `dados\dispositivos.json` na pasta do site. O pool do IIS precisa de permissão de escrita nessa pasta (administrador): `icacls "<pasta do site>\dados" /grant "IIS AppPool\<NomePool>:(OI)(CI)M"`. Republicar por cima não apaga a pasta `dados`.
+- O servidor precisa de saída para a internet para falar com o Firebase. Detalhes da app Android e testes à mão: `docs/Push-FCM.md`.

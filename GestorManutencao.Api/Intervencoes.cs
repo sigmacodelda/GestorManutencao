@@ -260,6 +260,14 @@ public static partial class EndpointsIntervencoes
             {
                 try { await Microsoft.AspNetCore.SignalR.ClientProxyExtensions.SendAsync(ctx.HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<AvisosHub>>().Clients.All, AvisosHub.Evento); }
                 catch (Exception) { /* o aviso em tempo real é um extra: a verificação periódica apanha a mudança */ }
+                // Escritas recusadas (4xx/5xx) não mudaram nada: não acordam os aparelhos.
+                if (resultado is not Microsoft.AspNetCore.Http.IStatusCodeHttpResult { StatusCode: >= 400 })
+                try
+                {
+                    var u = ctx.HttpContext.User;
+                    ctx.HttpContext.RequestServices.GetRequiredService<INotificadorPush>().Notificar(u.FindFirstValue("sub") ?? u.FindFirstValue(ClaimTypes.NameIdentifier));
+                }
+                catch (Exception) { /* o push é um extra e nunca pode falhar o pedido */ }
             }
             return resultado;
         });
