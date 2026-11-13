@@ -32,6 +32,7 @@ public sealed record ResultadoAvisos(EstadoAvisos Estado, IReadOnlyList<Aviso> A
 public static class CentroAvisos
 {
     public const int MaxLista = 50, MaxVistas = 500, HoraResumo = 8;
+    private const string PrefixoDevolvida = "devolvida:";
 
     public static IReadOnlyList<Aviso> Gerar(Perfil perfil, int tecno, IEnumerable<Intervencao> fichas, DateTime agora)
     {
@@ -50,10 +51,13 @@ public static class CentroAvisos
         var avisos = new List<Aviso>();
         foreach (var f in fichas.Where(f => Minha(f, tecno)))
         {
-            if (f.Estado == EstadoIntervencao.Planeada)
+            // Também em curso: a ficha pode ter passado a "em curso" antes de a app a ver. Ficam de fora a devolvida (tem aviso próprio)
+            // e a avaria (curativa), que é o próprio técnico que a abre.
+            if (f.Estado == EstadoIntervencao.Planeada
+                || (f.Estado == EstadoIntervencao.EmCurso && f.Tipo != TipoIntervencao.Curativa && string.IsNullOrWhiteSpace(f.Motivo)))
                 avisos.Add(Novo($"atribuida:{f.Id}:{f.Tecno}", TipoAviso.Atribuida, "Nova intervenção atribuída", $"{f.Equipamento} · para {f.DataPlaneada:dd/MM}", f, agora));
             if (f.Estado == EstadoIntervencao.EmCurso && !string.IsNullOrWhiteSpace(f.Motivo))
-                avisos.Add(Novo($"devolvida:{f.Id}:{Hash(f.Motivo.Trim())}", TipoAviso.Devolvida, "Intervenção devolvida", $"{f.Equipamento}: {f.Motivo.Trim()}", f, agora));
+                avisos.Add(Novo($"{PrefixoDevolvida}{f.Id}:{Hash(f.Motivo.Trim())}", TipoAviso.Devolvida, "Intervenção devolvida", $"{f.Equipamento}: {f.Motivo.Trim()}", f, agora));
             if (f.Estado == EstadoIntervencao.Planeada && f.DataPlaneada == hoje)
                 avisos.Add(Novo($"hoje:{f.Id}:{hoje:yyyyMMdd}", TipoAviso.Hoje, "Intervenção para hoje", f.Equipamento, f, agora));
             if (f.EstaAtrasada(hoje))
@@ -123,18 +127,24 @@ public static class CentroAvisos
     {
         var geradosLista = gerados.ToList();
         var vistas = new HashSet<string>(estado.Vistas, StringComparer.Ordinal);
+        // Uma devolução que já acabou (a ficha foi concluída outra vez) deixa de contar como vista: se for devolvida de novo, mesmo com o mesmo motivo, avisa outra vez.
+        var devolvidasAtivas = geradosLista.Where(a => a.Tipo == TipoAviso.Devolvida).Select(a => a.Chave).ToHashSet(StringComparer.Ordinal);
+        var rearmadas = vistas.RemoveWhere(k => k.StartsWith(PrefixoDevolvida, StringComparison.Ordinal) && !devolvidasAtivas.Contains(k));
         var novos = new List<Aviso>();
         foreach (var a in geradosLista)
             if (vistas.Add(a.Chave)) novos.Add(a);
 
         var baseline = !estado.Iniciado;
-        if (novos.Count == 0 && !baseline) return new(estado, [], false);
+        if (novos.Count == 0 && !baseline && rearmadas == 0) return new(estado, [], false);
 
         var lista = novos.Select(a => new EntradaAviso(a, baseline)).Concat(estado.Lista)
             .OrderByDescending(e => e.Aviso.Quando).Take(MaxLista).ToList();
-        var guardadas = estado.Vistas.Concat(novos.Select(a => a.Chave)).TakeLast(Math.Max(MaxVistas, geradosLista.Count * 2)).ToList();
+        var guardadas = estado.Vistas.Where(vistas.Contains).Concat(novos.Select(a => a.Chave)).TakeLast(Math.Max(MaxVistas, geradosLista.Count * 2)).ToList();
         return new(new EstadoAvisos(true, guardadas, lista), baseline ? [] : novos, true);
     }
+
+    // Esvazia a lista mas mantém as vistas: o que foi limpo não volta a aparecer nem a avisar.
+    public static EstadoAvisos Limpar(EstadoAvisos estado) => estado with { Lista = [] };
 
     public static EstadoAvisos MarcarTodasLidas(EstadoAvisos estado) =>
         estado with { Lista = estado.Lista.Select(e => e with { Lido = true }).ToList() };

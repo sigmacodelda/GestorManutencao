@@ -28,6 +28,7 @@ Pasta pronta a copiar: `publicar-api/` (gerada com `dotnet publish GestorManuten
 
 Notas
 - O ambiente é `Production` por omissão no IIS. Sem ligação à base configurada, a API recusa arrancar (não usa dados fictícios).
+- **Tempo real (SignalR, rota `/hub/avisos`):** no IIS é preciso a funcionalidade **WebSocket Protocol** (Server Manager > Add Roles and Features > Web Server > Application Development > WebSocket Protocol), seguida de `iisreset`. Sem ela a app continua a funcionar, mas volta à verificação de 5 em 5 segundos. O aviso não leva dados: cada aparelho volta a pedir as fichas com o seu token.
 - Em IIS "in-process" não é preciso configurar `Proxy:IpsConfiaveis`.
 - Os limites de tentativas de PIN (por endereço e totais) estão em `appsettings.json`, secção `Limites`.
 

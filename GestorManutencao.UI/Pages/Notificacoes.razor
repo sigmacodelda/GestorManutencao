@@ -36,6 +36,9 @@
                 <button type="button" class="btn btn-secundario" disabled="@(Centro.NaoLidas == 0)" @onclick="Centro.MarcarTodasLidasAsync">
                     <Icone Nome="check" /><span>Marcar todas como lidas</span>
                 </button>
+                <button type="button" class="btn btn-secundario" @onclick="Centro.LimparAsync">
+                    <Icone Nome="trash" /><span>Limpar notificações</span>
+                </button>
             </div>
             <ul class="lista-intervencoes">
                 @foreach (var e in lista)

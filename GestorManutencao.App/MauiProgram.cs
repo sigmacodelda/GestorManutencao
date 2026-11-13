@@ -37,6 +37,8 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IArmazemAvisos, ArmazemAvisosFicheiro>();
 #if ANDROID
 		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaAndroid>();
+		builder.Services.AddSingleton<IServicoSegundoPlano, ServicoSegundoPlanoAndroid>();
+		builder.Services.AddSingleton<IAvisoEmCurso, AvisoEmCursoAndroid>();
 		builder.Services.AddSingleton<IDitado, DitadoAndroid>();
 		builder.Services.AddSingleton<ICamara, CamaraAndroid>();
 #elif WINDOWS
@@ -81,6 +83,12 @@ public static class MauiProgram
 				throw new InvalidOperationException("ApiUrl tem de ser https (http só para um IP da rede interna: o PIN não pode ir em claro pela internet).");
 			var http = new HttpClient(new TempoLimitePorPedidoHandler(manipulador ?? new HttpClientHandler())) { BaseAddress = new Uri(apiUrl), Timeout = Timeout.InfiniteTimeSpan };
 			builder.Services.AddSingleton<IAutenticacaoService>(new AutenticacaoApiService(http));
+			// Canal em tempo real: a API avisa a app no instante em que as fichas mudam.
+			var hubUrl = new Uri(new Uri(apiUrl.TrimEnd('/') + "/"), "hub/avisos");
+			builder.Services.AddSingleton<ITempoReal>(new TempoRealSignalR(new EnderecoTempoReal(hubUrl, manipulador is null ? null : () => new HttpClientHandler
+			{
+				ServerCertificateCustomValidationCallback = (pedido, _, _, erros) => erros == System.Net.Security.SslPolicyErrors.None || pedido.RequestUri?.IsLoopback == true
+			})));
 			builder.Services.AddSingleton<IEquipaService>(new EquipaApiService(http));
 			builder.Services.AddScoped<IntervencoesApiService>(sp => new IntervencoesApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IIntervencoesRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());

@@ -55,6 +55,7 @@ if (pinDev.Length > 0 && !RegrasPin.Aceitavel(pinDev)) throw new InvalidOperatio
 builder.Services.Configure<PinOpcoes>(o => o.Dev = pinDev);
 
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSignalR();
 builder.Services.AddSingleton<EmissorToken>();
 builder.Services.AddSingleton<PinHasher>();
 
@@ -92,6 +93,13 @@ builder.Services
         };
         o.Events = new JwtBearerEvents
         {
+            // WebSockets não levam cabeçalhos: o token do canal em tempo real vai no endereço (só para essa rota).
+            OnMessageReceived = ctx =>
+            {
+                var token = ctx.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && ctx.HttpContext.Request.Path.StartsWithSegments(AvisosHub.Rota)) ctx.Token = token;
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async ctx =>
             {
                 var codigo = ctx.Principal?.FindFirstValue("sub") ?? ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -208,6 +216,7 @@ static IResult RegistarPinEmUso(ILogger log, HttpContext http)
     return Erro(409, "pin_em_uso");
 }
 
+app.MapHub<AvisosHub>(AvisosHub.Rota).RequireAuthorization();
 app.MapIntervencoes();
 app.MapGestao();
 

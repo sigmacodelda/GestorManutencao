@@ -1,6 +1,8 @@
 @page "/planeadas"
+@implements IDisposable
 @inject SessaoService Sessao
 @inject IIntervencoesService Intervencoes
+@inject NotificacaoService Notificacoes
 @inject IEquipaService ServicoEquipa
 @inject GeracaoDiaria GeracaoDiariaServico
 
@@ -209,6 +211,11 @@
         catch (Exception) { _falhou = true; }
         finally { _a_carregar = false; }
     }
+
+    // O servidor avisa que as fichas mudaram: recarrega logo, salvo se o supervisor estiver a meio de uma ação.
+    private void AoMudarDados() => InvokeAsync(async () => { if (!Sessao.PodeSerSupervisor || _ocupado) return; await CarregarAsync(); StateHasChanged(); });
+
+    public void Dispose() => Notificacoes.DadosMudaram -= AoMudarDados;
 
     private bool _gerarPlaneadas;
     private string? _avisoGeracao;

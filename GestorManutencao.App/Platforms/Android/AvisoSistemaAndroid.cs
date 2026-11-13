@@ -32,10 +32,15 @@ public sealed class AvisoSistemaAndroid : IAvisoSistema
 				Description = "Avisos sobre intervenções e fichas"
 			});
 
-		var abrir = contexto.PackageManager?.GetLaunchIntentForPackage(contexto.PackageName ?? "");
-		var toque = abrir is null
-			? null
-			: PendingIntent.GetActivity(contexto, 0, abrir, PendingIntentFlags.Immutable | PendingIntentFlags.UpdateCurrent);
+		// O identificador é estável por aviso: o mesmo aviso nunca fica duplicado na barra.
+		var id = Convert.ToInt32(CentroAvisos.Hash(aviso.Chave), 16) & 0x7fffffff;
+
+		// O toque abre a MainActivity já com o destino (tipo e ficha). O pedido tem de ser único por aviso, senão o Android troca os extras dos outros.
+		var abrir = new Intent(contexto, typeof(MainActivity))
+			.SetFlags(ActivityFlags.NewTask | ActivityFlags.SingleTop | ActivityFlags.ClearTop)
+			.PutExtra(MainActivity.ExtraTipo, aviso.Tipo.ToString())
+			.PutExtra(MainActivity.ExtraFicha, aviso.FichaId);
+		var toque = PendingIntent.GetActivity(contexto, id, abrir, PendingIntentFlags.Immutable | PendingIntentFlags.UpdateCurrent);
 
 		var notificacao = new NotificationCompat.Builder(contexto, Canal)
 			.SetSmallIcon(Android.Resource.Drawable.IcDialogInfo)!
@@ -47,8 +52,7 @@ public sealed class AvisoSistemaAndroid : IAvisoSistema
 			.SetContentIntent(toque)!
 			.Build();
 
-		// O identificador é estável por aviso: o mesmo aviso nunca fica duplicado na barra.
-		gestor.Notify(Convert.ToInt32(CentroAvisos.Hash(aviso.Chave), 16) & 0x7fffffff, notificacao);
+		gestor.Notify(id, notificacao);
 		return Task.FromResult(true);
 	}
 }

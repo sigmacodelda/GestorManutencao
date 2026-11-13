@@ -4,6 +4,7 @@
 @inject NavigationManager Nav
 @inject NotificacaoService Notificacoes
 @inject IGestorOffline Offline
+@inject CicloVidaApp Ciclo
 
 @if (_pronto && Sessao.TemSessao)
 {
@@ -111,11 +112,21 @@
         Notificacoes.Alterado += Atualizar;
         Notificacoes.AvisoNaApp += MostrarFaixa;
         Offline.Mudou += Atualizar;
+        Ciclo.AbrirPedido += AbrirDeNotificacao;
         await Sessao.RestaurarAsync();
         _pronto = true;
         if (!Sessao.TemSessao) Nav.NavigateTo("login", replace: true);
-        else { Notificacoes.Iniciar(); Offline.Iniciar(); }
+        else { Notificacoes.Iniciar(); Offline.Iniciar(); AbrirDeNotificacao(); }
     }
+
+    // Toque numa notificação do sistema: vai para a página do aviso. Sem sessão (ou com PIN provisório) fica o pedido por consumir.
+    private void AbrirDeNotificacao() => InvokeAsync(() =>
+    {
+        if (!_pronto || Sessao.Utilizador is not { PinProvisorio: false } u) return;
+        if (Ciclo.ConsumirPedido() is not { } p) return;
+        var aviso = new Aviso("", p.Tipo, "", "", p.FichaId, DateTime.Now);
+        Nav.NavigateTo(aviso.Destino(u.Perfil));
+    });
 
     private void MostrarFaixa(Aviso aviso) => InvokeAsync(async () =>
     {
@@ -165,6 +176,7 @@
         Notificacoes.Alterado -= Atualizar;
         Notificacoes.AvisoNaApp -= MostrarFaixa;
         Offline.Mudou -= Atualizar;
+        Ciclo.AbrirPedido -= AbrirDeNotificacao;
         _faixaCts?.Cancel();
     }
 }

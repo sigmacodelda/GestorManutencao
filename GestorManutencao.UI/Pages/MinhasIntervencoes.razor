@@ -1,6 +1,8 @@
 @page "/intervencoes"
+@implements IDisposable
 @inject SessaoService Sessao
 @inject IIntervencoesService Intervencoes
+@inject NotificacaoService Notificacoes
 
 <PageTitle>As minhas intervenções · Gestor de Manutenção</PageTitle>
 
@@ -82,7 +84,16 @@
     // Poucas fichas de cada vez: uma lista muito comprida cansa e esconde o que importa.
     private int Limite(GrupoIntervencoes g) => _limites.GetValueOrDefault(g.Titulo, PorPagina);
 
-    protected override async Task OnInitializedAsync() => await CarregarAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        Notificacoes.DadosMudaram += AoMudarDados;
+        await CarregarAsync();
+    }
+
+    // O servidor avisa que as fichas mudaram: recarrega logo, sem o técnico ter de atualizar.
+    private void AoMudarDados() => InvokeAsync(async () => { await CarregarAsync(); StateHasChanged(); });
+
+    public void Dispose() => Notificacoes.DadosMudaram -= AoMudarDados;
 
     private async Task CarregarAsync()
     {

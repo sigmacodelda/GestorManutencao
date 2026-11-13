@@ -55,6 +55,52 @@ public class AvisosPuraTests
     }
 
     [Fact]
+    public void Ficha_atribuida_ja_em_curso_tambem_avisa_uma_so_vez()
+    {
+        var fichas = new[] { Ficha("curso", 0, EstadoUi.EmCurso) };
+
+        var gerados = CentroAvisos.Gerar(Perfil.Operador, Eu, fichas, Manha);
+        Assert.Equal([TipoAviso.Atribuida], Tipos(gerados, "curso"));
+
+        var primeira = CentroAvisos.Processar(new EstadoAvisos(true, [], []), gerados);
+        Assert.Single(primeira.Avisar, a => a.Tipo == TipoAviso.Atribuida);
+        Assert.Empty(CentroAvisos.Processar(primeira.Estado, gerados).Avisar);
+    }
+
+    [Fact]
+    public void Devolvida_outra_vez_com_o_mesmo_motivo_avisa_de_novo()
+    {
+        var devolvida = Ficha("f1", 0, EstadoUi.EmCurso) with { Motivo = "Falta o material" };
+
+        var a1 = CentroAvisos.Processar(new EstadoAvisos(true, [], []), CentroAvisos.Gerar(Perfil.Operador, Eu, [devolvida], Manha));
+        Assert.Contains(a1.Avisar, a => a.Tipo == TipoAviso.Devolvida);
+
+        // Ainda devolvida: não repete.
+        Assert.DoesNotContain(CentroAvisos.Processar(a1.Estado, CentroAvisos.Gerar(Perfil.Operador, Eu, [devolvida], Manha)).Avisar, a => a.Tipo == TipoAviso.Devolvida);
+
+        // O técnico conclui (a ficha sai da lista) e o estado fica guardado mesmo sem avisos novos.
+        var concluida = CentroAvisos.Processar(a1.Estado, CentroAvisos.Gerar(Perfil.Operador, Eu, [], Manha));
+        Assert.True(concluida.Mudou);
+
+        // Devolvida de novo com o mesmo motivo.
+        var a2 = CentroAvisos.Processar(concluida.Estado, CentroAvisos.Gerar(Perfil.Operador, Eu, [devolvida], Manha));
+        Assert.Contains(a2.Avisar, a => a.Tipo == TipoAviso.Devolvida);
+    }
+
+    [Fact]
+    public void Limpar_esvazia_a_lista_sem_voltar_a_avisar()
+    {
+        var gerados = CentroAvisos.Gerar(Perfil.Operador, Eu, [Ficha("f1", 3, EstadoUi.Planeada)], Manha);
+        var estado = CentroAvisos.Processar(new EstadoAvisos(true, [], []), gerados).Estado;
+        Assert.NotEmpty(estado.Lista);
+
+        var limpo = CentroAvisos.Limpar(estado);
+
+        Assert.Empty(limpo.Lista);
+        Assert.Empty(CentroAvisos.Processar(limpo, gerados).Avisar);
+    }
+
+    [Fact]
     public void Tecnico_so_ve_o_que_e_seu_e_nao_recebe_avisos_de_supervisor()
     {
         var fichas = new[]

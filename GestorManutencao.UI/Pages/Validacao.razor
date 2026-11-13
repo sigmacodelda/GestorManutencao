@@ -1,7 +1,9 @@
 @page "/validacao"
+@implements IDisposable
 @inject SessaoService Sessao
 @inject ToastService Toast
 @inject IIntervencoesService Intervencoes
+@inject NotificacaoService Notificacoes
 
 <PageTitle>Validação · Gestor de Manutenção</PageTitle>
 
@@ -122,9 +124,20 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Notificacoes.DadosMudaram += AoMudarDados;
         if (Sessao.PodeSerSupervisor) await CarregarAsync();
         else _a_carregar = false;
     }
+
+    // O servidor avisa que as fichas mudaram: recarrega logo, salvo se o supervisor estiver a validar ou a devolver uma ficha.
+    private void AoMudarDados() => InvokeAsync(async () =>
+    {
+        if (!Sessao.PodeSerSupervisor || _ocupado || _aConfirmar is not null || _aDevolver is not null) return;
+        await CarregarAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Notificacoes.DadosMudaram -= AoMudarDados;
 
     private async Task CarregarAsync()
     {

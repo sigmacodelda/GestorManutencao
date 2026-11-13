@@ -98,15 +98,19 @@
     protected override async Task OnInitializedAsync()
     {
         Notificacoes.Alterado += Atualizar;
+        Notificacoes.DadosMudaram += AoMudarDados;
         Offline.Mudou += Atualizar;
         if (Sessao.TemSessao) await CarregarAsync();
     }
 
     private void Atualizar() => InvokeAsync(StateHasChanged);
 
+    private void AoMudarDados() => InvokeAsync(async () => { if (Sessao.TemSessao) { await CarregarAsync(); StateHasChanged(); } });
+
     public void Dispose()
     {
         Notificacoes.Alterado -= Atualizar;
+        Notificacoes.DadosMudaram -= AoMudarDados;
         Offline.Mudou -= Atualizar;
     }
 

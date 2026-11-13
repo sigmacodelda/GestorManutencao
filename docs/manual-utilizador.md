@@ -98,7 +98,7 @@ Consulte a ficha e o histórico de cada equipamento (marca, modelo, nº de séri
 
 O centro de **Avisos** lista as novidades das suas fichas (nova atribuição, ficha devolvida com o motivo, etc.). Use **Marcar todas como lidas** para limpar a contagem.
 
-> Os avisos só chegam com a app **aberta ou em segundo plano**. Com a app fechada não há aviso.
+> Os avisos chegam no instante em que a ficha muda: a app está ligada ao servidor e as listas atualizam sozinhas, sem ter de atualizar. Com a app aberta ou em segundo plano. No Android a app mantém-se ativa com o ecrã apagado (aparece uma notificação discreta "A receber avisos"; aceite a exclusão da otimização de bateria quando a app a pedir). Se fechar a app deslizando-a, deixa de haver aviso até a voltar a abrir.
 
 ### 3.6 Ficha devolvida
 

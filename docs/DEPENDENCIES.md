@@ -7,6 +7,7 @@
 | Microsoft.AspNetCore.Mvc.Testing | 10.0.0 | GestorManutencao.Tests | Testar a API em memória | Subir a API à mão nos testes | MIT |
 | xunit | do template | GestorManutencao.Tests | Testes | NUnit | Apache-2.0 |
 | System.Security.Cryptography.Pkcs | 10.0.14 | GestorManutencao.Api | Fixa a versão corrigida (a 9.0.18 vinda do SqlClient tem vulnerabilidades conhecidas) | Esperar nova versão do SqlClient | MIT |
+| Microsoft.AspNetCore.SignalR.Client | 10.0.14 | GestorManutencao.UI | Canal em tempo real com a API: a app é avisada no instante em que as fichas mudam (notificações e listas sem esperar) | Verificação periódica mais rápida (mais pedidos e bateria, nunca instantânea) | MIT |
 | sqlite-net-pcl | 1.11.285 | GestorManutencao.Armazenamento (usado pela App) | Base SQLite local (cache e fila de envio) para o modo offline. Traz SQLitePCLRaw 3.0.3 e SourceGear.sqlite3 3.53.3 (SQLite atual); a 1.9.172 foi posta de parte porque o SQLitePCLRaw.lib.e_sqlite3 2.1.x traz um SQLite com a vulnerabilidade CVE-2025-6965 (GHSA-2m69-gcr7-jv3q) | Microsoft.Data.Sqlite (mais pesada em MAUI); ficheiros JSON (sem consultas nem transações) | MIT (SQLitePCLRaw: Apache-2.0; SQLite: domínio público) |
 
 Fontes (OFL): Exo 2 e Open Sans, em `GestorManutencao.UI/wwwroot/fonts`, para funcionarem sem internet.

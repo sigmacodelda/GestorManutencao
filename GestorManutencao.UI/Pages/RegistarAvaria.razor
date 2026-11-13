@@ -135,7 +135,9 @@
             Nav.NavigateTo("intervencoes");
         }
         catch (NotSupportedException) { _erro = "Esta parte ainda não está disponível."; }
-        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        // Diagnóstico temporário: o código do erro ajuda a perceber porque falha o registo.
+        catch (System.Net.Http.HttpRequestException e) { _erro = $"Não foi possível guardar (erro {(e.StatusCode is { } c ? (int)c : "de ligação")}). Tente outra vez."; }
+        catch (Exception e) { _erro = $"Não foi possível guardar ({e.GetType().Name}). Tente outra vez."; }
         finally { _a_guardar = false; }
     }
 }

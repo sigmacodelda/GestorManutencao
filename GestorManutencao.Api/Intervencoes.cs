@@ -251,6 +251,18 @@ public static partial class EndpointsIntervencoes
     public static void MapIntervencoes(this WebApplication app)
     {
         var g = app.MapGroup("").RequireAuthorization();
+        // Qualquer escrita nas fichas avisa já os aparelhos ligados (a gravação na base acabou antes de aqui chegar).
+        g.AddEndpointFilter(async (ctx, next) =>
+        {
+            var resultado = await next(ctx);
+            var metodo = ctx.HttpContext.Request.Method;
+            if (!HttpMethods.IsGet(metodo) && !HttpMethods.IsHead(metodo))
+            {
+                try { await Microsoft.AspNetCore.SignalR.ClientProxyExtensions.SendAsync(ctx.HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<AvisosHub>>().Clients.All, AvisosHub.Evento); }
+                catch (Exception) { /* o aviso em tempo real é um extra: a verificação periódica apanha a mudança */ }
+            }
+            return resultado;
+        });
         g.AddEndpointFilter(async (ctx, next) =>
         {
             var rotas = ctx.HttpContext.Request.RouteValues;
