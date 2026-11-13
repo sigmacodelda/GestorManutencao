@@ -415,3 +415,71 @@ public class NotificacaoServicoTests
         Assert.Empty(servico.Lista);
     }
 }
+
+public class EmCursoTests
+{
+    private static readonly DateTime Dez = DateTime.Today.AddHours(10);
+
+    private static Intervencao Ficha(string id, bool pausa = false, TimeOnly? inicio = null, bool podePausar = true, GestorManutencao.UI.Modelos.EstadoIntervencao estado = GestorManutencao.UI.Modelos.EstadoIntervencao.EmCurso) =>
+        new(id, "Empilhador 05", "Armazém", GestorManutencao.UI.Modelos.TipoIntervencao.Curativa, DateOnly.FromDateTime(Dez), estado, "x", null, inicio ?? new TimeOnly(9, 0), PodePausar: podePausar, EmPausa: pausa);
+
+    [Fact]
+    public void So_ha_aviso_com_uma_intervencao_em_curso()
+    {
+        Assert.Null(RelogioEmCurso.Unica([]));
+        Assert.Null(RelogioEmCurso.Unica([Ficha("A"), Ficha("B")]));
+        Assert.Null(RelogioEmCurso.Unica([Ficha("A", estado: GestorManutencao.UI.Modelos.EstadoIntervencao.Planeada)]));
+        Assert.Null(RelogioEmCurso.Unica([Ficha("A", podePausar: false)]));
+        Assert.Equal("A", RelogioEmCurso.Unica([Ficha("A"), Ficha("B", estado: GestorManutencao.UI.Modelos.EstadoIntervencao.Planeada)])!.Id);
+    }
+
+    [Fact]
+    public void O_tempo_desconta_as_pausas()
+    {
+        var f = Ficha("A");
+        var (a1, e1) = RelogioEmCurso.Calcular(null, f, Dez);
+        Assert.Equal(TimeSpan.FromHours(1).TotalMilliseconds, a1.DecorridoMs);
+
+        var (a2, e2) = RelogioEmCurso.Calcular(e1, f with { EmPausa = true }, Dez.AddMinutes(10));
+        Assert.True(a2.EmPausa);
+        Assert.Equal(TimeSpan.FromMinutes(70).TotalMilliseconds, a2.DecorridoMs);
+
+        // Pausa parada: o decorrido não anda.
+        var (a3, e3) = RelogioEmCurso.Calcular(e2, f with { EmPausa = true }, Dez.AddMinutes(25));
+        Assert.Equal(a2.DecorridoMs, a3.DecorridoMs);
+
+        // Retoma 15 minutos depois: o tempo parado (15 min) não conta.
+        var (a4, _) = RelogioEmCurso.Calcular(e3, f, Dez.AddMinutes(25));
+        Assert.False(a4.EmPausa);
+        Assert.Equal(TimeSpan.FromMinutes(70).TotalMilliseconds, a4.DecorridoMs);
+    }
+
+    private sealed class EmCursoFalso : IAvisoEmCurso
+    {
+        public List<AvisoEmCurso> Mostrados { get; } = [];
+        public int Escondidos { get; private set; }
+        public void Mostrar(AvisoEmCurso aviso) => Mostrados.Add(aviso);
+        public void Esconder() => Escondidos++;
+    }
+
+    [Fact]
+    public async Task Tecnico_com_uma_em_curso_ve_a_notificacao_e_o_botao_pausa()
+    {
+        var sessao = new SessaoService(new DevAutenticacaoService(), new ArmazemSessaoMemoria());
+        Assert.True((await sessao.EntrarAsync("4829")).Sucesso);
+        var fichas = new DevIntervencoesService();
+        var falso = new EmCursoFalso();
+        var servico = new NotificacaoService(sessao, fichas, new ArmazemAvisosMemoria(), new AvisoSistemaNenhum(), new CicloVidaApp(), () => Dez, null, null, falso);
+
+        await servico.VerificarAsync();
+        var minhas = await fichas.ListarMinhasAsync();
+        var unica = RelogioEmCurso.Unica(minhas);
+        if (unica is null) { Assert.Equal(1, falso.Escondidos); return; }
+
+        Assert.Equal(unica.Id, falso.Mostrados.Last().FichaId);
+        await servico.AlternarPausaAsync(unica.Id);
+        Assert.True(falso.Mostrados.Last().EmPausa);
+        await servico.AlternarPausaAsync(unica.Id);
+        Assert.False(falso.Mostrados.Last().EmPausa);
+    }
+}
