@@ -36,7 +36,7 @@
                 @foreach (var c in Contadores())
                 {
                     <li>
-                        <a class="contador @(c.Alerta && c.Valor > 0 ? "alerta-led" : "")" href="@c.Href">
+                        <a class="contador @(c.Valor == 0 ? "contador-zero" : c.Alerta ? "alerta-led" : "contador-vivo")" href="@c.Href">
                             <span class="led" aria-hidden="true"></span>
                             <span class="contador-num">@c.Valor</span>
                             <span class="contador-rot">@c.Rotulo</span>
