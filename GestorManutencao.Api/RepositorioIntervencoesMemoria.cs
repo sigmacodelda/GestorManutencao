@@ -23,6 +23,15 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
         public string Periodo { get; set; } = "";
         public bool Antiga { get; set; }
         public bool Fechada { get; set; }
+        // Circuito da Qualidade: validada pelo supervisor e ainda por concluir; histórico das etapas.
+        public bool AguardaQualidade { get; set; }
+        public string? ValidouPor { get; set; }
+        public DateTime? ValidouEm { get; set; }
+        public string HistDevol { get; set; } = "";
+        public string? HigienizadoPor { get; set; }
+        public DateTime? HigienizadoEm { get; set; }
+        public string? ConcluiuPor { get; set; }
+        public DateTime? ConcluiuEm { get; set; }
         public bool Supervisao { get; set; }
         public DateTime? HIni { get; set; }
         public DateTime? HFim { get; set; }
@@ -392,6 +401,9 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
             if (f.D.Estado != EstadoIntervencao.Concluida || f.Antiga) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
             if (!_cfg.ValidarPropria && Pertence(f, supervisor.Tecno)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Propria));
             f.D = f.D with { Estado = EstadoIntervencao.Validada };
+            f.AguardaQualidade = true;
+            f.ValidouPor = supervisor.Codigo;
+            f.ValidouEm = relogio.GetLocalNow().DateTime;
             return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
         }
     }
@@ -406,6 +418,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
             // A seguinte ainda por tocar sai: volta a gerar-se quando esta for concluída outra vez.
             if (f.Tarefa != "") _lista.RemoveAll(x => x != f && x.Tarefa == f.Tarefa && x.D.Estado == EstadoIntervencao.Planeada && x.Tecno == 0 && x.Materiais.Count == 0);
             f.Motivo = motivo.Trim();
+            f.HistDevol = RegrasQualidade.AcrescentarDevolucao(f.HistDevol, relogio.GetLocalNow().DateTime, supervisor.Codigo, motivo);
             f.D = f.D with { Estado = EstadoIntervencao.EmCurso, HoraFim = null };
             return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
         }

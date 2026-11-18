@@ -17,7 +17,7 @@ public interface IEquipaService
     Task<IReadOnlyList<MembroEquipa>> ListarAsync(string? token, CancellationToken ct = default);
     // tecno = número de utilizador do PHC (0 = ainda sem número: a pessoa não vê fichas até o supervisor o indicar).
     // supervisor = true só é aceite com o PIN de configuração.
-    Task<RespostaEquipa> CriarAsync(string? token, string codigo, string nome, int tecno, bool supervisor = false, CancellationToken ct = default);
+    Task<RespostaEquipa> CriarAsync(string? token, string codigo, string nome, int tecno, bool supervisor = false, CancellationToken ct = default, bool qualidade = false);
     Task<RespostaEquipa> DefinirTecnoAsync(string? token, string codigo, int tecno, CancellationToken ct = default);
     Task<RespostaEquipa> NovoPinAsync(string? token, string codigo, CancellationToken ct = default);
 }
@@ -34,8 +34,8 @@ public sealed class EquipaApiService(HttpClient http) : IEquipaService
         return await resposta.Content.ReadFromJsonAsync<List<MembroEquipa>>(ct) ?? [];
     }
 
-    public Task<RespostaEquipa> CriarAsync(string? token, string codigo, string nome, int tecno, bool supervisor = false, CancellationToken ct = default) =>
-        Enviar(Pedido(HttpMethod.Post, "utilizadores", token, new { utilizador = codigo, nome, tecno, perfil = supervisor ? "Supervisor" : "Operador" }), ct);
+    public Task<RespostaEquipa> CriarAsync(string? token, string codigo, string nome, int tecno, bool supervisor = false, CancellationToken ct = default, bool qualidade = false) =>
+        Enviar(Pedido(HttpMethod.Post, "utilizadores", token, new { utilizador = codigo, nome, tecno, perfil = supervisor ? "Supervisor" : qualidade ? "Qualidade" : "Operador" }), ct);
 
     public Task<RespostaEquipa> DefinirTecnoAsync(string? token, string codigo, int tecno, CancellationToken ct = default) =>
         Enviar(Pedido(HttpMethod.Put, $"utilizadores/{Uri.EscapeDataString(codigo)}/tecno", token, new { tecno }), ct);
@@ -89,13 +89,13 @@ public sealed class DevEquipaService : IEquipaService
         lock (_trinco) return Task.FromResult<IReadOnlyList<MembroEquipa>>(_equipa.ToList());
     }
 
-    public Task<RespostaEquipa> CriarAsync(string? token, string codigo, string nome, int tecno, bool supervisor = false, CancellationToken ct = default)
+    public Task<RespostaEquipa> CriarAsync(string? token, string codigo, string nome, int tecno, bool supervisor = false, CancellationToken ct = default, bool qualidade = false)
     {
         lock (_trinco)
         {
             if (_equipa.Any(m => m.Codigo == codigo)) return Task.FromResult(new RespostaEquipa(ResultadoEquipa.JaExiste));
             if (tecno > 0 && _equipa.Any(m => m.Tecno == tecno)) return Task.FromResult(new RespostaEquipa(ResultadoEquipa.TecnoEmUso));
-            _equipa.Add(new MembroEquipa(codigo, nome, supervisor ? Perfil.Supervisor : Perfil.Operador, true, true, 0, tecno));
+            _equipa.Add(new MembroEquipa(codigo, nome, supervisor ? Perfil.Supervisor : qualidade ? Perfil.Qualidade : Perfil.Operador, true, true, 0, tecno));
             return Task.FromResult(new RespostaEquipa(ResultadoEquipa.Ok, "590147"));
         }
     }
@@ -116,7 +116,7 @@ public sealed class DevEquipaService : IEquipaService
     {
         lock (_trinco)
         {
-            var pos = _equipa.FindIndex(m => m.Codigo == codigo && m.Perfil == Perfil.Operador);
+            var pos = _equipa.FindIndex(m => m.Codigo == codigo && m.Perfil != Perfil.Supervisor);
             if (pos < 0) return Task.FromResult(new RespostaEquipa(ResultadoEquipa.SemPermissao));
             _equipa[pos] = _equipa[pos] with { PinProvisorio = true };
             return Task.FromResult(new RespostaEquipa(ResultadoEquipa.Ok, "831462"));

@@ -228,6 +228,8 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     }
 
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default)
     {
         Entrar("Validar", id);

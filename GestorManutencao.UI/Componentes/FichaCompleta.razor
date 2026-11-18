@@ -22,6 +22,23 @@
     {
         <p class="alerta alerta-pin" role="status"><Icone Nome="clock" /><span>@SeccoesFicha.TextoSituacao(d)@(d.Supervisao ? " · supervisionada" : " · por supervisionar").</span></p>
     }
+    @if (d.Historico is { Count: > 0 })
+    {
+        <h2 class="titulo-grupo"><Icone Nome="clock" /> Histórico</h2>
+        <ul class="lista-intervencoes" aria-label="Histórico da intervenção">
+            @foreach (var e in d.Historico)
+            {
+                <li class="intervencao">
+                    <span class="intervencao-titulo">@e.Etapa</span>
+                    <span class="intervencao-desc">@(e.Quem ?? "—")@(e.Quando is { } q ? " · " + q.ToString("dd/MM/yyyy HH:mm") : "")</span>
+                    @if (!string.IsNullOrWhiteSpace(e.Texto))
+                    {
+                        <p class="ficha-texto">@e.Texto</p>
+                    }
+                </li>
+            }
+        </ul>
+    }
     @if (d.Estado == EstadoIntervencao.Cancelada && !string.IsNullOrWhiteSpace(d.Motivo))
     {
         <div class="alerta alerta-devolvida" role="status"><Icone Nome="x" /><div><strong>Cancelada</strong><p>@d.Motivo</p></div></div>

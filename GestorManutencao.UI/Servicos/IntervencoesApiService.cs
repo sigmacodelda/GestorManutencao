@@ -168,6 +168,16 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
         return await resposta.Content.ReadFromJsonAsync<List<Intervencao>>(ct) ?? [];
     }
 
+    public async Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, "qualidade", null, ct);
+        await VerificarAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<List<Intervencao>>(ct) ?? [];
+    }
+
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default) =>
+        AlterarAsync(HttpMethod.Post, $"qualidade/{Uri.EscapeDataString(id)}/concluir", new { higienizacao }, ct);
+
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"validacao/{Uri.EscapeDataString(id)}", null, ct);
 

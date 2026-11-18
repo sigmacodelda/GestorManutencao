@@ -100,6 +100,8 @@
         Notificacoes.Alterado += Atualizar;
         Notificacoes.DadosMudaram += AoMudarDados;
         Offline.Mudou += Atualizar;
+        // A Qualidade só tem uma área: vai direta para ela.
+        if (Sessao.EQualidade) { Nav.NavigateTo("qualidade", replace: true); return; }
         if (Sessao.TemSessao) await CarregarAsync();
     }
 

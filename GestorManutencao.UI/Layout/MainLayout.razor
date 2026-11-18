@@ -59,7 +59,11 @@
                 var supervisor = Sessao.Modo == ModoTrabalho.Supervisor;
                 <nav class="navegacao" aria-label="Navegação principal">
                     <NavLink class="nav-item" href="" Match="NavLinkMatch.All"><span class="nav-icone"><Icone Nome="home" /></span><span class="nav-rotulo">Início</span></NavLink>
-                    @if (supervisor)
+                    @if (Sessao.EQualidade)
+                    {
+                        <NavLink class="nav-item" href="qualidade"><span class="nav-icone"><Icone Nome="shield-check" /></span><span class="nav-rotulo">Qualidade</span></NavLink>
+                    }
+                    else if (supervisor)
                     {
                         <NavLink class="nav-item" href="planeadas"><span class="nav-icone"><Icone Nome="calendar" /></span><span class="nav-rotulo">Planeadas</span></NavLink>
                         <NavLink class="nav-item" href="validacao"><span class="nav-icone"><Icone Nome="shield-check" /></span><span class="nav-rotulo">Validação</span></NavLink>

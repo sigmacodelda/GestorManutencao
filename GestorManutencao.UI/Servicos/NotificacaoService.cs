@@ -306,6 +306,7 @@ public sealed class NotificacaoService : IDisposable
 
     private async Task<IReadOnlyList<Intervencao>> ObterFichasAsync(Perfil perfil, CancellationToken ct)
     {
+        if (perfil == Perfil.Qualidade) return await _intervencoes.ListarPorConcluirAsync(ct);
         if (perfil != Perfil.Supervisor) return await _intervencoes.ListarMinhasAsync(ct);
         var porValidar = await _intervencoes.ListarPorValidarAsync(ct);
         var planeadas = await _intervencoes.ListarPlaneadasAsync(ct);

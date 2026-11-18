@@ -8,7 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace GestorManutencao.Api;
 
 [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
-public enum Perfil { Operador, Supervisor }
+public enum Perfil { Operador, Supervisor, Qualidade }
 
 // Versao muda sempre que o PIN muda; vai no token e permite revogar os tokens antigos.
 // Tecno é o número de utilizador do PHC (0 = ainda sem número): é a identidade da pessoa nas fichas de intervenção.

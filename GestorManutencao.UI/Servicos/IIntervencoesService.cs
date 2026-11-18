@@ -19,6 +19,9 @@ public interface IIntervencoesService
     Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default);
     Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default);
     Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default);
+    // Só para o perfil Qualidade: fichas validadas por concluir e conclusão com o nome de quem higienizou (grava-se uma só vez).
+    Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default);
+    Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default);
     // Só para supervisores: planeadas e em curso de todos, atribuição de técnico (tecno 0 = sem dono) e geração das planeadas.
     Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default);
     Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default);
@@ -199,6 +202,25 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
 
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) =>
         Alterar(id, EstadoIntervencao.Concluida, i => i with { Estado = EstadoIntervencao.Validada });
+
+    // Dados de demonstração: as validadas aqui ficam à espera da Qualidade até serem concluídas.
+    private readonly HashSet<string> _concluidasQualidade = [];
+
+    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(_lista.Where(i => i.Estado == EstadoIntervencao.Validada && !_concluidasQualidade.Contains(i.Id)).ToList());
+    }
+
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default)
+    {
+        if (RegrasQualidade.ValidarHigienizacao(higienizacao) is { } erro) throw new InvalidOperationException(erro);
+        lock (_trinco)
+        {
+            var i = _lista.FirstOrDefault(x => x.Id == id && x.Estado == EstadoIntervencao.Validada && !_concluidasQualidade.Contains(x.Id)) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            _concluidasQualidade.Add(id);
+            return Task.FromResult(i);
+        }
+    }
 
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default)
     {
@@ -518,6 +540,8 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();

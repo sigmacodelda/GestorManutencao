@@ -8,7 +8,7 @@ public sealed partial class RepositorioIntervencoesMemoria
     private int ProximoNumero() => ++_numero;
 
     // Validada fecha e supervisiona a ficha (como no SQL); nas antigas valem os campos que o supervisor marcou.
-    private static bool EstaFechada(Ficha f) => f.Fechada || (!f.Antiga && f.D.Estado == EstadoIntervencao.Validada);
+    private static bool EstaFechada(Ficha f) => f.Fechada || (!f.Antiga && f.D.Estado == EstadoIntervencao.Validada && !f.AguardaQualidade);
 
     private static bool Supervisionada(Ficha f) => f.Supervisao || (!f.Antiga && f.D.Estado == EstadoIntervencao.Validada);
 
@@ -67,7 +67,39 @@ public sealed partial class RepositorioIntervencoesMemoria
     }
 
     private FichaDetalheDto Detalhe(Ficha f, TecnicoAtual quem, bool supervisor) =>
-        RegrasFicha.Montar(Lida(f), f.Tempos.ToList(), f.Materiais.ToList(), _cfg, supervisor, Pertence(f, quem.Tecno), quem.Tecno);
+        RegrasFicha.Montar(Lida(f), f.Tempos.ToList(), f.Materiais.ToList(), _cfg, supervisor, Pertence(f, quem.Tecno), quem.Tecno) with
+        {
+            Historico = RegrasQualidade.Montar(f.D.Tecnico, f.HFim ?? (f.D.HoraFim is { } hf ? f.D.DataPlaneada.ToDateTime(hf) : null), f.ValidouPor, f.ValidouEm,
+                f.HistDevol, f.HigienizadoPor, f.HigienizadoEm, f.ConcluiuPor, f.ConcluiuEm)
+        };
+
+    public Task<IReadOnlyList<IntervencaoDto>> ListarPorConcluirAsync(CancellationToken ct)
+    {
+        lock (Trinco())
+            return Task.FromResult<IReadOnlyList<IntervencaoDto>>(_lista.Where(f => f.AguardaQualidade).OrderBy(f => f.D.DataPlaneada).Select(x => Ver(x)).ToList());
+    }
+
+    public Task<FichaDetalheDto?> ObterDetalheQualidadeAsync(string id, TecnicoAtual qualidade, CancellationToken ct)
+    {
+        lock (Trinco())
+            return Task.FromResult(_lista.FirstOrDefault(f => f.D.Id == id && f.AguardaQualidade) is { } f ? Detalhe(f, qualidade, false) : null);
+    }
+
+    // A higienização grava-se uma só vez: depois de fechada a ficha já não está à espera da Qualidade.
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirQualidadeAsync(string id, string higienizacao, TecnicoAtual qualidade, CancellationToken ct)
+    {
+        lock (Trinco())
+        {
+            var f = _lista.FirstOrDefault(x => x.D.Id == id);
+            if (f is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
+            if (!f.AguardaQualidade) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
+            var agora = relogio.GetLocalNow().DateTime;
+            f.HigienizadoPor = higienizacao; f.HigienizadoEm = agora;
+            f.ConcluiuPor = qualidade.Codigo; f.ConcluiuEm = agora;
+            f.LimRem = true; f.Fechada = true; f.Supervisao = true; f.AguardaQualidade = false;
+            return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
+        }
+    }
 
     private static string? Vazio(string valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
 
@@ -272,6 +304,7 @@ public sealed partial class RepositorioIntervencoesMemoria
         lock (Trinco())
             return Task.FromResult(new ContadoresMenuDto(
                 _lista.Count(f => Aberta(f) && RegrasManutencao.EmAtraso(f.D.DataPlaneada, Prevista(f), Hoje)),
-                _lista.Count(f => f.D.Estado == EstadoIntervencao.Concluida && !f.Antiga)));
+                _lista.Count(f => f.D.Estado == EstadoIntervencao.Concluida && !f.Antiga),
+                _lista.Count(f => f.AguardaQualidade)));
     }
 }

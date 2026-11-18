@@ -496,6 +496,8 @@ public sealed class OfflineIntervencoesService(
     }
 
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => remoto.ListarPorValidarAsync(ct);
+    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default) => remoto.ListarPorConcluirAsync(ct);
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default) => EscritaRemotaAsync(() => remoto.ConcluirQualidadeAsync(id, higienizacao, ct));
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => EscritaRemotaAsync(() => remoto.ValidarAsync(id, ct));
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => EscritaRemotaAsync(() => remoto.DevolverAsync(id, motivo, ct));
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => remoto.ListarPlaneadasAsync(ct);

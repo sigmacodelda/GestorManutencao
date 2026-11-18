@@ -112,7 +112,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
 
     private static UtilizadorApp Ler(SqlDataReader r) => new(
         r.GetString(0).Trim(), r.GetString(1).Trim(),
-        string.Equals(r.GetString(2).Trim(), "SUPERVISOR", StringComparison.OrdinalIgnoreCase) ? Perfil.Supervisor : Perfil.Operador,
+        r.GetString(2).Trim().ToUpperInvariant() switch { "SUPERVISOR" => Perfil.Supervisor, "QUALIDADE" => Perfil.Qualidade, _ => Perfil.Operador },
         r.GetBoolean(3), r.GetBoolean(4), r.IsDBNull(5) ? 0 : r.GetDateTime(5).Ticks, (int)r.GetDecimal(6));
 
     private static void Texto(SqlCommand cmd, string nome, int tamanho, string valor) =>
@@ -190,7 +190,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
                 Texto(cmd, "@stamp", 25, NovoStamp());
                 Texto(cmd, "@codigo", 30, codigo);
                 Texto(cmd, "@nome", 60, nome);
-                Texto(cmd, "@perfil", 12, perfil == Perfil.Supervisor ? "SUPERVISOR" : "OPERADOR");
+                Texto(cmd, "@perfil", 12, perfil switch { Perfil.Supervisor => "SUPERVISOR", Perfil.Qualidade => "QUALIDADE", _ => "OPERADOR" });
                 Texto(cmd, "@hash", 64, pinHash);
                 Auditoria(cmd, porQuem);
                 await cmd.ExecuteNonQueryAsync(ct);

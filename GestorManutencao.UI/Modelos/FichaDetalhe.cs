@@ -7,7 +7,10 @@ public sealed record CompraLigada(DateOnly? Data, string Documento, string Forne
 
 public sealed record Fornecedor(long No, string Nome);
 
-public sealed record ContadoresMenu(int PlaneadasAtrasadas, int PorValidar);
+public sealed record ContadoresMenu(int PlaneadasAtrasadas, int PorValidar, int PorConcluir = 0);
+
+// Etapa do histórico da ficha (execução, devoluções, validação, higienização, conclusão); Quem já vem como nome.
+public sealed record EtapaFicha(string Etapa, string? Quem, DateTime? Quando, string? Texto = null);
 
 // Ficha completa tal como a API a devolve. Antiga = ficha do PHC sem estado. Os bloqueios (Pode...) já vêm calculados para quem pediu:
 // PodeEditar vale também para o material e a mão de obra; PodeEditarGestao é técnico, data, tipos e periodicidade.
@@ -23,7 +26,7 @@ public sealed record FichaDetalhe(
     decimal MoInterna = 0, decimal MoExterna = 0, decimal MatInterno = 0, decimal MatExterno = 0, decimal TotMo = 0, decimal TotRef = 0,
     string? Motivo = null, IReadOnlyList<TempoMaoDeObra>? MaoDeObra = null, IReadOnlyList<Material>? Materiais = null,
     bool ExternosAMao = false, bool PodeEditar = false, bool PodeEditarGestao = false, bool PodeCancelar = false, bool PodeFecharAntiga = false,
-    string Versao = "", bool CustosOcultos = false)
+    string Versao = "", bool CustosOcultos = false, IReadOnlyList<EtapaFicha>? Historico = null)
 {
     public decimal Total => TotMo + TotRef;
 
@@ -85,4 +88,13 @@ public static class RegrasFichaDetalhe
         if (e.HoraInicio is { } i && e.HoraFim is { } f && i.Year > 1900 && f.Year > 1900 && f < i) return "A hora de fim não pode ser antes da de início.";
         return null;
     }
+}
+
+// Mesma regra do servidor, só para avisar logo no ecrã (o servidor volta a validar).
+public static class RegrasQualidade
+{
+    public const int MaxHigienizacao = 60;
+
+    public static string? ValidarHigienizacao(string? nome) =>
+        string.IsNullOrWhiteSpace(nome) || nome.Trim().Length > MaxHigienizacao ? "Indique quem realizou a higienização." : null;
 }

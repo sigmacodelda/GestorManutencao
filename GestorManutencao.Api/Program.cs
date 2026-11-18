@@ -81,7 +81,8 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn
     builder.Services.AddSingleton<IRepositorioUtilizadores>(sp => new RepositorioUtilizadoresMemoria(
     [
         (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), sp.GetRequiredService<PinHasher>().Hash("4829")),
-        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("7953"))
+        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("7953")),
+        (new UtilizadorApp("qualidade", "Qualidade", Perfil.Qualidade, true, false), sp.GetRequiredService<PinHasher>().Hash("3197"))
     ]));
     builder.Services.AddSingleton<IRepositorioIntervencoes, RepositorioIntervencoesMemoria>();
 }
@@ -148,6 +149,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("GestaoUtilizadores", p => p.RequireAssertion(c =>
         !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1")
         && (c.User.IsInRole(nameof(Perfil.Supervisor)) || c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1"))))
+    .AddPolicy("Qualidade", p => p.RequireRole(nameof(Perfil.Qualidade)).RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1") && !c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1")))
     .AddPolicy("Supervisor", p => p.RequireRole(nameof(Perfil.Supervisor)).RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1") && !c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1")));
 
 // Como o PIN identifica a pessoa, adivinhá-lo não se trava por utilizador: trava-se por endereço e no total.
@@ -381,7 +383,7 @@ equipa.MapPost("/{codigo}/pin", async (string codigo, ClaimsPrincipal eu, IRepos
 
         // Só se repõe o PIN a operadores: repor o de outro supervisor permitia fazer-se passar por ele.
         if (await repo.ObterAsync(codigo, ct) is not { } alvo) return Erro(404, "nao_existe");
-        if (alvo.Perfil != Perfil.Operador) return Results.Forbid();
+        if (alvo.Perfil == Perfil.Supervisor) return Results.Forbid();
 
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {

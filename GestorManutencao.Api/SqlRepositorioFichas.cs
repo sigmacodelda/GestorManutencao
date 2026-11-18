@@ -213,8 +213,37 @@ public sealed partial class SqlRepositorioIntervencoes
         var cfg = await LerConfiguracaoAsync(conn, ct);
         var tempos = await LerTemposAsync(conn, id, ct);
         var materiais = await LerMateriaisAsync(conn, id, ct);
-        return RegrasFicha.Montar(lida.Ficha, tempos, materiais, cfg, supervisor, RegrasIntervencao.PertenceAFicha(lida.Ficha.Tecno, lida.Ficha.Tecnos, quem.Tecno), quem.Tecno);
+        var ficha = RegrasFicha.Montar(lida.Ficha, tempos, materiais, cfg, supervisor, RegrasIntervencao.PertenceAFicha(lida.Ficha.Tecno, lida.Ficha.Tecnos, quem.Tecno), quem.Tecno);
+        return ficha with { Historico = await LerHistoricoAsync(conn, id, lida.Ficha, ct) };
     }
+
+    private const string SqlEtapasQualidade =
+        """
+        select isnull(valinis, ''), valdata, isnull(higienizadopor, ''), higienizadata, isnull(qualinis, ''), qualdata, isnull(cast(histdevol as varchar(max)), '')
+        from u_fichaint with (nolock) where u_fichaintstamp = @id
+        """;
+
+    // Se os campos do circuito da Qualidade ainda não existem na base, a ficha abre na mesma, sem histórico.
+    private static async Task<IReadOnlyList<EtapaDto>?> LerHistoricoAsync(SqlConnection conn, string id, FichaLida f, CancellationToken ct)
+    {
+        try
+        {
+            await using var cmd = new SqlCommand(SqlEtapasQualidade, conn);
+            Texto(cmd, "@id", 25, id);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            if (!await r.ReadAsync(ct)) return null;
+            static DateTime? D(SqlDataReader r, int i) => r.IsDBNull(i) || r.GetDateTime(i) <= RegrasFicha.SemData ? null : r.GetDateTime(i);
+            return RegrasQualidade.Montar(f.Tecnome, f.HFim <= RegrasFicha.SemData ? null : f.HFim, r.GetString(0), D(r, 1), r.GetString(6), r.GetString(2), D(r, 3), r.GetString(4), D(r, 5));
+        }
+        catch (SqlException) { return null; }
+    }
+
+    public Task<FichaDetalheDto?> ObterDetalheQualidadeAsync(string id, TecnicoAtual qualidade, CancellationToken ct) => Executar<FichaDetalheDto?>(async conn =>
+    {
+        await using var cmd = new SqlCommand("select count(*) from u_fichaint with (nolock) where u_fichaintstamp = @id and estado = 'Validada' and fechada = 0 and obsoleto = 0", conn);
+        Texto(cmd, "@id", 25, id);
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture) == 0 ? null : await MontarDetalheAsync(conn, id, qualidade, false, ct);
+    });
 
     private static async Task<string?> NomeFornecedorAsync(SqlConnection conn, long no, CancellationToken ct)
     {
@@ -523,6 +552,8 @@ public sealed partial class SqlRepositorioIntervencoes
             }
         }
         await using var contar = new SqlCommand(SqlContarPorValidar, conn);
-        return new ContadoresMenuDto(atrasadas, Convert.ToInt32(await contar.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture));
+        var porValidar = Convert.ToInt32(await contar.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
+        await using var contarQual = new SqlCommand("select count(*) from u_fichaint with (nolock) where estado = 'Validada' and fechada = 0 and obsoleto = 0", conn);
+        return new ContadoresMenuDto(atrasadas, porValidar, Convert.ToInt32(await contarQual.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture));
     });
 }

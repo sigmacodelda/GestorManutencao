@@ -385,9 +385,25 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlValidar =
         """
-        update u_fichaint set estado = 'Validada', fechada = 1, supervisao = 1, valinis = @codigo, valdata = @agora,
+        update u_fichaint set estado = 'Validada', fechada = 0, supervisao = 1, valinis = @codigo, valdata = @agora,
                usrinis = @codigo, usrdata = @dia, usrhora = @hora
         where u_fichaintstamp = @id and estado = 'Concluida'
+        """;
+
+    // Fila da Qualidade: validada pelo supervisor e ainda não fechada; as validadas antigas estão todas fechadas.
+    private const string SqlPorConcluir = SelecaoSemPausa +
+        """
+
+        where f.estado = 'Validada' and f.fechada = 0 and f.obsoleto = 0 and e.tipoequip = 1
+        order by f.data, f.no
+        """;
+
+    // O nome de quem higienizou só se grava uma vez (higienizadopor vazio) e só a Qualidade chega aqui.
+    private const string SqlConcluirQualidade =
+        """
+        update u_fichaint set fechada = 1, limrem = 1, higienizadopor = @higienizacao, higienizadata = @agora, qualinis = @codigo, qualdata = @agora,
+               usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        where u_fichaintstamp = @id and estado = 'Validada' and fechada = 0 and obsoleto = 0 and isnull(higienizadopor, '') = ''
         """;
 
     // Ao concluir já se gerou a seguinte; ao devolver, essa planeada ainda por tocar sai (uma só em aberto por tarefa).
@@ -401,7 +417,8 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlDevolver =
         """
-        update u_fichaint set estado = 'EmCurso', valobs = @motivo, usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        update u_fichaint set estado = 'EmCurso', valobs = @motivo,
+               histdevol = case when isnull(cast(histdevol as varchar(max)), '') = '' then @linha else cast(histdevol as varchar(max)) + char(10) + @linha end, usrinis = @codigo, usrdata = @dia, usrhora = @hora
         where u_fichaintstamp = @id and estado = 'Concluida'
         """;
 
@@ -1018,6 +1035,26 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         return await Resultado(conn, cmd, id, ct);
     });
 
+    public Task<IReadOnlyList<IntervencaoDto>> ListarPorConcluirAsync(CancellationToken ct) => Executar<IReadOnlyList<IntervencaoDto>>(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlPorConcluir, conn);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        var lista = new List<IntervencaoDto>();
+        while (lista.Count < 300 && await r.ReadAsync(ct)) lista.Add(Ler(r));
+        return lista;
+    });
+
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirQualidadeAsync(string id, string higienizacao, TecnicoAtual qualidade, CancellationToken ct) => Executar<(ResultadoIntervencao, IntervencaoDto?)>(async conn =>
+    {
+        if (await LerAtualAsync(conn, id, ct) is not { } a) return (ResultadoIntervencao.NaoExiste, null);
+        if (a.Estado != "Validada") return (ResultadoIntervencao.Conflito, null);
+        await using var cmd = new SqlCommand(SqlConcluirQualidade, conn);
+        Texto(cmd, "@id", 25, id);
+        Texto(cmd, "@higienizacao", RegrasQualidade.MaxHigienizacao, higienizacao);
+        Auditoria(cmd, qualidade.Codigo, await AgoraAsync(conn, ct));
+        return await Resultado(conn, cmd, id, ct);
+    });
+
     public Task<(ResultadoIntervencao, IntervencaoDto?)> DevolverAsync(string id, string motivo, TecnicoAtual supervisor, CancellationToken ct) => Executar<(ResultadoIntervencao, IntervencaoDto?)>(async conn =>
     {
         if (await LerAtualAsync(conn, id, ct) is not { } a) return (ResultadoIntervencao.NaoExiste, null);
@@ -1035,6 +1072,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         await using var cmd = new SqlCommand(SqlDevolver, conn, tx);
         Texto(cmd, "@id", 25, id);
         Texto(cmd, "@motivo", 254, RegrasManutencao.Cortar(motivo, RegrasManutencao.TamanhoMotivo));
+        cmd.Parameters.Add("@linha", SqlDbType.VarChar, -1).Value = RegrasQualidade.AcrescentarDevolucao(null, agora.Agora, supervisor.Codigo, RegrasManutencao.Cortar(motivo, RegrasManutencao.TamanhoMotivo));
         Auditoria(cmd, supervisor.Codigo, agora);
         if (await cmd.ExecuteNonQueryAsync(ct) == 0) { await tx.RollbackAsync(ct); return (ResultadoIntervencao.Conflito, null); }
         await tx.CommitAsync(ct);

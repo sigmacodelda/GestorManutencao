@@ -148,7 +148,7 @@
         finally { _a_carregar = false; }
     }
 
-    private Task ValidarAsync(Intervencao f) => AgirAsync(f, () => Intervencoes.ValidarAsync(f.Id), $"Validada: {f.Equipamento}.");
+    private Task ValidarAsync(Intervencao f) => AgirAsync(f, () => Intervencoes.ValidarAsync(f.Id), $"Validada: {f.Equipamento}. Segue para a Qualidade.");
 
     private Task DevolverAsync(Intervencao f) => AgirAsync(f, () => Intervencoes.DevolverAsync(f.Id, _motivo.Trim()), $"Devolvida ao técnico: {f.Equipamento}.");
 

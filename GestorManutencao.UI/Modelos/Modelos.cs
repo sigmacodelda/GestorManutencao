@@ -1,9 +1,9 @@
 namespace GestorManutencao.UI.Modelos;
 
 [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
-public enum Perfil { Operador, Supervisor }
+public enum Perfil { Operador, Supervisor, Qualidade }
 
-public enum ModoTrabalho { Operador, Supervisor }
+public enum ModoTrabalho { Operador, Supervisor, Qualidade }
 
 public enum ErroLogin { Credenciais, Rede, DemasiadasTentativas, PinFraco, PinEmUso }
 

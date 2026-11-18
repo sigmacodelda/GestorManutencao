@@ -196,6 +196,12 @@ public interface IRepositorioIntervencoes
     Task<(ResultadoIntervencao, IntervencaoDto?)> ValidarAsync(string id, TecnicoAtual supervisor, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> DevolverAsync(string id, string motivo, TecnicoAtual supervisor, CancellationToken ct);
 
+    // Qualidade: fichas validadas por concluir (Validada, fechada = 0) e conclusão com o nome de quem higienizou (grava-se uma só vez).
+    Task<IReadOnlyList<IntervencaoDto>> ListarPorConcluirAsync(CancellationToken ct);
+    // Detalhe só leitura de uma ficha que aguarda a Qualidade (null = não existe ou não está nessa fase).
+    Task<FichaDetalheDto?> ObterDetalheQualidadeAsync(string id, TecnicoAtual qualidade, CancellationToken ct);
+    Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirQualidadeAsync(string id, string higienizacao, TecnicoAtual qualidade, CancellationToken ct);
+
     // Supervisor: planeadas e em curso de todos, atribuição de técnico (tecno 0 = sem dono) e geração das planeadas.
     Task<IReadOnlyList<IntervencaoDto>> ListarPlaneadasAsync(CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> AtribuirAsync(string id, int tecno, string nome, TecnicoAtual supervisor, CancellationToken ct);
@@ -531,6 +537,17 @@ public static partial class EndpointsIntervencoes
                 ? Task.FromResult(Results.BadRequest())
                 : ComoSupervisor(eu, utilizadores, ct, async s => Resposta(await repo.DevolverAsync(id, p.Motivo.Trim(), s, ct)))).RequireAuthorization("Supervisor");
 
+        g.MapGet("/qualidade", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoQualidade(eu, utilizadores, ct, async _ => Results.Ok(await repo.ListarPorConcluirAsync(ct)))).RequireAuthorization("Qualidade");
+
+        g.MapGet("/qualidade/{id}/detalhe", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoQualidade(eu, utilizadores, ct, async q => await repo.ObterDetalheQualidadeAsync(id, q, ct) is { } d ? Results.Ok(d) : Results.NotFound())).RequireAuthorization("Qualidade");
+
+        g.MapPost("/qualidade/{id}/concluir", (string id, PedidoConclusaoQualidade p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            RegrasQualidade.ValidarHigienizacao(p.Higienizacao) is { } erro
+                ? Task.FromResult(PedidoInvalido(erro))
+                : ComoQualidade(eu, utilizadores, ct, async q => Resposta(await repo.ConcluirQualidadeAsync(id, p.Higienizacao!.Trim(), q, ct)))).RequireAuthorization("Qualidade");
+
         g.MapGet("/planeadas", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             ComoSupervisor(eu, utilizadores, ct, async _ => Results.Ok(await repo.ListarPlaneadasAsync(ct)))).RequireAuthorization("Supervisor");
 
@@ -574,13 +591,15 @@ public static partial class EndpointsIntervencoes
             IReadOnlyList<IntervencaoDto> l => l.Any(Tem),
             PaginaFichasDto pg => pg.Itens.Any(Tem),
             FichaEquipamentoDto f => f.Historico.Any(Tem),
-            FichaDetalheDto d => d.Adicionais is { Count: > 0 },
+            FichaDetalheDto d => d.Adicionais is { Count: > 0 } || d.Historico is { Count: > 0 },
             _ => false
         };
         if (!precisa) return resultado;
 
         var nomes = (await http.RequestServices.GetRequiredService<IRepositorioUtilizadores>().ListarAsync(http.RequestAborted))
             .Where(u => u.Tecno > 0).GroupBy(u => u.Tecno).ToDictionary(g => g.Key, g => Truncar(g.First().Nome));
+        var porCodigo = (await http.RequestServices.GetRequiredService<IRepositorioUtilizadores>().ListarAsync(http.RequestAborted))
+            .GroupBy(u => u.Codigo, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => Truncar(g.First().Nome), StringComparer.OrdinalIgnoreCase);
         IntervencaoDto N(IntervencaoDto i) => i.Adicionais is null ? i
             : i with { Adicionais = i.Adicionais.Select(a => a with { Nome = nomes.GetValueOrDefault(a.Tecno, "PHC " + a.Tecno) }).ToList() };
         return valor switch
@@ -589,7 +608,12 @@ public static partial class EndpointsIntervencoes
             IReadOnlyList<IntervencaoDto> l => Results.Ok((IReadOnlyList<IntervencaoDto>)l.Select(N).ToList()),
             PaginaFichasDto pg => Results.Ok(pg with { Itens = pg.Itens.Select(N).ToList() }),
             FichaEquipamentoDto f => Results.Ok(f with { Historico = f.Historico.Select(N).ToList() }),
-            FichaDetalheDto d => Results.Ok(d with { Adicionais = d.Adicionais!.Select(a => a with { Nome = nomes.GetValueOrDefault(a.Tecno, "PHC " + a.Tecno) }).ToList() }),
+            FichaDetalheDto d => Results.Ok(d with
+            {
+                Adicionais = d.Adicionais?.Select(a => a with { Nome = nomes.GetValueOrDefault(a.Tecno, "PHC " + a.Tecno) }).ToList(),
+                Historico = d.Historico?.Select(e => e.Etapa is RegrasQualidade.EtapaExecucao or RegrasQualidade.EtapaHigienizacao || e.Quem is null ? e
+                    : e with { Quem = porCodigo.GetValueOrDefault(e.Quem, e.Quem) }).ToList()
+            }),
             _ => resultado
         };
     }
@@ -613,7 +637,7 @@ public static partial class EndpointsIntervencoes
     // Sem utilizador ativo não há acesso; sem número de técnico do PHC não há fichas (a app explica e pede ao supervisor).
     private static async Task<IResult> ComoTecnico(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, Task<IResult>> acao)
     {
-        if (await Ativo(eu, utilizadores, ct) is not { } u) return Results.Forbid();
+        if (await Ativo(eu, utilizadores, ct) is not { } u || u.Perfil == Perfil.Qualidade) return Results.Forbid();
         if (u.Tecno <= 0) return Results.Json(new { erro = "sem_tecno" }, statusCode: StatusCodes.Status403Forbidden);
         return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)));
     }
@@ -621,7 +645,7 @@ public static partial class EndpointsIntervencoes
     // Supervisor (mesmo sem número de técnico) ou técnico com número; o supervisor lê qualquer ficha.
     private static async Task<IResult> ComoTecnicoOuSupervisor(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, bool, Task<IResult>> acao)
     {
-        if (await Ativo(eu, utilizadores, ct) is not { } u) return Results.Forbid();
+        if (await Ativo(eu, utilizadores, ct) is not { } u || u.Perfil == Perfil.Qualidade) return Results.Forbid();
         var supervisor = u.Perfil == Perfil.Supervisor;
         if (!supervisor && u.Tecno <= 0) return Results.Json(new { erro = "sem_tecno" }, statusCode: StatusCodes.Status403Forbidden);
         return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)), supervisor);
@@ -631,6 +655,12 @@ public static partial class EndpointsIntervencoes
     private static async Task<IResult> ComoSupervisor(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, Task<IResult>> acao)
     {
         if (await Ativo(eu, utilizadores, ct) is not { Perfil: Perfil.Supervisor } u) return Results.Forbid();
+        return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)));
+    }
+
+    private static async Task<IResult> ComoQualidade(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, Task<IResult>> acao)
+    {
+        if (await Ativo(eu, utilizadores, ct) is not { Perfil: Perfil.Qualidade } u) return Results.Forbid();
         return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)));
     }
 
