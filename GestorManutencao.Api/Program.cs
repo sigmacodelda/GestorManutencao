@@ -301,6 +301,24 @@ app.MapPost("/auth/pin", async (PedidoMudarPin pedido, ClaimsPrincipal eu, IRepo
     }
 }).WithMetadata(new LimitaPin()).RequireAuthorization("Autenticado");
 
+// A assinatura é só da própria pessoa: lê e escreve a sua, nunca a de outra.
+app.MapGet("/auth/assinatura", async (ClaimsPrincipal eu, IRepositorioUtilizadores repo, HttpContext http, CancellationToken ct) =>
+{
+    http.Response.Headers.CacheControl = "no-store";
+    if (Codigo(eu) is not { } codigo) return Results.Unauthorized();
+    try { return Results.Ok(new PedidoAssinatura((await repo.ObterAssinaturaAsync(codigo, ct))?.Trim() ?? "")); }
+    catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
+}).RequireAuthorization("Autenticado");
+
+app.MapPut("/auth/assinatura", async (PedidoAssinatura pedido, ClaimsPrincipal eu, IRepositorioUtilizadores repo, CancellationToken ct) =>
+{
+    var texto = (pedido.Assinatura ?? "").Trim();
+    if (texto.Length > PedidoAssinatura.Max) return Erro(400, "assinatura_longa");
+    if (Codigo(eu) is not { } codigo) return Results.Unauthorized();
+    try { return await repo.DefinirAssinaturaAsync(codigo, texto, ct) == ResultadoPin.Ok ? Results.NoContent() : Erro(404, "nao_existe"); }
+    catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
+}).RequireAuthorization("Autenticado");
+
 app.MapGet("/auth/eu", (ClaimsPrincipal utilizador) => Results.Ok(new
 {
     utilizador = Codigo(utilizador),

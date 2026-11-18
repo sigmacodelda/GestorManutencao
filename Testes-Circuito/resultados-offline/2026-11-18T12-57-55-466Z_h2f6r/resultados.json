@@ -1,0 +1,212 @@
+[
+  {
+    "modo": "computador",
+    "nome": "Técnico: entra online e o sinal de ligação mostra \"ligado\"",
+    "ok": true,
+    "ms": 4939,
+    "detalhe": "{\"visivel\":true,\"estado\":\"ok\",\"texto\":\"Ligado\"}"
+  },
+  {
+    "modo": "computador",
+    "nome": "Técnico: online, regista a avaria 1 (vai direta à API)",
+    "ok": true,
+    "ms": 1570,
+    "detalhe": ""
+  },
+  {
+    "modo": "computador",
+    "nome": "Técnico: SEM REDE, a pesquisa de equipamentos devolve resultados da cópia guardada",
+    "ok": true,
+    "ms": 3294,
+    "detalhe": "1 opção(ões)"
+  },
+  {
+    "modo": "computador",
+    "nome": "Técnico: SEM REDE, regista a avaria 2 e fica \"guardado, será enviado\"",
+    "ok": true,
+    "ms": 2864,
+    "detalhe": "sinal: {\"visivel\":true,\"estado\":\"sem\",\"texto\":\"Sem ligação. Pode continuar a trabalhar. 1 por enviar.\"}"
+  },
+  {
+    "modo": "computador",
+    "nome": "Técnico: a ficha offline aparece nas \"minhas intervenções\" marcada como por enviar",
+    "ok": false,
+    "ms": 16,
+    "erro": "sem sinal da ficha pendente"
+  },
+  {
+    "modo": "computador",
+    "nome": "Técnico: a rede volta e a avaria 2 segue para a API (até 100 s)",
+    "ok": true,
+    "ms": 41942,
+    "detalhe": "chegou em 42 s; sinal: {\"visivel\":true,\"estado\":\"ok\",\"texto\":\"Ligado\"}"
+  },
+  {
+    "modo": "computador",
+    "nome": "Supervisor: entra online e vê as fichas por validar",
+    "ok": true,
+    "ms": 626,
+    "detalhe": ""
+  },
+  {
+    "modo": "computador",
+    "nome": "Supervisor: SEM REDE, a lista por validar continua visível (cópia guardada)",
+    "ok": true,
+    "ms": 2643,
+    "detalhe": "3 fichas"
+  },
+  {
+    "modo": "computador",
+    "nome": "Supervisor: SEM REDE, valida uma ficha (\"Guardado. Será enviado quando houver rede.\")",
+    "ok": true,
+    "ms": 2743,
+    "detalhe": ""
+  },
+  {
+    "modo": "computador",
+    "nome": "Supervisor: SEM REDE, devolve uma ficha com motivo",
+    "ok": false,
+    "ms": 153,
+    "erro": "a ficha devolvida continua na lista"
+  },
+  {
+    "modo": "computador",
+    "nome": "Supervisor: SEM REDE, o que exige rede avisa em vez de falhar calado (planeadas/equipa)",
+    "ok": true,
+    "ms": 2780,
+    "detalhe": "Não foi possível carregar a equipa."
+  },
+  {
+    "modo": "computador",
+    "nome": "Supervisor: a rede volta e validar/devolver chegam à API (até 100 s)",
+    "ok": true,
+    "ms": 44294,
+    "detalhe": "chegou em 44 s"
+  },
+  {
+    "modo": "computador",
+    "nome": "Qualidade: entra online, vê o Início e a lista por concluir",
+    "ok": true,
+    "ms": 865,
+    "detalhe": ""
+  },
+  {
+    "modo": "computador",
+    "nome": "Qualidade: SEM REDE, a lista continua visível e conclui com o nome de quem higienizou",
+    "ok": true,
+    "ms": 5275,
+    "detalhe": ""
+  },
+  {
+    "modo": "computador",
+    "nome": "Qualidade: a rede volta e a conclusão chega à API (até 100 s)",
+    "ok": true,
+    "ms": 46364,
+    "detalhe": "chegou em 46 s"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Técnico: entra online e o sinal de ligação mostra \"ligado\"",
+    "ok": true,
+    "ms": 713,
+    "detalhe": "{\"visivel\":true,\"estado\":\"ok\",\"texto\":\"Ligado\"}"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Técnico: online, regista a avaria 1 (vai direta à API)",
+    "ok": true,
+    "ms": 919,
+    "detalhe": ""
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Técnico: SEM REDE, a pesquisa de equipamentos devolve resultados da cópia guardada",
+    "ok": true,
+    "ms": 3151,
+    "detalhe": "1 opção(ões)"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Técnico: SEM REDE, regista a avaria 2 e fica \"guardado, será enviado\"",
+    "ok": true,
+    "ms": 2742,
+    "detalhe": "sinal: {\"visivel\":true,\"estado\":\"sem\",\"texto\":\"Sem ligação. Pode continuar a trabalhar. 1 por enviar.\"}"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Técnico: a ficha offline aparece nas \"minhas intervenções\" marcada como por enviar",
+    "ok": false,
+    "ms": 8,
+    "erro": "sem sinal da ficha pendente"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Técnico: a rede volta e a avaria 2 segue para a API (até 100 s)",
+    "ok": true,
+    "ms": 48088,
+    "detalhe": "chegou em 48 s; sinal: {\"visivel\":true,\"estado\":\"ok\",\"texto\":\"Ligado\"}"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Supervisor: entra online e vê as fichas por validar",
+    "ok": true,
+    "ms": 668,
+    "detalhe": ""
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Supervisor: SEM REDE, a lista por validar continua visível (cópia guardada)",
+    "ok": true,
+    "ms": 2778,
+    "detalhe": "3 fichas"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Supervisor: SEM REDE, valida uma ficha (\"Guardado. Será enviado quando houver rede.\")",
+    "ok": true,
+    "ms": 2842,
+    "detalhe": ""
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Supervisor: SEM REDE, devolve uma ficha com motivo",
+    "ok": false,
+    "ms": 249,
+    "erro": "a ficha devolvida continua na lista"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Supervisor: SEM REDE, o que exige rede avisa em vez de falhar calado (planeadas/equipa)",
+    "ok": true,
+    "ms": 2824,
+    "detalhe": "Não foi possível carregar a equipa."
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Supervisor: a rede volta e validar/devolver chegam à API (até 100 s)",
+    "ok": true,
+    "ms": 42284,
+    "detalhe": "chegou em 42 s"
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Qualidade: entra online, vê o Início e a lista por concluir",
+    "ok": true,
+    "ms": 935,
+    "detalhe": ""
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Qualidade: SEM REDE, a lista continua visível e conclui com o nome de quem higienizou",
+    "ok": true,
+    "ms": 5691,
+    "detalhe": ""
+  },
+  {
+    "modo": "telemovel",
+    "nome": "Qualidade: a rede volta e a conclusão chega à API (até 100 s)",
+    "ok": true,
+    "ms": 48388,
+    "detalhe": "chegou em 48 s"
+  }
+]

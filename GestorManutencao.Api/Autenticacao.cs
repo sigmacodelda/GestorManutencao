@@ -19,6 +19,11 @@ public sealed record PedidoLogin(string? Pin)
     private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
 }
 
+public sealed record PedidoAssinatura(string? Assinatura)
+{
+    public const int Max = 1000;
+}
+
 public sealed record PedidoMudarPin(string? PinAtual, string? PinNovo)
 {
     private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
@@ -118,6 +123,9 @@ public interface IRepositorioUtilizadores
     Task<ResultadoPin> DefinirTecnoAsync(string codigo, int tecno, string porQuem, CancellationToken ct);
     // Apaga a linha do utilizador (Protegido = é supervisor: esses nunca se apagam). As fichas já gravadas ficam com o código dele.
     Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct);
+    // Assinatura escrita pela própria pessoa (memo em u_manutil); só se guarda, não se usa em mais nada por agora.
+    Task<string?> ObterAssinaturaAsync(string codigo, CancellationToken ct);
+    Task<ResultadoPin> DefinirAssinaturaAsync(string codigo, string assinatura, CancellationToken ct);
     // Com pinHashAtual só muda se o PIN ainda for esse (evita que duas alterações em simultâneo se atropelem).
     Task<ResultadoPin> DefinirPinAsync(string codigo, string pinHash, bool provisorio, string porQuem, CancellationToken ct, string? pinHashAtual = null);
 }

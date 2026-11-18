@@ -1,0 +1,65 @@
+@page "/assinatura"
+@inject SessaoService Sessao
+@inject IAssinaturaService Servico
+@inject ToastService Toast
+
+<PageTitle>A minha assinatura · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">A minha assinatura</h1>
+        <p class="login-sub">Escreva a assinatura que quer que fique associada ao seu nome. Só você a altera.</p>
+    </div>
+
+    @if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else
+    {
+        <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+            <div class="campo">
+                <label for="assinatura">Assinatura</label>
+                <textarea id="assinatura" rows="4" maxlength="@IAssinaturaService.Max" autocomplete="off" @bind="_texto" @bind:event="oninput"></textarea>
+                <small class="campo-ajuda">@_texto.Length / @IAssinaturaService.Max</small>
+            </div>
+
+            <p class="campo-erro" role="alert">@_erro</p>
+
+            <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@(_ocupado || !_carregada)">
+                <Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Guardar")</span>
+            </button>
+        </form>
+    }
+</section>
+
+@code {
+    private string _texto = "", _erro = "";
+    private bool _a_carregar = true, _ocupado, _carregada;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Servico.LerAsync(Sessao.Utilizador?.Token);
+        if (r.Resultado == ResultadoAssinatura.Ok) { _texto = r.Texto; _carregada = true; }
+        else _erro = "Não foi possível carregar a assinatura. Precisa de ligação à rede.";
+        _a_carregar = false;
+    }
+
+    private async Task GuardarAsync()
+    {
+        _erro = "";
+        _ocupado = true;
+        try
+        {
+            var r = await Servico.GuardarAsync(Sessao.Utilizador?.Token, _texto);
+            switch (r.Resultado)
+            {
+                case ResultadoAssinatura.Ok: _texto = r.Texto; Toast.Sucesso("Assinatura guardada."); break;
+                case ResultadoAssinatura.Longa: _erro = $"A assinatura pode ter no máximo {IAssinaturaService.Max} caracteres."; break;
+                default: _erro = "Não foi possível guardar. Precisa de ligação à rede."; break;
+            }
+        }
+        finally { _ocupado = false; }
+    }
+}

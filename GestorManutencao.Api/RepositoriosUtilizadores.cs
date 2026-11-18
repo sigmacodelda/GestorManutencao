@@ -56,6 +56,23 @@ public sealed class RepositorioUtilizadoresMemoria : IRepositorioUtilizadores
         }
     }
 
+    private readonly Dictionary<string, string> _assinaturas = [];
+
+    public Task<string?> ObterAssinaturaAsync(string codigo, CancellationToken ct)
+    {
+        lock (_trinco) return Task.FromResult(_assinaturas.GetValueOrDefault(codigo));
+    }
+
+    public Task<ResultadoPin> DefinirAssinaturaAsync(string codigo, string assinatura, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (!_dados.ContainsKey(codigo)) return Task.FromResult(ResultadoPin.NaoExiste);
+            _assinaturas[codigo] = assinatura;
+            return Task.FromResult(ResultadoPin.Ok);
+        }
+    }
+
     public Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct)
     {
         lock (_trinco)
@@ -190,6 +207,29 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
     });
 
     // O perfil vai na própria condição: um supervisor nunca se apaga por aqui. Pressupõe DELETE em u_manutil para o login da API.
+    private const string SqlAssinatura = "select cast(isnull(assinatura, '') as varchar(max)) from u_manutil with (nolock) where utilizador = @codigo";
+    private const string SqlDefinirAssinatura =
+        """
+        update u_manutil set assinatura = @assinatura, usrinis = @por, usrdata = @dia, usrhora = @hora
+        where utilizador = @codigo
+        """;
+
+    public Task<string?> ObterAssinaturaAsync(string codigo, CancellationToken ct) => Executar(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlAssinatura, conn);
+        Texto(cmd, "@codigo", 30, codigo);
+        return await cmd.ExecuteScalarAsync(ct) as string;
+    });
+
+    public Task<ResultadoPin> DefinirAssinaturaAsync(string codigo, string assinatura, CancellationToken ct) => Executar(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlDefinirAssinatura, conn);
+        Texto(cmd, "@codigo", 30, codigo);
+        cmd.Parameters.Add("@assinatura", SqlDbType.VarChar, -1).Value = assinatura;
+        Auditoria(cmd, codigo);
+        return await cmd.ExecuteNonQueryAsync(ct) == 0 ? ResultadoPin.NaoExiste : ResultadoPin.Ok;
+    });
+
     private const string SqlApagar = "delete from u_manutil where utilizador = @codigo and upper(rtrim(perfil)) <> 'SUPERVISOR'";
 
     public Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct) => Executar(async conn =>

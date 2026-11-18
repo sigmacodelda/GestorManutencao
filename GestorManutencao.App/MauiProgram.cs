@@ -91,6 +91,7 @@ public static class MauiProgram
 				ServerCertificateCustomValidationCallback = (pedido, _, _, erros) => erros == System.Net.Security.SslPolicyErrors.None || pedido.RequestUri?.IsLoopback == true
 			})));
 			builder.Services.AddSingleton<IEquipaService>(new EquipaApiService(http));
+			builder.Services.AddSingleton<IAssinaturaService>(new AssinaturaApiService(http));
 			builder.Services.AddScoped<IntervencoesApiService>(sp => new IntervencoesApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IIntervencoesRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());
 			builder.Services.AddScoped<IDispositivosRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());
@@ -113,6 +114,7 @@ public static class MauiProgram
 #if DEBUG
 			builder.Services.AddSingleton<IAutenticacaoService, DevAutenticacaoService>();
 			builder.Services.AddSingleton<IEquipaService, DevEquipaService>();
+			builder.Services.AddSingleton<IAssinaturaService, DevAssinaturaService>();
 			builder.Services.AddSingleton<IGestaoService, GestaoDevService>();
 			builder.Services.AddSingleton<IArmazemGeracaoDiaria, ArmazemGeracaoDiariaMemoria>();
 			builder.Services.AddSingleton<GeracaoDiaria>(sp => new GeracaoDiaria(sp.GetRequiredService<IArmazemGeracaoDiaria>(), TimeProvider.System));
