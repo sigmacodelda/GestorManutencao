@@ -23,10 +23,9 @@ ALTER TABLE u_fichaint ADD
     qualinis       varchar(30)  NOT NULL CONSTRAINT DF_u_fichaint_qualinis       DEFAULT '',
     qualdata       datetime     NOT NULL CONSTRAINT DF_u_fichaint_qualdata       DEFAULT '19000101',
     histdevol      varchar(max) NOT NULL CONSTRAINT DF_u_fichaint_histdevol      DEFAULT '';
-
-ALTER TABLE u_manutil DROP CONSTRAINT CK_u_manutil_perfil;
-ALTER TABLE u_manutil ADD CONSTRAINT CK_u_manutil_perfil CHECK (perfil IN ('OPERADOR', 'SUPERVISOR', 'QUALIDADE'));
 ```
+
+Em `u_manutil` não há nada a alterar: na base de testes `perfil` não tem restrição CHECK (verificado em 18/11/2026), por isso aceita `QUALIDADE`. Se uma base de produção tiver a restrição `CK_u_manutil_perfil` do script `criar-u_manutil.sql`, é preciso acrescentar-lhe `'QUALIDADE'`.
 
 `limrem` já existe (lógico) e passa a 1 quando a Qualidade conclui. O login SQL da API precisa de `UPDATE` nos campos novos (já o tem em `u_fichaint`).
 
