@@ -157,9 +157,9 @@
         _ocupado = true; _aviso = _erro = null;
         try
         {
-            await acao();
+            var resultado = await acao();
             _fichas.Remove(f);
-            Toast.Sucesso(sucesso);
+            Toast.Sucesso(resultado.Pendente ? "Guardado. Será enviado quando houver rede." : sucesso);
         }
         catch (InvalidOperationException ex)
         {

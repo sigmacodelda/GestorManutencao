@@ -211,7 +211,9 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     public Task<IReadOnlyList<Equipamento>> PesquisarAsync(string texto, CancellationToken ct = default)
     {
         Entrar("Pesquisar");
-        return Task.FromResult<IReadOnlyList<Equipamento>>(Equipamentos.Where(e => !e.Obsoleto && e.Nome.Contains(texto ?? "", StringComparison.OrdinalIgnoreCase)).ToList());
+        // Como a API real: a pesquisa leve sem texto devolve lista vazia.
+        if (string.IsNullOrWhiteSpace(texto)) return Task.FromResult<IReadOnlyList<Equipamento>>([]);
+        return Task.FromResult<IReadOnlyList<Equipamento>>(Equipamentos.Where(e => !e.Obsoleto && e.Nome.Contains(texto, StringComparison.OrdinalIgnoreCase)).ToList());
     }
 
     public Task<IReadOnlyList<Equipamento>> ListarAsync(FiltroEquipamentos filtro, CancellationToken ct = default)
@@ -227,9 +229,32 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
         return Task.FromResult(e is null ? null : new FichaEquipamento(e, [], []));
     }
 
-    public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default)
+    {
+        Entrar("ListarPorValidar");
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(Fichas.Values.Where(f => f.Estado == EstadoIntervencao.Concluida).ToList());
+    }
+
+    // Validadas ainda sem conclusão da Qualidade; Higienizacoes guarda quem higienizou (por ficha).
+    public Dictionary<string, string> Higienizacoes { get; } = [];
+
+    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default)
+    {
+        Entrar("ListarPorConcluir");
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(Fichas.Values.Where(f => f.Estado == EstadoIntervencao.Validada && !Higienizacoes.ContainsKey(f.Id)).ToList());
+    }
+
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default)
+    {
+        Entrar("ConcluirQualidade", id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id);
+            if (f is not { Estado: EstadoIntervencao.Validada } || Higienizacoes.ContainsKey(id)) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            Higienizacoes[id] = higienizacao;
+            return Task.FromResult(f);
+        }
+    }
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default)
     {
         Entrar("Validar", id);
@@ -239,7 +264,16 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
             return Task.FromResult(Fichas[id] = f with { Estado = EstadoIntervencao.Validada });
         }
     }
-    public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default)
+    {
+        Entrar("Devolver", id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id);
+            if (f is not { Estado: EstadoIntervencao.Concluida }) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            return Task.FromResult(Fichas[id] = f with { Estado = EstadoIntervencao.EmCurso, Motivo = motivo });
+        }
+    }
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) => throw new NotSupportedException();

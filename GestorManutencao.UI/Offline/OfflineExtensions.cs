@@ -19,7 +19,7 @@ public static class OfflineExtensions
         services.TryAddSingleton<IArmazemFotosPendentes, ArmazemFotosPendentesMemoria>();
         services.TryAddSingleton<IRedeEstado, RedeEstadoManual>();
         services.TryAddScoped<IDonoDados, DonoDadosSessao>();
-        services.AddScoped<ManutencaoCache>().AddScoped<SincronizadorFila>().AddScoped<AtualizadorCache>().AddScoped<OfflineIntervencoesService>();
+        services.AddScoped<ManutencaoCache>().AddScoped<SincronizadorFila>().AddScoped<AtualizadorCache>(sp => new AtualizadorCache(sp.GetRequiredService<IIntervencoesRemoto>(), sp.GetRequiredService<ManutencaoCache>(), sp.GetRequiredService<IRedeEstado>(), sp.GetRequiredService<TimeProvider>(), () => sp.GetRequiredService<SessaoService>().Utilizador?.Perfil)).AddScoped<OfflineIntervencoesService>();
         services.AddScoped<IIntervencoesService>(sp => sp.GetRequiredService<OfflineIntervencoesService>());
         services.AddScoped<IEquipamentosService>(sp => sp.GetRequiredService<OfflineIntervencoesService>());
         services.AddScoped<IEstadoLeitura>(sp => sp.GetRequiredService<OfflineIntervencoesService>());

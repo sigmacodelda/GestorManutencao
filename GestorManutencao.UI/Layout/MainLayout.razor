@@ -9,27 +9,10 @@
 @if (_pronto && Sessao.TemSessao)
 {
     <div class="shell">
-        @if (Offline.SemLigacao || Offline.TextoDados is not null || Offline.Estado != EstadoSincronizacao.Sincronizado)
-        {
-            <div class="faixa-estado" role="status" aria-live="polite">
-                @if (Offline.SemLigacao || Offline.TextoDados is not null)
-                {
-                    <span class="faixa-estado-item"><Icone Nome="wifi-off" /><span>Sem ligação. @(Offline.TextoDados ?? "Pode continuar a trabalhar.")</span></span>
-                }
-                @if (Offline.Estado == EstadoSincronizacao.ASincronizar)
-                {
-                    <span class="faixa-estado-item"><Icone Nome="refresh-cw" /><span>A enviar…</span></span>
-                }
-                else if (Offline.Pendentes > 0)
-                {
-                    <span class="faixa-estado-item"><Icone Nome="clock" /><span>@Offline.Pendentes por enviar</span></span>
-                }
-                @if (Offline.Conflitos > 0)
-                {
-                    <a class="faixa-estado-item faixa-estado-rever" href="por-rever"><Icone Nome="triangle-alert" /><span>@Offline.Conflitos por rever</span></a>
-                }
-            </div>
-        }
+        @* Em ecrã estreito o topo não aparece: o sinal de ligação fica flutuante no canto. *@
+        <div class="ligacao-flutuante">
+            <EstadoLigacao Estado="EstadoDaLigacao" Pendentes="Offline.Pendentes" Conflitos="Offline.Conflitos" />
+        </div>
         @if (_faixa is { } faixa)
         {
             <div class="faixa-aviso" role="status" aria-live="polite">
@@ -47,6 +30,7 @@
                     <span class="avatar" aria-hidden="true">@Sessao.Utilizador.Iniciais</span>
                     <span class="utilizador-nome">@Sessao.Utilizador.Nome</span>
                 </span>
+                <span class="so-largo-ligacao"><EstadoLigacao Estado="EstadoDaLigacao" Pendentes="Offline.Pendentes" Conflitos="Offline.Conflitos" /></span>
                 <ModoVisual />
                 <button type="button" class="btn-icone" aria-label="Terminar sessão" @onclick="Sair">
                     <Icone Nome="log-out" />
@@ -105,6 +89,12 @@
 }
 
 @code {
+    // Sem rede (ou sem dados do servidor) = cinzento; a enviar = amarelo; senão verde.
+    private EstadoLigacao.EstadoLigacaoApi EstadoDaLigacao =>
+        Offline.SemLigacao || Offline.TextoDados is not null ? EstadoLigacao.EstadoLigacaoApi.Sem
+        : Offline.Estado == EstadoSincronizacao.ASincronizar ? EstadoLigacao.EstadoLigacaoApi.Sincronizando
+        : EstadoLigacao.EstadoLigacaoApi.Ligado;
+
     private bool _pronto;
     private int _pendentesSaida;
     private Aviso? _faixa;

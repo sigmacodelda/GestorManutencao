@@ -121,9 +121,9 @@
         _ocupado = true; _erro = null;
         try
         {
-            await Intervencoes.ConcluirQualidadeAsync(f.Id, _higienizacao.Trim());
+            var resultado = await Intervencoes.ConcluirQualidadeAsync(f.Id, _higienizacao.Trim());
             _fichas.Remove(f);
-            Toast.Sucesso($"Concluída: {f.Equipamento}.");
+            Toast.Sucesso(resultado.Pendente ? "Guardado. Será enviado quando houver rede." : $"Concluída: {f.Equipamento}.");
         }
         catch (InvalidOperationException ex)
         {

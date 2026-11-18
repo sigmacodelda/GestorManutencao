@@ -166,6 +166,15 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
                 var conclusao = CargasFila.Ler<CargaConclusao>(operacao.Payload);
                 servidor[fichaId] = await remoto.ConcluirAsync(fichaId, conclusao.Feito, conclusao.Inicio, conclusao.Fim, ct);
                 break;
+            case TipoOperacao.Validar:
+                await remoto.ValidarAsync(fichaId, ct);
+                break;
+            case TipoOperacao.Devolver:
+                await remoto.DevolverAsync(fichaId, CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? "", ct);
+                break;
+            case TipoOperacao.ConcluirQualidade:
+                await remoto.ConcluirQualidadeAsync(fichaId, CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? "", ct);
+                break;
             case TipoOperacao.AdicionarMaterial:
                 await EnviarMaterialAsync(operacao, dono, ct);
                 break;
@@ -271,12 +280,14 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
         foreach (var a in afetadas)
             try { if (TextoDe(a) is { } t) textos.Add(t); }
             catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException) { }
-        var equipamento = mc.EDono(dono) ? (await Cache.ObterFichaAsync(operacao.FichaId))?.Equipamento ?? "" : "";
+        var decisao = operacao.Tipo is TipoOperacao.Validar or TipoOperacao.Devolver or TipoOperacao.ConcluirQualidade;
+        var equipamento = decisao ? EquipamentoDaDecisao(operacao) : mc.EDono(dono) ? (await Cache.ObterFichaAsync(operacao.FichaId))?.Equipamento ?? "" : "";
         var aviso = new AvisoConflito(Guid.NewGuid().ToString("N"), dono, operacao.FichaId, equipamento,
             mensagem ?? $"Não foi possível enviar o que registou sem rede. {motivo}", textos, tempo.GetUtcNow());
         await fila.AdicionarAvisoAsync(aviso);
         foreach (var a in afetadas) await fila.AtualizarAsync(a with { Estado = EstadoOperacao.Conflito, AvisoId = aviso.Id, UltimoErro = motivo ?? NaoAceitou });
-        await RefrescarDoServidorAsync(operacao.FichaId, dono, ct);
+        // As decisões do supervisor e da Qualidade não mexem nas fichas do técnico guardadas no telemóvel: a lista atualiza-se na próxima atualização da cache.
+        if (!decisao) await RefrescarDoServidorAsync(operacao.FichaId, dono, ct);
     }
 
     // Só a pausa da ficha volta ao que o servidor diz (sem mexer no resto da ficha, que pode ter operações por enviar).
@@ -303,8 +314,16 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
         TipoOperacao.RegistarAvaria => new("Descrição da avaria", CargasFila.Ler<CargaAvaria>(operacao.Payload).Anomalia),
         TipoOperacao.Concluir => new("O que foi feito", CargasFila.Ler<CargaConclusao>(operacao.Payload).Feito),
         TipoOperacao.AdicionarMaterial => new("Material", CargasFila.Ler<CargaMaterial>(operacao.Payload).Design),
+        TipoOperacao.Devolver => new("Motivo da devolução", CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? ""),
+        TipoOperacao.ConcluirQualidade => new("Quem fez a higienização", CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? ""),
         _ => null
     };
+
+    private static string EquipamentoDaDecisao(OperacaoSaida operacao)
+    {
+        try { return CargasFila.Ler<CargaDecisao>(operacao.Payload).Equipamento; }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException) { return ""; }
+    }
 
     // A ficha passa a mostrar o estado do servidor. Se não for possível agora, a próxima atualização da cache corrige-a.
     private async Task RefrescarDoServidorAsync(string fichaId, string dono, CancellationToken ct)

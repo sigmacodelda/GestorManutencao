@@ -33,6 +33,8 @@ internal sealed record CargaAvaria(string EquipamentoId, string Anomalia);
 internal sealed record CargaConclusao(string Feito, TimeOnly Inicio, TimeOnly Fim);
 internal sealed record CargaMaterial(string MaterialId, string Design, decimal Qtt, decimal Epv);
 internal sealed record CargaApagar(string ItemId);
+// Validar, Devolver (Texto = motivo) e ConcluirQualidade (Texto = quem higienizou); o equipamento serve ao aviso de conflito.
+internal sealed record CargaDecisao(string Equipamento, string? Texto);
 internal sealed record CargaFoto(string FotoId, string Nome, int Bytes);
 
 internal static class CargasFila
