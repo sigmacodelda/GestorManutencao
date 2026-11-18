@@ -371,6 +371,27 @@ equipa.MapPut("/{codigo}/tecno", async (string codigo, PedidoTecno pedido, Claim
     catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
 });
 
+// Apagar: só um supervisor ou o acesso de configuração; nunca a própria conta nem um supervisor.
+equipa.MapDelete("/{codigo}", async (string codigo, ClaimsPrincipal eu, IRepositorioUtilizadores repo, ILogger<Program> log, CancellationToken ct) =>
+{
+    if (!RegrasUtilizador.CodigoOk(codigo)) return Erro(400, "pedido_invalido");
+
+    try
+    {
+        if (await SupervisorAtual(eu, repo, ct) is not { } supervisor) return Results.Forbid();
+        if (string.Equals(supervisor.Codigo, codigo, StringComparison.OrdinalIgnoreCase)) return Erro(409, "propria_conta");
+        var resultado = await repo.ApagarUtilizadorAsync(codigo, ct);
+        if (resultado == ResultadoPin.Ok) log.LogInformation("Utilizador {Codigo} apagado por {Supervisor}.", codigo, supervisor.Codigo);
+        return resultado switch
+        {
+            ResultadoPin.Ok => Results.NoContent(),
+            ResultadoPin.Protegido => Erro(403, "supervisor_protegido"),
+            _ => Erro(404, "nao_existe")
+        };
+    }
+    catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
+});
+
 equipa.MapPost("/{codigo}/pin", async (string codigo, ClaimsPrincipal eu, IRepositorioUtilizadores repo, PinHasher hasher,
     HttpContext http, CancellationToken ct) =>
 {

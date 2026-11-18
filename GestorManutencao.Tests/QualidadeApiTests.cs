@@ -25,7 +25,8 @@ public class QualidadeApiTests : IDisposable
             (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), Hasher.Hash("482913")),
             (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), Hasher.Hash("603918")),
             (new UtilizadorApp("qual", "Marta Qualidade", Perfil.Qualidade, true, false), Hasher.Hash("715329")),
-            (new UtilizadorApp("qual2", "Qualidade Com Numero", Perfil.Qualidade, true, false, Tecno: 150), Hasher.Hash("951372"))
+            (new UtilizadorApp("qual2", "Qualidade Com Numero", Perfil.Qualidade, true, false, Tecno: 150), Hasher.Hash("951372")),
+            (new UtilizadorApp("chefe2", "Outro Chefe", Perfil.Supervisor, true, false, Tecno: 160), Hasher.Hash("268413"))
         ]))))
     );
 
@@ -147,5 +148,31 @@ public class QualidadeApiTests : IDisposable
         Assert.True(RegrasQualidade.AguardaQualidade("Validada", false));
         Assert.False(RegrasQualidade.AguardaQualidade("Validada", true));
         Assert.NotNull(RegrasQualidade.ValidarHigienizacao(new string('a', 61)));
+    }
+
+    [Fact]
+    public async Task Supervisor_apaga_utilizador_que_deixa_de_entrar()
+    {
+        var chefe = await ComoAsync("603918");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await chefe.DeleteAsync("/utilizadores/qual2")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await chefe.DeleteAsync("/utilizadores/qual2")).StatusCode);
+        var c = _fabrica.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await c.PostAsJsonAsync("/auth/login", new PedidoLogin("951372"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Nao_se_apaga_a_propria_conta_nem_outro_supervisor_e_operador_nao_apaga()
+    {
+        var chefe = await ComoAsync("603918");
+        var propria = await chefe.DeleteAsync("/utilizadores/chefe");
+        Assert.Equal(HttpStatusCode.Conflict, propria.StatusCode);
+        Assert.Contains("propria_conta", await propria.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Forbidden, (await chefe.DeleteAsync("/utilizadores/chefe2")).StatusCode);
+
+        var ana = await ComoAsync("482913");
+        Assert.Equal(HttpStatusCode.Forbidden, (await ana.DeleteAsync("/utilizadores/qual")).StatusCode);
+        var qual = await ComoAsync("715329");
+        Assert.Equal(HttpStatusCode.Forbidden, (await qual.DeleteAsync("/utilizadores/ana")).StatusCode);
     }
 }

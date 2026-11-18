@@ -20,6 +20,8 @@ public interface IEquipaService
     Task<RespostaEquipa> CriarAsync(string? token, string codigo, string nome, int tecno, bool supervisor = false, CancellationToken ct = default, bool qualidade = false);
     Task<RespostaEquipa> DefinirTecnoAsync(string? token, string codigo, int tecno, CancellationToken ct = default);
     Task<RespostaEquipa> NovoPinAsync(string? token, string codigo, CancellationToken ct = default);
+    // Apaga o utilizador (só operadores e Qualidade; nunca supervisores). Não se desfaz.
+    Task<RespostaEquipa> ApagarAsync(string? token, string codigo, CancellationToken ct = default);
 }
 
 public sealed class EquipaApiService(HttpClient http) : IEquipaService
@@ -43,6 +45,9 @@ public sealed class EquipaApiService(HttpClient http) : IEquipaService
     public Task<RespostaEquipa> NovoPinAsync(string? token, string codigo, CancellationToken ct = default) =>
         Enviar(Pedido(HttpMethod.Post, $"utilizadores/{Uri.EscapeDataString(codigo)}/pin", token), ct);
 
+    public Task<RespostaEquipa> ApagarAsync(string? token, string codigo, CancellationToken ct = default) =>
+        Enviar(Pedido(HttpMethod.Delete, $"utilizadores/{Uri.EscapeDataString(codigo)}", token), ct);
+
     private static HttpRequestMessage Pedido(HttpMethod metodo, string url, string? token, object? corpo = null) => new(metodo, url)
     {
         Headers = { Authorization = new AuthenticationHeaderValue("Bearer", token) },
@@ -56,6 +61,8 @@ public sealed class EquipaApiService(HttpClient http) : IEquipaService
             using (pedido)
             using (var resposta = await http.SendAsync(pedido, ct))
             {
+                if (resposta.StatusCode == HttpStatusCode.Conflict && (await resposta.Content.ReadAsStringAsync(ct)).Contains("propria_conta")) return new(ResultadoEquipa.SemPermissao);
+                if (resposta.StatusCode == HttpStatusCode.NotFound && pedido.Method == HttpMethod.Delete) return new(ResultadoEquipa.Ok);
                 if (resposta.StatusCode == HttpStatusCode.Conflict)
                     return new((await resposta.Content.ReadAsStringAsync(ct)).Contains("tecno_em_uso") ? ResultadoEquipa.TecnoEmUso : ResultadoEquipa.JaExiste);
                 if (resposta.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized) return new(ResultadoEquipa.SemPermissao);
@@ -110,6 +117,12 @@ public sealed class DevEquipaService : IEquipaService
             _equipa[pos] = _equipa[pos] with { Tecno = tecno };
             return Task.FromResult(new RespostaEquipa(ResultadoEquipa.Ok));
         }
+    }
+
+    public Task<RespostaEquipa> ApagarAsync(string? token, string codigo, CancellationToken ct = default)
+    {
+        lock (_trinco)
+            return Task.FromResult(new RespostaEquipa(_equipa.RemoveAll(m => m.Codigo == codigo && m.Perfil != Perfil.Supervisor) > 0 ? ResultadoEquipa.Ok : ResultadoEquipa.SemPermissao));
     }
 
     public Task<RespostaEquipa> NovoPinAsync(string? token, string codigo, CancellationToken ct = default)

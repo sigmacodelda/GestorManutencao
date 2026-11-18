@@ -101,7 +101,7 @@ public sealed class PinHasher(Microsoft.Extensions.Options.IOptions<PinOpcoes> o
     public string VersaoDev => DevAtivo ? Hash("dev-versao:" + opcoes.Value.Dev)[..16] : "";
 }
 
-public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste, TecnoEmUso }
+public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste, TecnoEmUso, Protegido }
 
 public sealed class RepositorioIndisponivelException(Exception? interna = null)
     : Exception("A base de dados dos utilizadores não está disponível.", interna);
@@ -116,6 +116,8 @@ public interface IRepositorioUtilizadores
     Task<ResultadoPin> CriarUtilizadorAsync(string codigo, string nome, Perfil perfil, int tecno, string pinHash, string porQuem, CancellationToken ct);
     // Cada número do PHC só pode estar numa pessoa (0 = sem número).
     Task<ResultadoPin> DefinirTecnoAsync(string codigo, int tecno, string porQuem, CancellationToken ct);
+    // Apaga a linha do utilizador (Protegido = é supervisor: esses nunca se apagam). As fichas já gravadas ficam com o código dele.
+    Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct);
     // Com pinHashAtual só muda se o PIN ainda for esse (evita que duas alterações em simultâneo se atropelem).
     Task<ResultadoPin> DefinirPinAsync(string codigo, string pinHash, bool provisorio, string porQuem, CancellationToken ct, string? pinHashAtual = null);
 }

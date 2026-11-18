@@ -73,6 +73,21 @@
                         {
                             <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => NovoPinAsync(m)">Novo PIN</button>
                         }
+                        @if (m.Perfil != Perfil.Supervisor)
+                        {
+                            @if (_aApagar == m.Codigo)
+                            {
+                                <p class="ficha-texto">Apagar <strong>@m.Nome</strong>? Deixa de entrar na app e não se desfaz. As fichas já feitas ficam, com o código dele.</p>
+                                <div class="ficha-acoes">
+                                    <button type="button" class="btn" disabled="@_ocupado" @onclick="() => ApagarAsync(m)"><Icone Nome="x" /><span>Apagar</span></button>
+                                    <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aApagar = null">Cancelar</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => _aApagar = m.Codigo">Apagar utilizador</button>
+                            }
+                        }
                         @if (_aEditar == m.Codigo)
                         {
                             <div class="ficha-acoes">
@@ -94,7 +109,7 @@
 @code {
     private IReadOnlyList<MembroEquipa> _membros = [];
     private string _nome = "", _codigo = "", _tecno = "", _tecnoEditado = "", _erro = "", _pinDe = "";
-    private string? _aEditar;
+    private string? _aEditar, _aApagar;
     private string? _pinNovo;
     private bool _a_carregar = true, _ocupado, _supervisor, _qualidade;
 
@@ -160,6 +175,20 @@
         try
         {
             if (Tratar(await ServicoEquipa.NovoPinAsync(Sessao.Utilizador?.Token, m.Codigo), m.Nome)) await CarregarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task ApagarAsync(MembroEquipa m)
+    {
+        _erro = "";
+        _ocupado = true;
+        try
+        {
+            var r = await ServicoEquipa.ApagarAsync(Sessao.Utilizador?.Token, m.Codigo);
+            _aApagar = null;
+            if (r.Resultado == ResultadoEquipa.Ok) await CarregarAsync();
+            else _erro = r.Resultado == ResultadoEquipa.SemPermissao ? "Não pode apagar este utilizador." : "Não foi possível ligar ao servidor. Tente outra vez.";
         }
         finally { _ocupado = false; }
     }

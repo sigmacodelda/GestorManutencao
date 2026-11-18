@@ -56,6 +56,17 @@ public sealed class RepositorioUtilizadoresMemoria : IRepositorioUtilizadores
         }
     }
 
+    public Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (!_dados.TryGetValue(codigo, out var x)) return Task.FromResult(ResultadoPin.NaoExiste);
+            if (x.U.Perfil == Perfil.Supervisor) return Task.FromResult(ResultadoPin.Protegido);
+            _dados.Remove(codigo);
+            return Task.FromResult(ResultadoPin.Ok);
+        }
+    }
+
     public Task<ResultadoPin> DefinirPinAsync(string codigo, string pinHash, bool provisorio, string porQuem, CancellationToken ct, string? pinHashAtual = null)
     {
         lock (_trinco)
@@ -176,6 +187,19 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         cmd.Parameters.Add("@tecno", SqlDbType.Decimal).Value = (decimal)tecno;
         Auditoria(cmd, porQuem);
         return await cmd.ExecuteNonQueryAsync(ct) == 0 ? ResultadoPin.NaoExiste : ResultadoPin.Ok;
+    });
+
+    // O perfil vai na própria condição: um supervisor nunca se apaga por aqui. Pressupõe DELETE em u_manutil para o login da API.
+    private const string SqlApagar = "delete from u_manutil where utilizador = @codigo and upper(rtrim(perfil)) <> 'SUPERVISOR'";
+
+    public Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct) => Executar(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlApagar, conn);
+        Texto(cmd, "@codigo", 30, codigo);
+        if (await cmd.ExecuteNonQueryAsync(ct) > 0) return ResultadoPin.Ok;
+        await using var existe = new SqlCommand("select count(*) from u_manutil with (nolock) where utilizador = @codigo", conn);
+        Texto(existe, "@codigo", 30, codigo);
+        return (int)(await existe.ExecuteScalarAsync(ct))! > 0 ? ResultadoPin.Protegido : ResultadoPin.NaoExiste;
     });
 
     public async Task<ResultadoPin> CriarUtilizadorAsync(string codigo, string nome, Perfil perfil, int tecno, string pinHash, string porQuem, CancellationToken ct)
