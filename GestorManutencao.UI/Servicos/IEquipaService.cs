@@ -20,8 +20,8 @@ public interface IEquipaService
     Task<RespostaEquipa> CriarAsync(string? token, string codigo, string nome, int tecno, bool supervisor = false, CancellationToken ct = default, bool qualidade = false);
     Task<RespostaEquipa> DefinirTecnoAsync(string? token, string codigo, int tecno, CancellationToken ct = default);
     Task<RespostaEquipa> NovoPinAsync(string? token, string codigo, CancellationToken ct = default);
-    // Apaga o utilizador (só operadores e Qualidade; nunca supervisores). Não se desfaz.
-    Task<RespostaEquipa> ApagarAsync(string? token, string codigo, CancellationToken ct = default);
+    // Inativa ou reativa o utilizador (só operadores e Qualidade; nunca supervisores). Nunca se apaga.
+    Task<RespostaEquipa> DefinirAtivoAsync(string? token, string codigo, bool ativo, CancellationToken ct = default);
 }
 
 public sealed class EquipaApiService(HttpClient http) : IEquipaService
@@ -45,8 +45,8 @@ public sealed class EquipaApiService(HttpClient http) : IEquipaService
     public Task<RespostaEquipa> NovoPinAsync(string? token, string codigo, CancellationToken ct = default) =>
         Enviar(Pedido(HttpMethod.Post, $"utilizadores/{Uri.EscapeDataString(codigo)}/pin", token), ct);
 
-    public Task<RespostaEquipa> ApagarAsync(string? token, string codigo, CancellationToken ct = default) =>
-        Enviar(Pedido(HttpMethod.Delete, $"utilizadores/{Uri.EscapeDataString(codigo)}", token), ct);
+    public Task<RespostaEquipa> DefinirAtivoAsync(string? token, string codigo, bool ativo, CancellationToken ct = default) =>
+        Enviar(Pedido(HttpMethod.Put, $"utilizadores/{Uri.EscapeDataString(codigo)}/ativo", token, new { ativo }), ct);
 
     private static HttpRequestMessage Pedido(HttpMethod metodo, string url, string? token, object? corpo = null) => new(metodo, url)
     {
@@ -119,10 +119,15 @@ public sealed class DevEquipaService : IEquipaService
         }
     }
 
-    public Task<RespostaEquipa> ApagarAsync(string? token, string codigo, CancellationToken ct = default)
+    public Task<RespostaEquipa> DefinirAtivoAsync(string? token, string codigo, bool ativo, CancellationToken ct = default)
     {
         lock (_trinco)
-            return Task.FromResult(new RespostaEquipa(_equipa.RemoveAll(m => m.Codigo == codigo && m.Perfil != Perfil.Supervisor) > 0 ? ResultadoEquipa.Ok : ResultadoEquipa.SemPermissao));
+        {
+            var pos = _equipa.FindIndex(m => m.Codigo == codigo && m.Perfil != Perfil.Supervisor);
+            if (pos < 0) return Task.FromResult(new RespostaEquipa(ResultadoEquipa.SemPermissao));
+            _equipa[pos] = _equipa[pos] with { Ativo = ativo };
+            return Task.FromResult(new RespostaEquipa(ResultadoEquipa.Ok));
+        }
     }
 
     public Task<RespostaEquipa> NovoPinAsync(string? token, string codigo, CancellationToken ct = default)

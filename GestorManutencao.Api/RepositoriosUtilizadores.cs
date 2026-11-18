@@ -73,13 +73,13 @@ public sealed class RepositorioUtilizadoresMemoria : IRepositorioUtilizadores
         }
     }
 
-    public Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct)
+    public Task<ResultadoPin> DefinirAtivoAsync(string codigo, bool ativo, string porQuem, CancellationToken ct)
     {
         lock (_trinco)
         {
             if (!_dados.TryGetValue(codigo, out var x)) return Task.FromResult(ResultadoPin.NaoExiste);
             if (x.U.Perfil == Perfil.Supervisor) return Task.FromResult(ResultadoPin.Protegido);
-            _dados.Remove(codigo);
+            _dados[codigo] = (x.U with { Ativo = ativo, Versao = ++_versao }, x.Hash);
             return Task.FromResult(ResultadoPin.Ok);
         }
     }
@@ -206,7 +206,6 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         return await cmd.ExecuteNonQueryAsync(ct) == 0 ? ResultadoPin.NaoExiste : ResultadoPin.Ok;
     });
 
-    // O perfil vai na própria condição: um supervisor nunca se apaga por aqui. Pressupõe DELETE em u_manutil para o login da API.
     private const string SqlAssinatura = "select cast(isnull(assinatura, '') as varchar(max)) from u_manutil with (nolock) where utilizador = @codigo";
     private const string SqlDefinirAssinatura =
         """
@@ -230,12 +229,19 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         return await cmd.ExecuteNonQueryAsync(ct) == 0 ? ResultadoPin.NaoExiste : ResultadoPin.Ok;
     });
 
-    private const string SqlApagar = "delete from u_manutil where utilizador = @codigo and upper(rtrim(perfil)) <> 'SUPERVISOR'";
+    // O perfil vai na própria condição: um supervisor nunca se inativa por aqui. Os utilizadores nunca se apagam.
+    private const string SqlDefinirAtivo =
+        """
+        update u_manutil set ativo = @ativo, usrinis = @por, usrdata = @dia, usrhora = @hora
+        where utilizador = @codigo and upper(rtrim(perfil)) <> 'SUPERVISOR'
+        """;
 
-    public Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct) => Executar(async conn =>
+    public Task<ResultadoPin> DefinirAtivoAsync(string codigo, bool ativo, string porQuem, CancellationToken ct) => Executar(async conn =>
     {
-        await using var cmd = new SqlCommand(SqlApagar, conn);
+        await using var cmd = new SqlCommand(SqlDefinirAtivo, conn);
         Texto(cmd, "@codigo", 30, codigo);
+        cmd.Parameters.Add("@ativo", SqlDbType.Bit).Value = ativo;
+        Auditoria(cmd, porQuem);
         if (await cmd.ExecuteNonQueryAsync(ct) > 0) return ResultadoPin.Ok;
         await using var existe = new SqlCommand("select count(*) from u_manutil with (nolock) where utilizador = @codigo", conn);
         Texto(existe, "@codigo", 30, codigo);

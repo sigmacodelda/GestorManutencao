@@ -388,8 +388,8 @@ equipa.MapPut("/{codigo}/tecno", async (string codigo, PedidoTecno pedido, Claim
     catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
 });
 
-// Apagar: só um supervisor ou o acesso de configuração; nunca a própria conta nem um supervisor.
-equipa.MapDelete("/{codigo}", async (string codigo, ClaimsPrincipal eu, IRepositorioUtilizadores repo, ILogger<Program> log, CancellationToken ct) =>
+// Inativar ou reativar (nunca se apaga): só um supervisor; nunca a própria conta nem outro supervisor.
+equipa.MapPut("/{codigo}/ativo", async (string codigo, PedidoAtivo pedido, ClaimsPrincipal eu, IRepositorioUtilizadores repo, ILogger<Program> log, CancellationToken ct) =>
 {
     if (!RegrasUtilizador.CodigoOk(codigo)) return Erro(400, "pedido_invalido");
 
@@ -397,8 +397,8 @@ equipa.MapDelete("/{codigo}", async (string codigo, ClaimsPrincipal eu, IReposit
     {
         if (await SupervisorAtual(eu, repo, ct) is not { } supervisor) return Results.Forbid();
         if (string.Equals(supervisor.Codigo, codigo, StringComparison.OrdinalIgnoreCase)) return Erro(409, "propria_conta");
-        var resultado = await repo.ApagarUtilizadorAsync(codigo, ct);
-        if (resultado == ResultadoPin.Ok) log.LogInformation("Utilizador {Codigo} apagado por {Supervisor}.", codigo, supervisor.Codigo);
+        var resultado = await repo.DefinirAtivoAsync(codigo, pedido.Ativo, supervisor.Codigo, ct);
+        if (resultado == ResultadoPin.Ok) log.LogInformation("Utilizador {Codigo} {Estado} por {Supervisor}.", codigo, pedido.Ativo ? "reativado" : "inativado", supervisor.Codigo);
         return resultado switch
         {
             ResultadoPin.Ok => Results.NoContent(),

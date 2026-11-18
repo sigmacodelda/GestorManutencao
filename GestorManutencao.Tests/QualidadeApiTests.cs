@@ -150,29 +150,37 @@ public class QualidadeApiTests : IDisposable
         Assert.NotNull(RegrasQualidade.ValidarHigienizacao(new string('a', 61)));
     }
 
+    private static Task<HttpResponseMessage> Ativo(HttpClient c, string codigo, bool ativo) => c.PutAsJsonAsync($"/utilizadores/{codigo}/ativo", new PedidoAtivo(ativo));
+
     [Fact]
-    public async Task Supervisor_apaga_utilizador_que_deixa_de_entrar()
+    public async Task Supervisor_inativa_utilizador_que_deixa_de_entrar_e_pode_reativar()
     {
         var chefe = await ComoAsync("603918");
 
-        Assert.Equal(HttpStatusCode.NoContent, (await chefe.DeleteAsync("/utilizadores/qual2")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await chefe.DeleteAsync("/utilizadores/qual2")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Ativo(chefe, "qual2", false)).StatusCode);
         var c = _fabrica.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await c.PostAsJsonAsync("/auth/login", new PedidoLogin("951372"))).StatusCode);
+        // Continua na lista (nunca se apaga).
+        Assert.Contains("qual2", await chefe.GetStringAsync("/utilizadores"));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await Ativo(chefe, "qual2", true)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/auth/login", new PedidoLogin("951372"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Ativo(chefe, "nao.existe", false)).StatusCode);
+        Assert.NotEqual(HttpStatusCode.NoContent, (await chefe.DeleteAsync("/utilizadores/qual2")).StatusCode); // apagar já não existe
     }
 
     [Fact]
-    public async Task Nao_se_apaga_a_propria_conta_nem_outro_supervisor_e_operador_nao_apaga()
+    public async Task Nao_se_inativa_a_propria_conta_nem_outro_supervisor_e_operador_nao_inativa()
     {
         var chefe = await ComoAsync("603918");
-        var propria = await chefe.DeleteAsync("/utilizadores/chefe");
+        var propria = await Ativo(chefe, "chefe", false);
         Assert.Equal(HttpStatusCode.Conflict, propria.StatusCode);
         Assert.Contains("propria_conta", await propria.Content.ReadAsStringAsync());
-        Assert.Equal(HttpStatusCode.Forbidden, (await chefe.DeleteAsync("/utilizadores/chefe2")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Ativo(chefe, "chefe2", false)).StatusCode);
 
         var ana = await ComoAsync("482913");
-        Assert.Equal(HttpStatusCode.Forbidden, (await ana.DeleteAsync("/utilizadores/qual")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Ativo(ana, "qual", false)).StatusCode);
         var qual = await ComoAsync("715329");
-        Assert.Equal(HttpStatusCode.Forbidden, (await qual.DeleteAsync("/utilizadores/ana")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Ativo(qual, "ana", false)).StatusCode);
     }
 }

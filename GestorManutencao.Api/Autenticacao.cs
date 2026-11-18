@@ -19,6 +19,7 @@ public sealed record PedidoLogin(string? Pin)
     private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
 }
 
+public sealed record PedidoAtivo(bool Ativo);
 public sealed record PedidoAssinatura(string? Assinatura);
 
 // A assinatura é um desenho (PNG em data URL) guardado no memo do utilizador.
@@ -134,8 +135,8 @@ public interface IRepositorioUtilizadores
     Task<ResultadoPin> CriarUtilizadorAsync(string codigo, string nome, Perfil perfil, int tecno, string pinHash, string porQuem, CancellationToken ct);
     // Cada número do PHC só pode estar numa pessoa (0 = sem número).
     Task<ResultadoPin> DefinirTecnoAsync(string codigo, int tecno, string porQuem, CancellationToken ct);
-    // Apaga a linha do utilizador (Protegido = é supervisor: esses nunca se apagam). As fichas já gravadas ficam com o código dele.
-    Task<ResultadoPin> ApagarUtilizadorAsync(string codigo, CancellationToken ct);
+    // Inativa ou reativa o utilizador; nunca se apaga (Protegido = é supervisor: esses não se inativam por aqui). Inativo deixa de entrar e as fichas ficam com o código dele.
+    Task<ResultadoPin> DefinirAtivoAsync(string codigo, bool ativo, string porQuem, CancellationToken ct);
     // Assinatura escrita pela própria pessoa (memo em u_manutil); só se guarda, não se usa em mais nada por agora.
     Task<string?> ObterAssinaturaAsync(string codigo, CancellationToken ct);
     Task<ResultadoPin> DefinirAssinaturaAsync(string codigo, string assinatura, CancellationToken ct);

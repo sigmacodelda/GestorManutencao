@@ -24,7 +24,7 @@
         window.gmAssinatura = (function () {
             var estados = {};
             function pos(c, e) { var r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height }; }
-            function fundo(c) { var g = c.getContext("2d"); g.fillStyle = "#ffffff"; g.fillRect(0, 0, c.width, c.height); g.strokeStyle = "#1A1731"; g.lineWidth = 3; g.lineCap = "round"; g.lineJoin = "round"; }
+            function fundo(c) { var g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height); /* PNG com fundo transparente; o fundo branco é só do CSS */ g.strokeStyle = "#1A1731"; g.lineWidth = 3; g.lineCap = "round"; g.lineJoin = "round"; }
             return {
                 iniciar: function (id, ref) {
                     var c = document.getElementById(id); if (!c) return;

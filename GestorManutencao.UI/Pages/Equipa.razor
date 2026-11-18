@@ -82,17 +82,21 @@
                         }
                         @if (m.Perfil != Perfil.Supervisor)
                         {
-                            @if (_aApagar == m.Codigo)
+                            @if (m.Ativo && _aInativar == m.Codigo)
                             {
-                                <p class="ficha-texto">Apagar <strong>@m.Nome</strong>? Deixa de entrar na app e não se desfaz. As fichas já feitas ficam, com o código dele.</p>
+                                <p class="ficha-texto">Inativar <strong>@m.Nome</strong>? Deixa de entrar na app. As fichas já feitas ficam e pode reativar quando quiser.</p>
                                 <div class="ficha-acoes">
-                                    <button type="button" class="btn" disabled="@_ocupado" @onclick="() => ApagarAsync(m)"><Icone Nome="x" /><span>Apagar</span></button>
-                                    <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aApagar = null">Cancelar</button>
+                                    <button type="button" class="btn" disabled="@_ocupado" @onclick="() => DefinirAtivoAsync(m, false)"><Icone Nome="x" /><span>Inativar</span></button>
+                                    <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aInativar = null">Cancelar</button>
                                 </div>
+                            }
+                            else if (m.Ativo)
+                            {
+                                <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => _aInativar = m.Codigo">Inativar utilizador</button>
                             }
                             else
                             {
-                                <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => _aApagar = m.Codigo">Apagar utilizador</button>
+                                <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => DefinirAtivoAsync(m, true)">Reativar utilizador</button>
                             }
                         }
                         @if (_aEditar == m.Codigo)
@@ -116,7 +120,7 @@
 @code {
     private IReadOnlyList<MembroEquipa> _membros = [];
     private string _nome = "", _codigo = "", _tecno = "", _tecnoEditado = "", _erro = "", _pinDe = "";
-    private string? _aEditar, _aApagar;
+    private string? _aEditar, _aInativar;
     private string? _pinNovo;
     private bool _a_carregar = true, _ocupado;
     private Perfil _perfil = Perfil.Operador;
@@ -187,16 +191,16 @@
         finally { _ocupado = false; }
     }
 
-    private async Task ApagarAsync(MembroEquipa m)
+    private async Task DefinirAtivoAsync(MembroEquipa m, bool ativo)
     {
         _erro = "";
         _ocupado = true;
         try
         {
-            var r = await ServicoEquipa.ApagarAsync(Sessao.Utilizador?.Token, m.Codigo);
-            _aApagar = null;
+            var r = await ServicoEquipa.DefinirAtivoAsync(Sessao.Utilizador?.Token, m.Codigo, ativo);
+            _aInativar = null;
             if (r.Resultado == ResultadoEquipa.Ok) await CarregarAsync();
-            else _erro = r.Resultado == ResultadoEquipa.SemPermissao ? "Não pode apagar este utilizador." : "Não foi possível ligar ao servidor. Tente outra vez.";
+            else _erro = r.Resultado == ResultadoEquipa.SemPermissao ? "Não pode alterar este utilizador." : "Não foi possível ligar ao servidor. Tente outra vez.";
         }
         finally { _ocupado = false; }
     }
