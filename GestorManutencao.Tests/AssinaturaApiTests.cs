@@ -37,30 +37,35 @@ public class AssinaturaApiTests : IDisposable
         return c;
     }
 
+    // PNG de 1x1 pixel (cabeçalho válido).
+    private const string Png = RegrasAssinatura.Prefixo + "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
     [Fact]
     public async Task Sem_assinatura_devolve_vazio_e_guarda_so_a_da_propria_pessoa()
     {
         var ana = await ComoAsync("482913");
         Assert.Equal("", (await ana.GetFromJsonAsync<PedidoAssinatura>("/auth/assinatura"))!.Assinatura);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await ana.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura("  Ana Silva, técnica  "))).StatusCode);
-        Assert.Equal("Ana Silva, técnica", (await ana.GetFromJsonAsync<PedidoAssinatura>("/auth/assinatura"))!.Assinatura);
+        Assert.Equal(HttpStatusCode.NoContent, (await ana.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura(Png))).StatusCode);
+        Assert.Equal(Png, (await ana.GetFromJsonAsync<PedidoAssinatura>("/auth/assinatura"))!.Assinatura);
 
         var qual = await ComoAsync("715329");
         Assert.Equal("", (await qual.GetFromJsonAsync<PedidoAssinatura>("/auth/assinatura"))!.Assinatura);
-        Assert.Equal(HttpStatusCode.NoContent, (await qual.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura("Marta"))).StatusCode);
-        Assert.Equal("Ana Silva, técnica", (await ana.GetFromJsonAsync<PedidoAssinatura>("/auth/assinatura"))!.Assinatura);
+        Assert.Equal(HttpStatusCode.NoContent, (await qual.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura(Png))).StatusCode);
+        Assert.Equal(Png, (await ana.GetFromJsonAsync<PedidoAssinatura>("/auth/assinatura"))!.Assinatura);
     }
 
     [Fact]
-    public async Task Assinatura_demasiado_longa_e_recusada_e_sem_token_da_401()
+    public async Task Assinatura_obrigatoria_so_aceita_um_desenho_png_valido()
     {
         var ana = await ComoAsync("482913");
-        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura(new string('a', PedidoAssinatura.Max + 1)))).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await ana.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura(new string('a', PedidoAssinatura.Max)))).StatusCode);
+        foreach (var mau in new[] { "", "   ", "Ana Silva", "data:image/png;base64,", "data:image/png;base64,naoebase64!!", "data:image/png;base64,SGVsbG8gV29ybGQ=", "data:image/jpeg;base64,/9j/4AAQ", RegrasAssinatura.Prefixo + new string('A', RegrasAssinatura.Max) })
+            Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura(mau))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura(null))).StatusCode);
+        Assert.Equal("", (await ana.GetFromJsonAsync<PedidoAssinatura>("/auth/assinatura"))!.Assinatura);
 
         var anonimo = _fabrica.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonimo.GetAsync("/auth/assinatura")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await anonimo.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura("x"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonimo.PutAsJsonAsync("/auth/assinatura", new PedidoAssinatura(Png))).StatusCode);
     }
 }

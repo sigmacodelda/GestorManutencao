@@ -313,7 +313,7 @@ app.MapGet("/auth/assinatura", async (ClaimsPrincipal eu, IRepositorioUtilizador
 app.MapPut("/auth/assinatura", async (PedidoAssinatura pedido, ClaimsPrincipal eu, IRepositorioUtilizadores repo, CancellationToken ct) =>
 {
     var texto = (pedido.Assinatura ?? "").Trim();
-    if (texto.Length > PedidoAssinatura.Max) return Erro(400, "assinatura_longa");
+    if (!RegrasAssinatura.Valida(texto)) return Erro(400, texto.Length == 0 ? "assinatura_vazia" : "assinatura_invalida");
     if (Codigo(eu) is not { } codigo) return Results.Unauthorized();
     try { return await repo.DefinirAssinaturaAsync(codigo, texto, ct) == ResultadoPin.Ok ? Results.NoContent() : Erro(404, "nao_existe"); }
     catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }

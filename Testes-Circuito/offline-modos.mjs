@@ -88,8 +88,29 @@ async function entrar(page, pin) {
   await page.locator('.teclado').waitFor({ timeout: 30000 });
   for (const d of pin) await page.locator('.teclado button.tecla', { hasText: new RegExp(`^${d}$`) }).first().click();
   const hero = page.locator('.hero-texto');
-  if (!(await hero.waitFor({ timeout: 4000 }).then(() => true, () => false))) await botao(page, 'Entrar').click();
-  await hero.waitFor({ timeout: 30000 });
+  // Depois do PIN a app entra sozinha (início ou, sem assinatura, a página da assinatura); se não entrar, carrega-se em Entrar.
+  const ass = page.locator('#assinatura-tela');
+  const aguardar = (ms) => Promise.race([hero.waitFor({ timeout: ms }).then(() => false), ass.waitFor({ timeout: ms }).then(() => true)]);
+  let pede;
+  try { pede = await aguardar(5000); } catch { await botao(page, 'Entrar').click(); pede = await aguardar(30000); }
+  if (pede) {
+    afirma((await page.locator('nav.navegacao:visible').count()) === 0, 'a navegação devia estar escondida até haver assinatura');
+    afirma(await botao(page, 'Guardar').isDisabled(), 'Guardar devia estar bloqueado sem texto');
+    await foto(page, `assinatura-obrigatoria-${pin}`);
+    await desenhar(page);
+    await botao(page, 'Guardar').click();
+    await hero.waitFor({ timeout: 20000 });
+    assinaturasPedidas++;
+  }
+}
+let assinaturasPedidas = 0;
+// Desenha um traço no canvas com o rato (como o dedo no telemóvel).
+async function desenhar(page) {
+  const c = page.locator('#assinatura-tela'); await c.scrollIntoViewIfNeeded();
+  const b = await c.boundingBox();
+  await page.mouse.move(b.x + b.width * 0.15, b.y + b.height * 0.6); await page.mouse.down();
+  for (let i = 1; i <= 12; i++) await page.mouse.move(b.x + b.width * (0.15 + 0.06 * i), b.y + b.height * (0.6 - 0.25 * Math.sin(i / 2)), { steps: 3 });
+  await page.mouse.up();
 }
 async function sair(page) {
   // Em telemóvel o cabeçalho está escondido: sai-se pelo botão do início (hero) ou, se tapado, pelo botão visível.
@@ -209,13 +230,14 @@ try {
     });
     await passo('Técnico: escreve a assinatura e fica guardada no utilizador (API)', async () => {
       await ir(page, '/assinatura');
-      await page.locator('#assinatura').waitFor({ timeout: 15000 });
-      await page.locator('#assinatura').fill(`Ana Silva (${M})`);
+      await page.locator('#assinatura-tela').waitFor({ timeout: 15000 });
+      await botao(page, 'Limpar').waitFor({ timeout: 5000 });
+      await desenhar(page);
       await foto(page, 'tecnico-assinatura');
       await botao(page, 'Guardar').click();
       await page.locator('.toast', { hasText: 'Assinatura guardada' }).first().waitFor({ timeout: 15000 });
       const r = await http(tokenT, 'GET', '/auth/assinatura');
-      afirma(r.json?.assinatura === `Ana Silva (${M})`, `a API devolveu ${JSON.stringify(r.json)}`);
+      afirma(/^data:image\/png;base64,/.test(r.json?.assinatura ?? '') && r.json.assinatura.length > 400, `a API devolveu ${JSON.stringify(r.json).slice(0, 80)}`);
       await transbordo(page); await semErro(page);
     });
     await sair(page);
@@ -258,6 +280,7 @@ try {
     await passo('Supervisor: SEM REDE, o que exige rede avisa em vez de falhar calado (planeadas/equipa)', async () => {
       await ir(page, '/equipa'); await page.locator('h1', { hasText: 'Equipa' }).waitFor({ timeout: 10000 }); await espera(2500);
       await foto(page, 'supervisor-equipa-offline'); await semErro(page);
+      for (const perfil of ['Operador', 'Qualidade', 'Supervisor']) afirma(await page.locator('.segmento', { hasText: perfil }).first().isVisible(), `falta o perfil ${perfil} em Equipa`);
       return (await page.locator('.campo-erro, .estado-lista, .alerta').allInnerTexts()).join(' | ').slice(0, 160);
     });
     ligar();

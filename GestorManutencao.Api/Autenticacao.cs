@@ -19,9 +19,22 @@ public sealed record PedidoLogin(string? Pin)
     private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
 }
 
-public sealed record PedidoAssinatura(string? Assinatura)
+public sealed record PedidoAssinatura(string? Assinatura);
+
+// A assinatura é um desenho (PNG em data URL) guardado no memo do utilizador.
+public static class RegrasAssinatura
 {
-    public const int Max = 1000;
+    public const string Prefixo = "data:image/png;base64,";
+    public const int Max = 200_000;
+    private static readonly byte[] CabecalhoPng = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    public static bool Valida(string? texto)
+    {
+        if (string.IsNullOrEmpty(texto) || texto.Length > Max || !texto.StartsWith(Prefixo, StringComparison.Ordinal)) return false;
+        var dados = texto.AsSpan(Prefixo.Length);
+        var buffer = new byte[dados.Length / 4 * 3 + 3];
+        return Convert.TryFromBase64Chars(dados, buffer, out var n) && n > CabecalhoPng.Length && buffer.AsSpan(0, CabecalhoPng.Length).SequenceEqual(CabecalhoPng);
+    }
 }
 
 public sealed record PedidoMudarPin(string? PinAtual, string? PinNovo)

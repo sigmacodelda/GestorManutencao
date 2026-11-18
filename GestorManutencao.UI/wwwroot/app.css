@@ -784,3 +784,9 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
     .so-largo-ligacao { display: none; }
     .conteudo-wrap { padding-top: calc(var(--esp-4) + 22px + env(safe-area-inset-top)); }
 }
+
+
+/* Assinatura desenhada: tela branca (o traço é azul-escuro), com proporção fixa em qualquer largura. */
+.assinatura-tela { display: block; width: 100%; max-width: 600px; aspect-ratio: 5 / 2; height: auto; background: #fff; border: 2px solid var(--borda, #CAC9C9); border-radius: 12px; touch-action: none; cursor: crosshair; }
+
+.segmento:disabled { opacity: .45; cursor: not-allowed; }

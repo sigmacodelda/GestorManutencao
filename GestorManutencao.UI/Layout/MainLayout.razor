@@ -5,6 +5,7 @@
 @inject NotificacaoService Notificacoes
 @inject IGestorOffline Offline
 @inject CicloVidaApp Ciclo
+@inject IAssinaturaService Assinaturas
 
 @if (_pronto && Sessao.TemSessao)
 {
@@ -38,7 +39,7 @@
             </div>
         </header>
         <div class="shell-corpo">
-            @if (Sessao.Utilizador is { PinProvisorio: false })
+            @if (Sessao.Utilizador is { PinProvisorio: false } && !Sessao.AssinaturaEmFalta)
             {
                 var supervisor = Sessao.Modo == ModoTrabalho.Supervisor;
                 <nav class="navegacao" aria-label="Navegação principal">
@@ -160,9 +161,42 @@
     {
         if (_pronto && Sessao.Utilizador is { PinProvisorio: true } && Nav.ToBaseRelativePath(Nav.Uri) != "pin")
             Nav.NavigateTo("pin", replace: true);
+        else if (_pronto && Sessao.Utilizador is { PinProvisorio: false })
+        {
+            if (Sessao.AssinaturaEmFalta && Nav.ToBaseRelativePath(Nav.Uri) != "assinatura") Nav.NavigateTo("assinatura", replace: true);
+            else if (!_assinaturaVista && !_aVerificarAssinatura) _ = VerificarAssinaturaAsync();
+        }
     }
 
-    private void Atualizar() => InvokeAsync(StateHasChanged);
+    // Quem ainda não tem assinatura tem de a escrever antes de continuar. Sem rede não se consegue saber e não se bloqueia ninguém:
+    // volta a verificar-se na navegação seguinte.
+    private bool _assinaturaVista, _aVerificarAssinatura;
+    private string? _assinaturaDe;
+
+    private async Task VerificarAssinaturaAsync()
+    {
+        _aVerificarAssinatura = true;
+        try
+        {
+            var r = await Assinaturas.LerAsync(Sessao.Utilizador?.Token);
+            if (r.Resultado != ResultadoAssinatura.Ok) return;
+            _assinaturaVista = true;
+            if (!RegrasAssinatura.EImagem(r.Texto))
+            {
+                Sessao.DefinirAssinaturaEmFalta(true);
+                await InvokeAsync(() => Nav.NavigateTo("assinatura", replace: true));
+            }
+        }
+        catch (Exception) { /* sem rede: tenta outra vez mais tarde */ }
+        finally { _aVerificarAssinatura = false; }
+    }
+
+    private void Atualizar()
+    {
+        var quem = Sessao.Utilizador?.Token;
+        if (quem != _assinaturaDe) { _assinaturaDe = quem; _assinaturaVista = false; }
+        InvokeAsync(StateHasChanged);
+    }
 
     public void Dispose()
     {

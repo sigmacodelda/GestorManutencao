@@ -14,6 +14,16 @@ public sealed class SessaoService(IAutenticacaoService autenticacao, IArmazemSes
     public bool PodeSerSupervisor => Utilizador?.Perfil == Perfil.Supervisor;
     public bool EQualidade => Utilizador?.Perfil == Perfil.Qualidade;
 
+    // Sem assinatura a pessoa só vê a página da assinatura. Só é verdadeiro depois de o servidor dizer que está vazia: sem rede não bloqueia.
+    public bool AssinaturaEmFalta { get; private set; }
+
+    public void DefinirAssinaturaEmFalta(bool emFalta)
+    {
+        if (AssinaturaEmFalta == emFalta) return;
+        AssinaturaEmFalta = emFalta;
+        Alterada?.Invoke();
+    }
+
     public event Action? Alterada;
 
     public async Task RestaurarAsync()
@@ -53,6 +63,7 @@ public sealed class SessaoService(IAutenticacaoService autenticacao, IArmazemSes
     public async Task SairAsync()
     {
         Utilizador = null;
+        AssinaturaEmFalta = false;
         Modo = ModoTrabalho.Operador;
         await armazem.LimparAsync();
         Alterada?.Invoke();

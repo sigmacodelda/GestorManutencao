@@ -30,7 +30,7 @@
         }
 
         <form class="formulario" @onsubmit="CriarAsync" novalidate>
-            <h2 class="titulo-grupo">@(Sessao.Utilizador?.Configuracao == true ? "Novo utilizador" : "Novo operador")</h2>
+            <h2 class="titulo-grupo">Novo utilizador</h2>
             <div class="campo">
                 <label for="nome">Nome</label>
                 <input id="nome" type="text" autocomplete="off" @bind="_nome" @bind:event="oninput" />
@@ -45,14 +45,15 @@
             </div>
             <div class="campo">
                 <span id="perfil-rotulo" class="campo-rotulo">Perfil</span>
-                <div class="segmentos" role="group" aria-labelledby="perfil-rotulo" style="grid-template-columns: repeat(@(Sessao.Utilizador?.Configuracao == true ? 3 : 2), 1fr); max-width: none;">
+                <div class="segmentos" role="group" aria-labelledby="perfil-rotulo" style="grid-template-columns: repeat(3, 1fr); max-width: none;">
                     <button type="button" class="segmento" aria-pressed="@(_perfil == Perfil.Operador ? "true" : "false")" @onclick="() => _perfil = Perfil.Operador"><span>Operador</span></button>
                     <button type="button" class="segmento" aria-pressed="@(_perfil == Perfil.Qualidade ? "true" : "false")" @onclick="() => _perfil = Perfil.Qualidade"><span>Qualidade</span></button>
-                    @if (Sessao.Utilizador?.Configuracao == true)
-                    {
-                        <button type="button" class="segmento" aria-pressed="@(_perfil == Perfil.Supervisor ? "true" : "false")" @onclick="() => _perfil = Perfil.Supervisor"><span>Supervisor</span></button>
-                    }
+                    <button type="button" class="segmento" aria-pressed="@(_perfil == Perfil.Supervisor ? "true" : "false")" disabled="@(Sessao.Utilizador?.Configuracao != true)" @onclick="() => _perfil = Perfil.Supervisor"><span>Supervisor</span></button>
                 </div>
+                @if (Sessao.Utilizador?.Configuracao != true)
+                {
+                    <small class="campo-ajuda">Criar um supervisor só é possível com o PIN de configuração.</small>
+                }
                 @if (_perfil == Perfil.Qualidade)
                 {
                     <small class="campo-ajuda">Conclui as intervenções validadas e regista quem fez a higienização.</small>

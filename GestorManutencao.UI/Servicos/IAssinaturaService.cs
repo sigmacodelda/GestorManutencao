@@ -3,14 +3,13 @@ using System.Net.Http.Json;
 
 namespace GestorManutencao.UI.Servicos;
 
-public enum ResultadoAssinatura { Ok, Longa, Rede }
+public enum ResultadoAssinatura { Ok, Invalida, Rede }
 
 public sealed record RespostaAssinatura(ResultadoAssinatura Resultado, string Texto = "");
 
-// A assinatura que cada pessoa escreve para si (fica no seu utilizador; por agora só se guarda).
+// A assinatura que cada pessoa desenha para si (imagem PNG em data URL, guardada no seu utilizador; por agora só se guarda).
 public interface IAssinaturaService
 {
-    public const int Max = 1000;
     Task<RespostaAssinatura> LerAsync(string? token, CancellationToken ct = default);
     Task<RespostaAssinatura> GuardarAsync(string? token, string texto, CancellationToken ct = default);
 }
@@ -44,7 +43,7 @@ public sealed class AssinaturaApiService(HttpClient http) : IAssinaturaService
                 Content = JsonContent.Create(new Corpo(texto))
             };
             using var r = await http.SendAsync(pedido, ct);
-            if (r.StatusCode == System.Net.HttpStatusCode.BadRequest) return new(ResultadoAssinatura.Longa);
+            if (r.StatusCode == System.Net.HttpStatusCode.BadRequest) return new(ResultadoAssinatura.Invalida);
             return r.IsSuccessStatusCode ? new(ResultadoAssinatura.Ok, texto.Trim()) : new(ResultadoAssinatura.Rede);
         }
         catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
@@ -61,8 +60,17 @@ public sealed class DevAssinaturaService : IAssinaturaService
     public Task<RespostaAssinatura> LerAsync(string? token, CancellationToken ct = default) => Task.FromResult(new RespostaAssinatura(ResultadoAssinatura.Ok, _texto));
     public Task<RespostaAssinatura> GuardarAsync(string? token, string texto, CancellationToken ct = default)
     {
-        if (texto.Trim().Length > IAssinaturaService.Max) return Task.FromResult(new RespostaAssinatura(ResultadoAssinatura.Longa));
+        if (!RegrasAssinatura.EImagem(texto)) return Task.FromResult(new RespostaAssinatura(ResultadoAssinatura.Invalida));
         _texto = texto.Trim();
         return Task.FromResult(new RespostaAssinatura(ResultadoAssinatura.Ok, _texto));
     }
+}
+
+public static class RegrasAssinatura
+{
+    public const string Prefixo = "data:image/png;base64,";
+    public const int Max = 200_000;
+
+    // Só conta como assinatura um desenho; texto antigo ou em branco volta a pedir.
+    public static bool EImagem(string? texto) => texto is { Length: > 30 and <= Max } && texto.StartsWith(Prefixo, StringComparison.Ordinal);
 }
