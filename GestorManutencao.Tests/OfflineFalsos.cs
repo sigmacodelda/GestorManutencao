@@ -124,11 +124,39 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
             var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
             if (f.Estado == EstadoIntervencao.EmCurso)
             {
+                if (f.Externa && !f.TemAssinaturaExterna) throw new InvalidOperationException(MensagensIntervencao.Para("externa_sem_assinatura"));
                 f = Fichas[id] = f with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim, EmPausa = false, PodePausar = false };
             }
             else if (f.Estado != EstadoIntervencao.Concluida) throw new InvalidOperationException(MensagensIntervencao.Mudou);
             return Task.FromResult(f);
         }
+    }
+
+    // Assinaturas recebidas por ficha (nome e PNG); como o servidor, só se grava uma vez e repetir o mesmo pedido é ok.
+    public Dictionary<string, (string Nome, string Assinatura)> Assinaturas { get; } = [];
+
+    public Task<Intervencao> AssinarExternaAsync(string id, string nome, string assinatura, CancellationToken ct = default)
+    {
+        Entrar("AssinarExterna", id);
+        Intervencao ficha;
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            if (!f.Externa) throw new InvalidOperationException(MensagensIntervencao.Para("nao_externa"));
+            if (Assinaturas.TryGetValue(id, out var antes))
+            {
+                if (antes != (nome, assinatura)) throw new InvalidOperationException(MensagensIntervencao.Para("ja_assinada"));
+                ficha = f;
+            }
+            else
+            {
+                if (f.Estado is not (EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+                Assinaturas[id] = (nome, assinatura);
+                ficha = Fichas[id] = f with { TemAssinaturaExterna = true };
+            }
+        }
+        Sair("AssinarExterna");
+        return Task.FromResult(ficha);
     }
 
     public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) => Pausa("Pausar", id, true);

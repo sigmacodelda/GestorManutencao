@@ -214,7 +214,22 @@ public sealed partial class SqlRepositorioIntervencoes
         var tempos = await LerTemposAsync(conn, id, ct);
         var materiais = await LerMateriaisAsync(conn, id, ct);
         var ficha = RegrasFicha.Montar(lida.Ficha, tempos, materiais, cfg, supervisor, RegrasIntervencao.PertenceAFicha(lida.Ficha.Tecno, lida.Ficha.Tecnos, quem.Tecno), quem.Tecno);
-        return ficha with { Historico = await LerHistoricoAsync(conn, id, lida.Ficha, ct) };
+        ficha = ficha with { Historico = await LerHistoricoAsync(conn, id, lida.Ficha, ct) };
+        return RegrasIntervencao.EhExterna(lida.Ficha.TipoManut) ? await ComAssinaturaExternaAsync(conn, id, ficha, ct) : ficha;
+    }
+
+    // A assinatura da empresa externa (só leitura, visível a quem vê a ficha). Se os campos ainda não existem na base, a ficha abre na mesma, sem assinatura.
+    private static async Task<FichaDetalheDto> ComAssinaturaExternaAsync(SqlConnection conn, string id, FichaDetalheDto ficha, CancellationToken ct)
+    {
+        try
+        {
+            await using var cmd = new SqlCommand(SqlAssinaturaExterna, conn);
+            Texto(cmd, "@id", 25, id);
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            if (!await r.ReadAsync(ct) || r.IsDBNull(2) || r.GetDateTime(2) <= RegrasFicha.SemData) return ficha;
+            return ficha with { AssinaturaExt = r.GetString(0), AssinaturaExtNome = r.GetString(1).Trim(), AssinaturaExtData = r.GetDateTime(2) };
+        }
+        catch (SqlException) { return ficha; }
     }
 
     private const string SqlEtapasQualidade =

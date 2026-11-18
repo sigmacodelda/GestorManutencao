@@ -15,6 +15,7 @@ public sealed record EtapaFicha(string Etapa, string? Quem, DateTime? Quando, st
 // Ficha completa tal como a API a devolve. Antiga = ficha do PHC sem estado. Os bloqueios (Pode...) já vêm calculados para quem pediu:
 // PodeEditar vale também para o material e a mão de obra; PodeEditarGestao é técnico, data, tipos e periodicidade.
 // ExternosAMao: sem compras na ficha, a mão de obra e o material externos escrevem-se à mão.
+// AssinaturaExt*: assinatura da empresa externa (PNG em data URL), nome e data/hora; só leitura (data nula = sem assinatura).
 public sealed record FichaDetalhe(
     string Id, string Equipamento, EstadoIntervencao Estado, DateOnly Data,
     int Numero = 0, string EquipamentoId = "", string Zona = "", string Ref = "", TipoIntervencao Tipo = TipoIntervencao.Preventiva, string TipoManut = "Interna",
@@ -26,7 +27,8 @@ public sealed record FichaDetalhe(
     decimal MoInterna = 0, decimal MoExterna = 0, decimal MatInterno = 0, decimal MatExterno = 0, decimal TotMo = 0, decimal TotRef = 0,
     string? Motivo = null, IReadOnlyList<TempoMaoDeObra>? MaoDeObra = null, IReadOnlyList<Material>? Materiais = null,
     bool ExternosAMao = false, bool PodeEditar = false, bool PodeEditarGestao = false, bool PodeCancelar = false, bool PodeFecharAntiga = false,
-    string Versao = "", bool CustosOcultos = false, IReadOnlyList<EtapaFicha>? Historico = null)
+    string Versao = "", bool CustosOcultos = false, IReadOnlyList<EtapaFicha>? Historico = null,
+    string AssinaturaExt = "", string AssinaturaExtNome = "", DateTime? AssinaturaExtData = null)
 {
     public decimal Total => TotMo + TotRef;
 

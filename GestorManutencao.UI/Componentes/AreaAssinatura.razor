@@ -1,0 +1,44 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@* Tela de desenho (JS window.gmAssinatura, definido no index.html da app). Quem a usa limpa e exporta o PNG por esta referência. *@
+<canvas id="@Id" class="assinatura-tela" width="600" height="240" role="img" aria-label="@Rotulo"></canvas>
+
+@code {
+    [Parameter] public string Id { get; set; } = "assinatura-tela";
+    [Parameter] public string Rotulo { get; set; } = "Área de assinatura";
+    // Chama-se quando passa a haver (ou deixa de haver) traço.
+    [Parameter] public EventCallback<bool> TracoMudou { get; set; }
+
+    private DotNetObjectReference<AreaAssinatura>? _ref;
+
+    public bool TemTraco { get; private set; }
+
+    protected override async Task OnAfterRenderAsync(bool primeira)
+    {
+        if (!primeira) return;
+        _ref = DotNetObjectReference.Create(this);
+        try { await JS.InvokeVoidAsync("gmAssinatura.iniciar", Id, _ref); }
+        catch (Exception) { /* sem a tela não há assinatura: quem a usa mostra o erro ao tentar exportar */ }
+    }
+
+    [JSInvokable]
+    public async Task AoMudar(bool temTraco)
+    {
+        TemTraco = temTraco;
+        await TracoMudou.InvokeAsync(temTraco);
+    }
+
+    public async Task LimparAsync()
+    {
+        await JS.InvokeVoidAsync("gmAssinatura.limpar", Id);
+    }
+
+    public async Task<string> ExportarAsync() => await JS.InvokeAsync<string>("gmAssinatura.exportar", Id);
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("gmAssinatura.parar", Id); } catch (Exception) { /* a página já fechou */ }
+        _ref?.Dispose();
+    }
+}

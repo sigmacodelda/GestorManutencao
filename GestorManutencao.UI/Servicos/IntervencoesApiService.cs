@@ -59,6 +59,9 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/concluir", new { feito, inicio, fim }, ct);
 
+    public Task<Intervencao> AssinarExternaAsync(string id, string nome, string assinatura, CancellationToken ct = default) =>
+        AlterarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/assinatura-externa", new { nome, assinatura }, ct);
+
     public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) =>
         PausaAsync($"intervencoes/{Uri.EscapeDataString(id)}/pausar", MensagensIntervencao.NaoPausa, ct);
 

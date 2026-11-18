@@ -170,6 +170,14 @@
                         </div>
                     </div>
                 }
+                @if (SeccoesFicha.EhExterna(d) && RegrasAssinatura.EImagem(d.AssinaturaExt))
+                {
+                    <div class="assinatura-lida">
+                        <p class="ficha-texto">Assinatura da empresa externa</p>
+                        <img class="assinatura-img" src="@d.AssinaturaExt" alt="Assinatura da empresa externa" />
+                        <p class="ficha-texto"><strong>@d.AssinaturaExtNome</strong>@(d.AssinaturaExtData is { } quando ? " · " + quando.ToString("dd/MM/yyyy HH:mm") : "")</p>
+                    </div>
+                }
             </section>
         }
 

@@ -35,6 +35,8 @@ internal sealed record CargaMaterial(string MaterialId, string Design, decimal Q
 internal sealed record CargaApagar(string ItemId);
 // Validar, Devolver (Texto = motivo) e ConcluirQualidade (Texto = quem higienizou); o equipamento serve ao aviso de conflito.
 internal sealed record CargaDecisao(string Equipamento, string? Texto);
+// Assinatura da empresa externa: PNG em data URL (até ~200 KB) e nome de quem assinou; a fila guarda-os em JSON sem limite de tamanho.
+internal sealed record CargaAssinatura(string Nome, string Assinatura);
 internal sealed record CargaFoto(string FotoId, string Nome, int Bytes);
 
 internal static class CargasFila

@@ -23,6 +23,12 @@ else
     [Parameter] public int Pendentes { get; set; }
     [Parameter] public int Conflitos { get; set; }
 
+    // Sem rede (ou sem dados do servidor) = cinzento; a enviar = amarelo; senão verde. Partilhado pelo topo, pelo canto e pelo Início.
+    public static EstadoLigacaoApi De(GestorManutencao.UI.Offline.IGestorOffline offline) =>
+        offline.SemLigacao || offline.TextoDados is not null ? EstadoLigacaoApi.Sem
+        : offline.Estado == GestorManutencao.UI.Offline.EstadoSincronizacao.ASincronizar ? EstadoLigacaoApi.Sincronizando
+        : EstadoLigacaoApi.Ligado;
+
     private string Classe => Estado switch { EstadoLigacaoApi.Sincronizando => "ligacao-sinc", EstadoLigacaoApi.Sem => "ligacao-sem", _ => "ligacao-ok" };
 
     private string Texto => Estado switch

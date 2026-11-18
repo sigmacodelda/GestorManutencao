@@ -217,6 +217,28 @@ public sealed class OfflineIntervencoesService(
                 : throw FichaMudou());
     }
 
+    // Como Feito: online se der, senão fila (a assinatura segue antes da conclusão da mesma ficha, porque a fila é por ordem) com a ficha local já assinada.
+    public async Task<Intervencao> AssinarExternaAsync(string id, string nome, string assinatura, CancellationToken ct = default)
+    {
+        if (RegrasIntervencao.ValidarAssinaturaExterna(nome, assinatura) is { } erro) throw new InvalidOperationException(erro);
+        nome = nome.Trim();
+        if (await mc.GarantirDonoAsync() is not { } dono) return await remoto.AssinarExternaAsync(id, nome, assinatura, ct);
+        id = await mc.ResolverIdAsync(id);
+        if (await PodeOnlineAsync(dono, id))
+            try
+            {
+                var ficha = await mc.GuardarFichaServidorAsync(await remoto.AssinarExternaAsync(id, nome, assinatura, ct));
+                AvisarEscrita();
+                return ficha;
+            }
+            catch (Exception e) when (FalhaDeRede(e, ct)) { }
+
+        return await EnfileirarFichaAsync(dono, id, TipoOperacao.AssinarExterna, CargasFila.Escrever(new CargaAssinatura(nome, assinatura)), f =>
+            f is { Externa: true, TemAssinaturaExterna: false, Estado: EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida }
+                ? f with { TemAssinaturaExterna = true }
+                : throw FichaMudou());
+    }
+
     public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) => PausaAsync(id, true, ct);
 
     public Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default) => PausaAsync(id, false, ct);

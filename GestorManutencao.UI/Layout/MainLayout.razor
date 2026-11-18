@@ -11,9 +11,13 @@
 {
     <div class="shell">
         @* Em ecrã estreito o topo não aparece: o sinal de ligação fica flutuante no canto. *@
-        <div class="ligacao-flutuante">
-            <EstadoLigacao Estado="EstadoDaLigacao" Pendentes="Offline.Pendentes" Conflitos="Offline.Conflitos" />
-        </div>
+        @* No Início o sinal vai dentro do cartão de boas-vindas; nas outras páginas fica no canto superior direito. *@
+        @if (Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Length > 0)
+        {
+            <div class="ligacao-flutuante">
+                <EstadoLigacao Estado="EstadoDaLigacao" Pendentes="Offline.Pendentes" Conflitos="Offline.Conflitos" />
+            </div>
+        }
         @if (_faixa is { } faixa)
         {
             <div class="faixa-aviso" role="status" aria-live="polite">
@@ -91,10 +95,7 @@
 
 @code {
     // Sem rede (ou sem dados do servidor) = cinzento; a enviar = amarelo; senão verde.
-    private EstadoLigacao.EstadoLigacaoApi EstadoDaLigacao =>
-        Offline.SemLigacao || Offline.TextoDados is not null ? EstadoLigacao.EstadoLigacaoApi.Sem
-        : Offline.Estado == EstadoSincronizacao.ASincronizar ? EstadoLigacao.EstadoLigacaoApi.Sincronizando
-        : EstadoLigacao.EstadoLigacaoApi.Ligado;
+    private EstadoLigacao.EstadoLigacaoApi EstadoDaLigacao => EstadoLigacao.De(Offline);
 
     private bool _pronto;
     private int _pendentesSaida;

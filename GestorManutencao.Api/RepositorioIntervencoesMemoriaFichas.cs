@@ -70,7 +70,8 @@ public sealed partial class RepositorioIntervencoesMemoria
         RegrasFicha.Montar(Lida(f), f.Tempos.ToList(), f.Materiais.ToList(), _cfg, supervisor, Pertence(f, quem.Tecno), quem.Tecno) with
         {
             Historico = RegrasQualidade.Montar(f.D.Tecnico, f.HFim ?? (f.D.HoraFim is { } hf ? f.D.DataPlaneada.ToDateTime(hf) : null), f.ValidouPor, f.ValidouEm,
-                f.HistDevol, f.HigienizadoPor, f.HigienizadoEm, f.ConcluiuPor, f.ConcluiuEm)
+                f.HistDevol, f.HigienizadoPor, f.HigienizadoEm, f.ConcluiuPor, f.ConcluiuEm),
+            AssinaturaExt = f.AssinaturaExt, AssinaturaExtNome = f.AssinaturaExtNome, AssinaturaExtData = f.AssinaturaExtData
         };
 
     public Task<IReadOnlyList<IntervencaoDto>> ListarPorConcluirAsync(CancellationToken ct)

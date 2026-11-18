@@ -67,6 +67,16 @@ async function avariaConcluida(tokenT, equipId, texto) {
   return id;
 }
 
+// A Ana abre uma avaria (API) e o supervisor passa-a a manutenção externa (o técnico só cria internas).
+async function avariaExterna(tokenT, tokenS, equipId, texto) {
+  const c = await http(tokenT, 'POST', '/intervencoes/avaria', { equipamentoId: equipId, anomalia: texto });
+  afirma(c.estado === 200 || c.estado === 201, `avaria ${c.estado}`);
+  const id = c.json.id;
+  const e = await http(tokenS, 'PUT', `/intervencoes/${id}`, { tipoManut: 'Externa' });
+  afirma(e.estado === 200, `externa ${e.estado}`);
+  return id;
+}
+
 // ------------------------------------------------------------ registo
 const resultados = [], achados = [];
 let paginaAtual = null, rotulo = '';
@@ -105,8 +115,8 @@ async function entrar(page, pin) {
 }
 let assinaturasPedidas = 0;
 // Desenha um traço no canvas com o rato (como o dedo no telemóvel).
-async function desenhar(page) {
-  const c = page.locator('#assinatura-tela'); await c.scrollIntoViewIfNeeded();
+async function desenhar(page, sel = '#assinatura-tela') {
+  const c = page.locator(sel); await c.scrollIntoViewIfNeeded();
   const b = await c.boundingBox();
   await page.mouse.move(b.x + b.width * 0.15, b.y + b.height * 0.6); await page.mouse.down();
   for (let i = 1; i <= 12; i++) await page.mouse.move(b.x + b.width * (0.15 + 0.06 * i), b.y + b.height * (0.6 - 0.25 * Math.sin(i / 2)), { steps: 3 });
@@ -185,6 +195,18 @@ try {
       await foto(page, 'tecnico-online-inicio'); await semErro(page); await transbordo(page);
       return JSON.stringify(await sinalLigacao(page));
     });
+    if (modo.nome === 'telemovel') await passo('Telemóvel: o sinal de ligação está no cartão do Início e, nas outras páginas, no canto superior direito', async () => {
+      const larg = await page.evaluate(() => window.innerWidth);
+      const noHero = await page.locator('.hero .ligacao').first().boundingBox();
+      const hero = await page.locator('.hero').first().boundingBox();
+      afirma(noHero && hero && noHero.x >= hero.x && noHero.x + noHero.width <= hero.x + hero.width && noHero.y >= hero.y && noHero.y + noHero.height <= hero.y + hero.height, 'o sinal não está dentro do cartão do Início');
+      afirma(noHero.x > larg / 2, 'no cartão o sinal devia estar do lado direito');
+      afirma(!(await page.locator('.ligacao-flutuante').first().isVisible()), 'o sinal flutuante não devia aparecer no Início');
+      await ir(page, '/avaria'); await page.locator('#equipamento').waitFor({ timeout: 10000 });
+      const f = await page.locator('.ligacao-flutuante .ligacao').first().boundingBox();
+      afirma(f && f.x > larg / 2 && f.y < 60, `o sinal devia estar no canto superior direito (x ${f?.x}, y ${f?.y})`);
+      await foto(page, 'sinal-canto-direito'); await ir(page, '/'); await page.locator('.hero-texto').waitFor({ timeout: 10000 });
+    });
     await espera(6000); // deixa a app guardar equipamentos e fichas
     await passo('Técnico: online, regista a avaria 1 (vai direta à API)', async () => {
       await ir(page, '/avaria');
@@ -239,6 +261,32 @@ try {
       const r = await http(tokenT, 'GET', '/auth/assinatura');
       afirma(/^data:image\/png;base64,/.test(r.json?.assinatura ?? '') && r.json.assinatura.length > 400, `a API devolveu ${JSON.stringify(r.json).slice(0, 80)}`);
       await transbordo(page); await semErro(page);
+    });
+    await passo('Técnico: ficha EXTERNA — sem assinatura da empresa não conclui; SEM REDE assina, conclui e segue quando a rede volta', async () => {
+      const id = await avariaExterna(tokenT, tokenS, equip.id, `TESTE-OFF-${M} externa`);
+      await ir(page, '/intervencoes');
+      await page.locator('a.intervencao', { hasText: equip.nome }).first().waitFor({ timeout: 15000 });
+      await espera(2000);
+      cortar();
+      await ir(page, `/intervencoes/${id}`);
+      await page.locator('#feito').waitFor({ timeout: 20000 });
+      await page.locator('#assinatura-externa').waitFor({ timeout: 5000 });
+      await page.locator('#feito').fill('Reparação feita pela empresa externa (teste)');
+      await botao(page, 'Feito').click();
+      await espera(1500);
+      afirma(await page.locator('#assinante').isVisible(), 'sem assinatura a ficha externa não devia concluir');
+      await page.locator('#assinante').fill('Manuel da Empresa Externa');
+      await desenhar(page, '#assinatura-externa');
+      await foto(page, 'tecnico-externa-assinatura');
+      await botao(page, 'Feito').click();
+      await page.locator('h1', { hasText: 'As minhas intervenções' }).waitFor({ timeout: 30000 });
+      afirma((await detalhe(tokenS, id)).estado === 'EmCurso', 'a API já mudou com a rede cortada');
+      ligar();
+      const t0 = Date.now();
+      await ate(async () => (await detalhe(tokenS, id))?.estado === 'Concluida', ESPERA_ENVIO, 'a conclusão externa chegar à API', 2000);
+      const d = await detalhe(tokenS, id);
+      afirma(d.assinaturaExtNome === 'Manuel da Empresa Externa' && /^data:image\/png;base64,/.test(d.assinaturaExt ?? ''), 'a assinatura externa não ficou na ficha');
+      return `chegou em ${Math.round((Date.now() - t0) / 1000)} s`;
     });
     await sair(page);
 

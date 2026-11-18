@@ -166,6 +166,10 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
                 var conclusao = CargasFila.Ler<CargaConclusao>(operacao.Payload);
                 servidor[fichaId] = await remoto.ConcluirAsync(fichaId, conclusao.Feito, conclusao.Inicio, conclusao.Fim, ct);
                 break;
+            case TipoOperacao.AssinarExterna:
+                var assinatura = CargasFila.Ler<CargaAssinatura>(operacao.Payload);
+                servidor[fichaId] = await remoto.AssinarExternaAsync(fichaId, assinatura.Nome, assinatura.Assinatura, ct);
+                break;
             case TipoOperacao.Validar:
                 await remoto.ValidarAsync(fichaId, ct);
                 break;
@@ -314,6 +318,7 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
         TipoOperacao.RegistarAvaria => new("Descrição da avaria", CargasFila.Ler<CargaAvaria>(operacao.Payload).Anomalia),
         TipoOperacao.Concluir => new("O que foi feito", CargasFila.Ler<CargaConclusao>(operacao.Payload).Feito),
         TipoOperacao.AdicionarMaterial => new("Material", CargasFila.Ler<CargaMaterial>(operacao.Payload).Design),
+        TipoOperacao.AssinarExterna => new("Nome de quem assinou pela empresa externa", CargasFila.Ler<CargaAssinatura>(operacao.Payload).Nome),
         TipoOperacao.Devolver => new("Motivo da devolução", CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? ""),
         TipoOperacao.ConcluirQualidade => new("Quem fez a higienização", CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? ""),
         _ => null

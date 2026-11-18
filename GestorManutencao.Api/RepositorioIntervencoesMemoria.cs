@@ -42,6 +42,9 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
         public decimal NoFornec { get; set; }
         public string NomeFornec { get; set; } = "";
         public string DocExterno { get; set; } = "";
+        public string AssinaturaExt { get; set; } = "";
+        public string AssinaturaExtNome { get; set; } = "";
+        public DateTime? AssinaturaExtData { get; set; }
         public decimal MoExterna { get; set; }
         public decimal MatExterno { get; set; }
         public List<TempoDto> Tempos { get; } = [];
@@ -134,7 +137,8 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
         {
             Tecno = f.Tecno, PodeValidar = podeValidar, Adicionais = RegrasIntervencao.AdicionaisDe(f.Tecnos, f.Tecno),
             Motivo = f.D.Estado == EstadoIntervencao.EmCurso && f.Motivo.Length > 0 ? f.Motivo : null,
-            PodePausar = linha is not null, EmPausa = linha == true
+            PodePausar = linha is not null, EmPausa = linha == true,
+            Externa = RegrasIntervencao.EhExterna(f.TipoManut), TemAssinaturaExterna = f.AssinaturaExtData is not null
         };
     }
 
@@ -345,12 +349,32 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
                 && Segundos(f.D.HoraInicio) == Segundos(inicio) && Segundos(f.D.HoraFim) == Segundos(fim))
                 return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
             if (f.D.Estado != EstadoIntervencao.EmCurso) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
+            if (RegrasIntervencao.EhExterna(f.TipoManut) && f.AssinaturaExtData is null) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.ExigeAssinatura));
 
             // Concluir em pausa fecha a pausa.
             f.D = f.D with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim, DataPlaneada = Hoje };
             f.Linhas.Clear();
             GerarSeguinte(f);
             return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f)));
+        }
+    }
+
+    // Imutável: só grava se ainda não há assinatura; a repetição idêntica devolve a ficha como está.
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> AssinarExternaAsync(string id, string nome, string assinatura, TecnicoAtual quem, bool supervisor, CancellationToken ct)
+    {
+        lock (Trinco())
+        {
+            var f = _lista.FirstOrDefault(x => x.D.Id == id);
+            if (f is null || (!supervisor && !Minha(f, quem))) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExiste));
+            if (!RegrasIntervencao.EhExterna(f.TipoManut)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.NaoExterna));
+            if (f.AssinaturaExtData is not null)
+                return Task.FromResult(f.AssinaturaExt == assinatura && f.AssinaturaExtNome == nome
+                    ? (ResultadoIntervencao.Ok, (IntervencaoDto?)Ver(f, tecno: quem.Tecno))
+                    : Falha<IntervencaoDto>(ResultadoIntervencao.JaAssinada));
+            if (f.D.Estado is not (EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida) || EstaFechada(f)) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.Conflito));
+            f.AssinaturaExt = assinatura; f.AssinaturaExtNome = nome; f.AssinaturaExtData = relogio.GetLocalNow().DateTime;
+            f.Versao++;
+            return Task.FromResult<(ResultadoIntervencao, IntervencaoDto?)>((ResultadoIntervencao.Ok, Ver(f, tecno: quem.Tecno)));
         }
     }
 

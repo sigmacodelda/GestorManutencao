@@ -353,9 +353,8 @@ equipa.MapPost("/", async (PedidoNovoUtilizador pedido, ClaimsPrincipal eu, IRep
         var tecno = pedido.Tecno ?? 0;
         if (tecno is < 0 or > 99999) return Erro(400, "pedido_invalido");
 
-        // Só o PIN de configuração cria supervisores (é assim que se cria o primeiro); um supervisor só cria operadores.
+        // Um supervisor cria qualquer perfil, também outros supervisores (o primeiro cria-se com o PIN de configuração).
         var perfil = pedido.Perfil ?? Perfil.Operador;
-        if (perfil == Perfil.Supervisor && !eu.HasClaim(EmissorToken.ClaimConfiguracao, "1")) return Results.Forbid();
 
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {

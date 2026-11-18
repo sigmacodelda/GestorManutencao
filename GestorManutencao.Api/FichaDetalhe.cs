@@ -22,12 +22,14 @@ public sealed record FichaDetalheDto(
     decimal MoInterna, decimal MoExterna, decimal MatInterno, decimal MatExterno, decimal TotMo, decimal TotRef,
     string? Motivo, IReadOnlyList<TempoDto> MaoDeObra, IReadOnlyList<MaterialDto> Materiais,
     bool ExternosAMao, bool PodeEditar, bool PodeEditarGestao, bool PodeCancelar, bool PodeFecharAntiga,
-    string Versao = "", bool CustosOcultos = false, IReadOnlyList<EtapaDto>? Historico = null);
+    string Versao = "", bool CustosOcultos = false, IReadOnlyList<EtapaDto>? Historico = null,
+    string AssinaturaExt = "", string AssinaturaExtNome = "", DateTime? AssinaturaExtData = null);
 
 // Campos a null ficam como estão; texto vazio apaga; hora de fim ou de início em 1900 apaga.
 // Operador: só execução (horas, frio, confirmação, problema, resolução, obs, limrem, fornecedor e documento). Data, Tipo, TipoManut, Periodicidade, Tecno, MoExterna e MatExterno são do supervisor.
 // Versao é a do detalhe lido: se a ficha mudou entretanto, a gravação é recusada (409). O nome do fornecedor vem sempre do número (fl).
 // CustosOcultos (no detalhe): o operador não vê custos de terceiros, externos, totais nem compras.
+// AssinaturaExt*: assinatura da empresa externa (PNG em data URL), nome e data/hora; só leitura e visível a quem vê a ficha. Data nula = sem assinatura.
 public sealed record PedidoFicha(
     DateTime? HoraInicio = null, DateTime? HoraFim = null, decimal? HorasFrio = null, decimal? HorasConf = null,
     string? Problema = null, string? Resolucao = null, string? Obs = null, bool? LimRem = null,
