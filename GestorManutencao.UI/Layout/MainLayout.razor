@@ -83,7 +83,16 @@
                     </NavLink>
                 </nav>
             }
-            <div class="conteudo-wrap">@Body</div>
+            <div class="conteudo-wrap">
+                @if (!_assinaturaTentada && Sessao.Utilizador is { PinProvisorio: false })
+                {
+                    <p class="estado-lista" role="status">A carregar…</p>
+                }
+                else
+                {
+                    @Body
+                }
+            </div>
         </div>
         <Toast />
         @if (_pendentesSaida > 0)
@@ -112,7 +121,11 @@
         await Sessao.RestaurarAsync();
         _pronto = true;
         if (!Sessao.TemSessao) Nav.NavigateTo("login", replace: true);
-        else { Notificacoes.Iniciar(); Offline.Iniciar(); AbrirDeNotificacao(); }
+        else
+        {
+            Notificacoes.Iniciar(); Offline.Iniciar(); AbrirDeNotificacao();
+            if (Sessao.Utilizador is { PinProvisorio: false } u) { _assinaturaDe = u.Token; _ = VerificarAssinaturaAsync(); }
+        }
     }
 
     // Toque numa notificação do sistema: vai para a página do aviso. Sem sessão (ou com PIN provisório) fica o pedido por consumir.
@@ -171,12 +184,14 @@
 
     // Quem ainda não tem assinatura tem de a escrever antes de continuar. Sem rede não se consegue saber e não se bloqueia ninguém:
     // volta a verificar-se na navegação seguinte.
-    private bool _assinaturaVista, _aVerificarAssinatura;
+    private bool _assinaturaVista, _aVerificarAssinatura, _assinaturaTentada;
     private string? _assinaturaDe;
 
     private async Task VerificarAssinaturaAsync()
     {
         _aVerificarAssinatura = true;
+        // O conteúdo só espera pela resposta uns segundos: sem rede ou com rede lenta a pessoa não fica parada.
+        _ = Task.Delay(TimeSpan.FromSeconds(3)).ContinueWith(_ => { if (!_assinaturaTentada) { _assinaturaTentada = true; Atualizar(); } });
         try
         {
             var r = await Assinaturas.LerAsync(Sessao.Utilizador?.Token);
@@ -189,13 +204,18 @@
             }
         }
         catch (Exception) { /* sem rede: tenta outra vez mais tarde */ }
-        finally { _aVerificarAssinatura = false; }
+        finally { _aVerificarAssinatura = false; _assinaturaTentada = true; await InvokeAsync(StateHasChanged); }
     }
 
     private void Atualizar()
     {
         var quem = Sessao.Utilizador?.Token;
-        if (quem != _assinaturaDe) { _assinaturaDe = quem; _assinaturaVista = false; }
+        if (quem != _assinaturaDe)
+        {
+            _assinaturaDe = quem; _assinaturaVista = false; _assinaturaTentada = false;
+            // Entrou outra pessoa (ou acabou de escolher o PIN definitivo): verifica já, para o Início não piscar antes da assinatura.
+            if (Sessao.Utilizador is { PinProvisorio: false } && !_aVerificarAssinatura) _ = VerificarAssinaturaAsync();
+        }
         InvokeAsync(StateHasChanged);
     }
 

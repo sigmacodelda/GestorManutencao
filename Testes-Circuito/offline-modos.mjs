@@ -116,7 +116,7 @@ async function entrar(page, pin) {
 let assinaturasPedidas = 0;
 // Desenha um traço no canvas com o rato (como o dedo no telemóvel).
 async function desenhar(page, sel = '#assinatura-tela') {
-  const c = page.locator(sel); await c.scrollIntoViewIfNeeded();
+  const c = page.locator(sel); await c.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
   const b = await c.boundingBox();
   await page.mouse.move(b.x + b.width * 0.15, b.y + b.height * 0.6); await page.mouse.down();
   for (let i = 1; i <= 12; i++) await page.mouse.move(b.x + b.width * (0.15 + 0.06 * i), b.y + b.height * (0.6 - 0.25 * Math.sin(i / 2)), { steps: 3 });
@@ -160,8 +160,10 @@ page.on('pageerror', (e) => consola.push(`${rotulo} excecao: ${String(e.message)
 page.on('console', (m) => { if (m.type() === 'error') consola.push(`${rotulo} consola: ${m.text().slice(0, 200)}`); });
 await page.waitForLoadState('domcontentloaded');
 // A app arrancou antes do proxy existir: se não chegou ao login, recarrega-se agora que o proxy está a passar.
-const noLogin = () => ate(async () => (await page.locator('.teclado').isVisible()) || (await page.locator('.hero-texto').isVisible()), 25000, 'login ou início');
+const noLogin = () => ate(async () => (await page.locator('.teclado').isVisible()) || (await page.locator('.hero-texto').isVisible()) || (await page.locator('#assinatura-tela').isVisible()), 25000, 'login, início ou assinatura');
 try { await noLogin(); } catch { await foto0(); await page.reload(); await noLogin(); } // só na página da app Gestor (porta própria)
+// Sessão guardada de uma execução anterior: se a API nova não tem a assinatura dela, a app pede-a; desenha-se e sai-se.
+if (await page.locator('#assinatura-tela').isVisible()) { await desenhar(page); await botao(page, 'Guardar').click(); await page.locator('.hero-texto').waitFor({ timeout: 20000 }); }
 if (await page.locator('.hero-texto').isVisible()) await sair(page);
 
 const tokenT = await login(PIN_T), tokenS = await login(PIN_S);
@@ -169,11 +171,12 @@ const eqs = itens((await http(tokenS, 'GET', '/equipamentos')).json).filter((e) 
 afirma(eqs.length, 'sem equipamentos na API');
 const equip = eqs[0];
 
-const MODOS = [
+const MODOS_TODOS = [
   { nome: 'computador', aplicar: () => cdp.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false }) },
   { nome: 'telemovel', aplicar: () => cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }) }
 ];
 
+const MODOS = process.env.SO_MODO ? MODOS_TODOS.filter(m => m.nome === process.env.SO_MODO) : MODOS_TODOS;
 try {
   for (const modo of MODOS) {
     await modo.aplicar();
@@ -200,7 +203,7 @@ try {
       const noHero = await page.locator('.hero .ligacao').first().boundingBox();
       const hero = await page.locator('.hero').first().boundingBox();
       afirma(noHero && hero && noHero.x >= hero.x && noHero.x + noHero.width <= hero.x + hero.width && noHero.y >= hero.y && noHero.y + noHero.height <= hero.y + hero.height, 'o sinal não está dentro do cartão do Início');
-      afirma(noHero.x > larg / 2, 'no cartão o sinal devia estar do lado direito');
+      afirma(noHero.x + noHero.width / 2 > larg / 2, `no cartão o sinal devia estar do lado direito (x ${noHero.x}, largura ${larg})`);
       afirma(!(await page.locator('.ligacao-flutuante').first().isVisible()), 'o sinal flutuante não devia aparecer no Início');
       await ir(page, '/avaria'); await page.locator('#equipamento').waitFor({ timeout: 10000 });
       const f = await page.locator('.ligacao-flutuante .ligacao').first().boundingBox();
