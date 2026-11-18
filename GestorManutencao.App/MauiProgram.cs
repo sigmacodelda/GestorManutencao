@@ -39,6 +39,7 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaAndroid>();
 		builder.Services.AddSingleton<IServicoSegundoPlano, ServicoSegundoPlanoAndroid>();
 		builder.Services.AddSingleton<IAvisoEmCurso, AvisoEmCursoAndroid>();
+		builder.Services.AddSingleton<IPushToken, PushTokenAndroid>();
 		builder.Services.AddSingleton<IDitado, DitadoAndroid>();
 		builder.Services.AddSingleton<ICamara, CamaraAndroid>();
 #elif WINDOWS
@@ -90,8 +91,10 @@ public static class MauiProgram
 				ServerCertificateCustomValidationCallback = (pedido, _, _, erros) => erros == System.Net.Security.SslPolicyErrors.None || pedido.RequestUri?.IsLoopback == true
 			})));
 			builder.Services.AddSingleton<IEquipaService>(new EquipaApiService(http));
+			builder.Services.AddSingleton<IAssinaturaService>(new AssinaturaApiService(http));
 			builder.Services.AddScoped<IntervencoesApiService>(sp => new IntervencoesApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IIntervencoesRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());
+			builder.Services.AddScoped<IDispositivosRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());
 			// Gestão (só supervisor): sempre online, nunca na fila de saída; sem rede recusa com uma mensagem clara.
 			builder.Services.AddScoped(sp => new GestaoApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IGestaoService>(sp => new GestaoSoOnlineService(sp.GetRequiredService<GestaoApiService>(), sp.GetRequiredService<IRedeEstado>(),
@@ -111,6 +114,7 @@ public static class MauiProgram
 #if DEBUG
 			builder.Services.AddSingleton<IAutenticacaoService, DevAutenticacaoService>();
 			builder.Services.AddSingleton<IEquipaService, DevEquipaService>();
+			builder.Services.AddSingleton<IAssinaturaService, DevAssinaturaService>();
 			builder.Services.AddSingleton<IGestaoService, GestaoDevService>();
 			builder.Services.AddSingleton<IArmazemGeracaoDiaria, ArmazemGeracaoDiariaMemoria>();
 			builder.Services.AddSingleton<GeracaoDiaria>(sp => new GeracaoDiaria(sp.GetRequiredService<IArmazemGeracaoDiaria>(), TimeProvider.System));

@@ -414,3 +414,10 @@ Testes-Circuito/resultados-ux/
 # APK e binarios de publicacao (gerados, nao se versionam)
 publicar-apk/
 publicar-api/
+
+# Chaves privadas do Firebase (conta de servico): nunca no repositorio
+*-firebase-adminsdk-*.json
+GestorManutencao.Api/dados/
+segredos/
+**/firebase-adminsdk*.json
+GestorManutencao.App/Platforms/Android/google-services.json

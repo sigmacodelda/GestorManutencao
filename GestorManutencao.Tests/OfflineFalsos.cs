@@ -124,11 +124,39 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
             var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
             if (f.Estado == EstadoIntervencao.EmCurso)
             {
+                if (f.Externa && !f.TemAssinaturaExterna) throw new InvalidOperationException(MensagensIntervencao.Para("externa_sem_assinatura"));
                 f = Fichas[id] = f with { Estado = EstadoIntervencao.Concluida, Feito = feito, HoraInicio = inicio, HoraFim = fim, EmPausa = false, PodePausar = false };
             }
             else if (f.Estado != EstadoIntervencao.Concluida) throw new InvalidOperationException(MensagensIntervencao.Mudou);
             return Task.FromResult(f);
         }
+    }
+
+    // Assinaturas recebidas por ficha (nome e PNG); como o servidor, só se grava uma vez e repetir o mesmo pedido é ok.
+    public Dictionary<string, (string Nome, string Assinatura)> Assinaturas { get; } = [];
+
+    public Task<Intervencao> AssinarExternaAsync(string id, string nome, string assinatura, CancellationToken ct = default)
+    {
+        Entrar("AssinarExterna", id);
+        Intervencao ficha;
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            if (!f.Externa) throw new InvalidOperationException(MensagensIntervencao.Para("nao_externa"));
+            if (Assinaturas.TryGetValue(id, out var antes))
+            {
+                if (antes != (nome, assinatura)) throw new InvalidOperationException(MensagensIntervencao.Para("ja_assinada"));
+                ficha = f;
+            }
+            else
+            {
+                if (f.Estado is not (EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+                Assinaturas[id] = (nome, assinatura);
+                ficha = Fichas[id] = f with { TemAssinaturaExterna = true };
+            }
+        }
+        Sair("AssinarExterna");
+        return Task.FromResult(ficha);
     }
 
     public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) => Pausa("Pausar", id, true);
@@ -211,7 +239,9 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     public Task<IReadOnlyList<Equipamento>> PesquisarAsync(string texto, CancellationToken ct = default)
     {
         Entrar("Pesquisar");
-        return Task.FromResult<IReadOnlyList<Equipamento>>(Equipamentos.Where(e => !e.Obsoleto && e.Nome.Contains(texto ?? "", StringComparison.OrdinalIgnoreCase)).ToList());
+        // Como a API real: a pesquisa leve sem texto devolve lista vazia.
+        if (string.IsNullOrWhiteSpace(texto)) return Task.FromResult<IReadOnlyList<Equipamento>>([]);
+        return Task.FromResult<IReadOnlyList<Equipamento>>(Equipamentos.Where(e => !e.Obsoleto && e.Nome.Contains(texto, StringComparison.OrdinalIgnoreCase)).ToList());
     }
 
     public Task<IReadOnlyList<Equipamento>> ListarAsync(FiltroEquipamentos filtro, CancellationToken ct = default)
@@ -227,7 +257,32 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
         return Task.FromResult(e is null ? null : new FichaEquipamento(e, [], []));
     }
 
-    public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default)
+    {
+        Entrar("ListarPorValidar");
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(Fichas.Values.Where(f => f.Estado == EstadoIntervencao.Concluida).ToList());
+    }
+
+    // Validadas ainda sem conclusão da Qualidade; Higienizacoes guarda quem higienizou (por ficha).
+    public Dictionary<string, string> Higienizacoes { get; } = [];
+
+    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default)
+    {
+        Entrar("ListarPorConcluir");
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(Fichas.Values.Where(f => f.Estado == EstadoIntervencao.Validada && !Higienizacoes.ContainsKey(f.Id)).ToList());
+    }
+
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default)
+    {
+        Entrar("ConcluirQualidade", id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id);
+            if (f is not { Estado: EstadoIntervencao.Validada } || Higienizacoes.ContainsKey(id)) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            Higienizacoes[id] = higienizacao;
+            return Task.FromResult(f);
+        }
+    }
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default)
     {
         Entrar("Validar", id);
@@ -237,7 +292,16 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
             return Task.FromResult(Fichas[id] = f with { Estado = EstadoIntervencao.Validada });
         }
     }
-    public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default)
+    {
+        Entrar("Devolver", id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id);
+            if (f is not { Estado: EstadoIntervencao.Concluida }) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            return Task.FromResult(Fichas[id] = f with { Estado = EstadoIntervencao.EmCurso, Motivo = motivo });
+        }
+    }
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) => throw new NotSupportedException();

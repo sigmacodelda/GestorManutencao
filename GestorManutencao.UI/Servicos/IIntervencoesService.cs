@@ -12,6 +12,9 @@ public interface IIntervencoesService
     Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default);
     Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default);
     Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default);
+    // Assinatura da empresa externa (PNG em data URL) numa ficha externa: obrigatória antes de concluir e imutável depois de guardada.
+    // Sem rede vai para a fila de saída e a ficha local fica assinada (TemAssinaturaExterna) para se poder concluir.
+    Task<Intervencao> AssinarExternaAsync(string id, string nome, string assinatura, CancellationToken ct = default);
     // Pausa e retoma a ficha em curso (o estado não muda; Intervencao.EmPausa diz se está em pausa). Repetir o pedido é inofensivo.
     Task<Intervencao> PausarAsync(string id, CancellationToken ct = default);
     Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default);
@@ -19,6 +22,9 @@ public interface IIntervencoesService
     Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default);
     Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default);
     Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default);
+    // Só para o perfil Qualidade: fichas validadas por concluir e conclusão com o nome de quem higienizou (grava-se uma só vez).
+    Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default);
+    Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default);
     // Só para supervisores: planeadas e em curso de todos, atribuição de técnico (tecno 0 = sem dono) e geração das planeadas.
     Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default);
     Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default);
@@ -89,6 +95,9 @@ public static class MensagensIntervencao
         "periodicidade_invalida" => "Essa periodicidade não existe neste equipamento.",
         "fora_de_ordem" => "Há intervenções mais antigas nesta zona. Comece pela primeira da lista.",
         "externa_sem_documento" => "Falta o fornecedor ou o documento externo. Peça ao supervisor para os indicar no PHC.",
+        "externa_sem_assinatura" => "Falta a assinatura da empresa externa. Peça-lhe que assine antes de concluir.",
+        "nao_externa" => "Esta intervenção não é de manutenção externa.",
+        "ja_assinada" => "Esta intervenção já foi assinada pela empresa externa.",
         "propria" => "Não pode validar uma intervenção feita por si.",
         "limite_fotos" => $"No máximo {RegrasFoto.Max} fotos por intervenção.",
         _ => Mudou
@@ -180,10 +189,17 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default)
     {
         if (RegrasIntervencao.ValidarConclusao(feito, inicio, fim) is not null) throw new InvalidOperationException(MensagensIntervencao.Mudou);
-        return Alterar(id, EstadoIntervencao.EmCurso, i => i with
-        {
-            Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null, EmPausa = false, PodePausar = false
-        });
+        return Alterar(id, EstadoIntervencao.EmCurso, i => i.Externa && !i.TemAssinaturaExterna
+            ? throw new InvalidOperationException(MensagensIntervencao.Para("externa_sem_assinatura"))
+            : i with { Estado = EstadoIntervencao.Concluida, Feito = feito.Trim(), HoraInicio = inicio, HoraFim = fim, Motivo = null, EmPausa = false, PodePausar = false });
+    }
+
+    public Task<Intervencao> AssinarExternaAsync(string id, string nome, string assinatura, CancellationToken ct = default)
+    {
+        if (RegrasIntervencao.ValidarAssinaturaExterna(nome, assinatura) is { } erro) throw new InvalidOperationException(erro);
+        return Alterar(id, null, i => !i.Externa ? throw new InvalidOperationException(MensagensIntervencao.Para("nao_externa"))
+            : i.TemAssinaturaExterna ? throw new InvalidOperationException(MensagensIntervencao.Para("ja_assinada"))
+            : i with { TemAssinaturaExterna = true });
     }
 
     public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) =>
@@ -199,6 +215,25 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
 
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) =>
         Alterar(id, EstadoIntervencao.Concluida, i => i with { Estado = EstadoIntervencao.Validada });
+
+    // Dados de demonstração: as validadas aqui ficam à espera da Qualidade até serem concluídas.
+    private readonly HashSet<string> _concluidasQualidade = [];
+
+    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(_lista.Where(i => i.Estado == EstadoIntervencao.Validada && !_concluidasQualidade.Contains(i.Id)).ToList());
+    }
+
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default)
+    {
+        if (RegrasQualidade.ValidarHigienizacao(higienizacao) is { } erro) throw new InvalidOperationException(erro);
+        lock (_trinco)
+        {
+            var i = _lista.FirstOrDefault(x => x.Id == id && x.Estado == EstadoIntervencao.Validada && !_concluidasQualidade.Contains(x.Id)) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            _concluidasQualidade.Add(id);
+            return Task.FromResult(i);
+        }
+    }
 
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default)
     {
@@ -423,7 +458,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         {
             var eq = Equipamentos.FirstOrDefault(e => e.Id == ficha.EquipamentoId && !e.Obsoleto) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
             var nova = new Intervencao(Guid.NewGuid().ToString("N"), eq.Nome, eq.Zona, ficha.Tipo, DateOnly.FromDateTime(DateTime.Today), EstadoIntervencao.EmCurso,
-                Texto(ficha.Problema), null, TimeOnly.FromDateTime(DateTime.Now), null, "Operador de Teste", 101);
+                Texto(ficha.Problema), null, TimeOnly.FromDateTime(DateTime.Now), null, "Operador de Teste", 101, Externa: ficha.TipoManut == "Externa");
             _lista.Add(nova);
             _extras[nova.Id] = new FichaDetalhe(nova.Id, nova.Equipamento, nova.Estado, nova.DataPlaneada, TipoManut: ficha.TipoManut, Periodicidade: (ficha.Periodicidade ?? "").Trim());
             return Task.FromResult(nova);
@@ -516,8 +551,11 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> AssinarExternaAsync(string id, string nome, string assinatura, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> RetomarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();

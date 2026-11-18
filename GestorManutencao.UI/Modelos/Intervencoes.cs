@@ -29,7 +29,8 @@ public sealed record Intervencao(
     bool Pendente = false,
     IReadOnlyList<TecnicoFicha>? Adicionais = null,
     int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false,
-    bool EmPausa = false, bool PodePausar = false)
+    bool EmPausa = false, bool PodePausar = false,
+    bool Externa = false, bool TemAssinaturaExterna = false)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
@@ -133,6 +134,15 @@ public static class RegrasIntervencao
 {
     // Limites das colunas da ficha de intervenção no PHC.
     public const int MaxAnomalia = 200, MaxFeito = 254;
+
+    // Assinatura da empresa externa: nome de quem assina (2 a 60 letras), como no servidor.
+    public const int MinNomeAssinante = 2, MaxNomeAssinante = 60;
+
+    public static string? ValidarAssinaturaExterna(string? nome, string? assinatura) =>
+        (nome ?? "").Trim().Length < MinNomeAssinante ? "Escreva o nome de quem assina."
+        : nome!.Trim().Length > MaxNomeAssinante ? $"Escreva menos: no máximo {MaxNomeAssinante} letras."
+        : !Servicos.RegrasAssinatura.EImagem(assinatura) ? "A assinatura é obrigatória. Peça à empresa para assinar."
+        : null;
 
     public static string? ValidarAvaria(string? equipamento, string? anomalia) =>
         string.IsNullOrWhiteSpace(equipamento) ? "Escolha o equipamento."

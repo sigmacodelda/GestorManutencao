@@ -5,29 +5,17 @@
 @inject NotificacaoService Notificacoes
 @inject IGestorOffline Offline
 @inject CicloVidaApp Ciclo
+@inject IAssinaturaService Assinaturas
 
 @if (_pronto && Sessao.TemSessao)
 {
     <div class="shell">
-        @if (Offline.SemLigacao || Offline.TextoDados is not null || Offline.Estado != EstadoSincronizacao.Sincronizado)
+        @* Em ecrã estreito o topo não aparece: o sinal de ligação fica flutuante no canto. *@
+        @* No Início o sinal vai dentro do cartão de boas-vindas; nas outras páginas fica no canto superior direito. *@
+        @if (Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Length > 0)
         {
-            <div class="faixa-estado" role="status" aria-live="polite">
-                @if (Offline.SemLigacao || Offline.TextoDados is not null)
-                {
-                    <span class="faixa-estado-item"><Icone Nome="wifi-off" /><span>Sem ligação. @(Offline.TextoDados ?? "Pode continuar a trabalhar.")</span></span>
-                }
-                @if (Offline.Estado == EstadoSincronizacao.ASincronizar)
-                {
-                    <span class="faixa-estado-item"><Icone Nome="refresh-cw" /><span>A enviar…</span></span>
-                }
-                else if (Offline.Pendentes > 0)
-                {
-                    <span class="faixa-estado-item"><Icone Nome="clock" /><span>@Offline.Pendentes por enviar</span></span>
-                }
-                @if (Offline.Conflitos > 0)
-                {
-                    <a class="faixa-estado-item faixa-estado-rever" href="por-rever"><Icone Nome="triangle-alert" /><span>@Offline.Conflitos por rever</span></a>
-                }
+            <div class="ligacao-flutuante">
+                <EstadoLigacao Estado="EstadoDaLigacao" Pendentes="Offline.Pendentes" Conflitos="Offline.Conflitos" />
             </div>
         }
         @if (_faixa is { } faixa)
@@ -47,6 +35,7 @@
                     <span class="avatar" aria-hidden="true">@Sessao.Utilizador.Iniciais</span>
                     <span class="utilizador-nome">@Sessao.Utilizador.Nome</span>
                 </span>
+                <span class="so-largo-ligacao"><EstadoLigacao Estado="EstadoDaLigacao" Pendentes="Offline.Pendentes" Conflitos="Offline.Conflitos" /></span>
                 <ModoVisual />
                 <button type="button" class="btn-icone" aria-label="Terminar sessão" @onclick="Sair">
                     <Icone Nome="log-out" />
@@ -54,12 +43,16 @@
             </div>
         </header>
         <div class="shell-corpo">
-            @if (Sessao.Utilizador is { PinProvisorio: false })
+            @if (Sessao.Utilizador is { PinProvisorio: false } && !Sessao.AssinaturaEmFalta)
             {
                 var supervisor = Sessao.Modo == ModoTrabalho.Supervisor;
                 <nav class="navegacao" aria-label="Navegação principal">
                     <NavLink class="nav-item" href="" Match="NavLinkMatch.All"><span class="nav-icone"><Icone Nome="home" /></span><span class="nav-rotulo">Início</span></NavLink>
-                    @if (supervisor)
+                    @if (Sessao.EQualidade)
+                    {
+                        <NavLink class="nav-item" href="qualidade"><span class="nav-icone"><Icone Nome="shield-check" /></span><span class="nav-rotulo">Qualidade</span></NavLink>
+                    }
+                    else if (supervisor)
                     {
                         <NavLink class="nav-item" href="planeadas"><span class="nav-icone"><Icone Nome="calendar" /></span><span class="nav-rotulo">Planeadas</span></NavLink>
                         <NavLink class="nav-item" href="validacao"><span class="nav-icone"><Icone Nome="shield-check" /></span><span class="nav-rotulo">Validação</span></NavLink>
@@ -90,7 +83,16 @@
                     </NavLink>
                 </nav>
             }
-            <div class="conteudo-wrap">@Body</div>
+            <div class="conteudo-wrap">
+                @if (!_assinaturaTentada && Sessao.Utilizador is { PinProvisorio: false })
+                {
+                    <p class="estado-lista" role="status">A carregar…</p>
+                }
+                else
+                {
+                    @Body
+                }
+            </div>
         </div>
         <Toast />
         @if (_pendentesSaida > 0)
@@ -101,6 +103,9 @@
 }
 
 @code {
+    // Sem rede (ou sem dados do servidor) = cinzento; a enviar = amarelo; senão verde.
+    private EstadoLigacao.EstadoLigacaoApi EstadoDaLigacao => EstadoLigacao.De(Offline);
+
     private bool _pronto;
     private int _pendentesSaida;
     private Aviso? _faixa;
@@ -116,7 +121,11 @@
         await Sessao.RestaurarAsync();
         _pronto = true;
         if (!Sessao.TemSessao) Nav.NavigateTo("login", replace: true);
-        else { Notificacoes.Iniciar(); Offline.Iniciar(); AbrirDeNotificacao(); }
+        else
+        {
+            Notificacoes.Iniciar(); Offline.Iniciar(); AbrirDeNotificacao();
+            if (Sessao.Utilizador is { PinProvisorio: false } u) { _assinaturaDe = u.Token; _ = VerificarAssinaturaAsync(); }
+        }
     }
 
     // Toque numa notificação do sistema: vai para a página do aviso. Sem sessão (ou com PIN provisório) fica o pedido por consumir.
@@ -166,9 +175,49 @@
     {
         if (_pronto && Sessao.Utilizador is { PinProvisorio: true } && Nav.ToBaseRelativePath(Nav.Uri) != "pin")
             Nav.NavigateTo("pin", replace: true);
+        else if (_pronto && Sessao.Utilizador is { PinProvisorio: false })
+        {
+            if (Sessao.AssinaturaEmFalta && Nav.ToBaseRelativePath(Nav.Uri) != "assinatura") Nav.NavigateTo("assinatura", replace: true);
+            else if (!_aVerificarAssinatura && Nav.ToBaseRelativePath(Nav.Uri) != "assinatura") _ = VerificarAssinaturaAsync(); // a cada página: se a assinatura for apagada noutro sítio, a pessoa é logo barrada
+        }
     }
 
-    private void Atualizar() => InvokeAsync(StateHasChanged);
+    // Quem ainda não tem assinatura tem de a escrever antes de continuar. Sem rede não se consegue saber e não se bloqueia ninguém:
+    // volta a verificar-se na navegação seguinte.
+    private bool _assinaturaVista, _aVerificarAssinatura, _assinaturaTentada;
+    private string? _assinaturaDe;
+
+    private async Task VerificarAssinaturaAsync()
+    {
+        _aVerificarAssinatura = true;
+        // O conteúdo só espera pela resposta uns segundos: sem rede ou com rede lenta a pessoa não fica parada.
+        _ = Task.Delay(TimeSpan.FromSeconds(3)).ContinueWith(_ => { if (!_assinaturaTentada) { _assinaturaTentada = true; Atualizar(); } });
+        try
+        {
+            var r = await Assinaturas.LerAsync(Sessao.Utilizador?.Token);
+            if (r.Resultado != ResultadoAssinatura.Ok) return;
+            _assinaturaVista = true;
+            if (!RegrasAssinatura.EImagem(r.Texto))
+            {
+                Sessao.DefinirAssinaturaEmFalta(true);
+                await InvokeAsync(() => Nav.NavigateTo("assinatura", replace: true));
+            }
+        }
+        catch (Exception) { /* sem rede: tenta outra vez mais tarde */ }
+        finally { _aVerificarAssinatura = false; _assinaturaTentada = true; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void Atualizar()
+    {
+        var quem = Sessao.Utilizador?.Token;
+        if (quem != _assinaturaDe)
+        {
+            _assinaturaDe = quem; _assinaturaVista = false; _assinaturaTentada = false;
+            // Entrou outra pessoa (ou acabou de escolher o PIN definitivo): verifica já, para o Início não piscar antes da assinatura.
+            if (Sessao.Utilizador is { PinProvisorio: false } && !_aVerificarAssinatura) _ = VerificarAssinaturaAsync();
+        }
+        InvokeAsync(StateHasChanged);
+    }
 
     public void Dispose()
     {

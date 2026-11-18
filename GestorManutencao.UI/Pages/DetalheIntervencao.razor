@@ -52,6 +52,11 @@
             <div class="chips"><span class="chip chip-aviso" role="status"><Icone Nome="pause" /> Em pausa</span></div>
         }
 
+        @if (_i.Externa && _i.TemAssinaturaExterna)
+        {
+            <div class="chips"><span class="chip chip-ok" role="status"><Icone Nome="circle-check" /> Assinada pela empresa externa</span></div>
+        }
+
         <dl class="ficha">
             @if (!string.IsNullOrWhiteSpace(_i.Zona)) { <dt>Zona</dt><dd>@_i.Zona</dd> }
             <dt>Tipo</dt><dd>@(_i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</dd>
@@ -127,6 +132,19 @@
                     <textarea id="feito" rows="4" maxlength="254" @bind="_feito" @bind:event="oninput"></textarea>
                     <Microfone @bind-Texto="_feito" MaxLength="254" />
                 </div>
+                @if (PrecisaAssinatura)
+                {
+                    <div class="campo">
+                        <label id="assinatura-ext-rotulo">Assinatura da empresa externa</label>
+                        <AreaAssinatura @ref="_area" Id="assinatura-externa" Rotulo="Assinatura da empresa externa" TracoMudou="AoMudarTraco" />
+                        <small class="campo-ajuda">Peça a quem acompanhou a intervenção para assinar com o dedo. É obrigatória para concluir.</small>
+                        <button type="button" class="btn-texto" disabled="@(_a_gravar || !_temTraco)" @onclick="LimparAssinaturaAsync">Limpar</button>
+                    </div>
+                    <div class="campo">
+                        <label for="assinante">Nome de quem assina</label>
+                        <input id="assinante" type="text" maxlength="@RegrasIntervencao.MaxNomeAssinante" autocomplete="off" @bind="_nomeAssinante" @bind:event="oninput" />
+                    </div>
+                }
                 @if (Sessao.Modo == ModoTrabalho.Supervisor)
                 {
                     <div class="horas">
@@ -273,6 +291,37 @@
     private bool _viaDetalhe;
     private string? _avisoOnline, _matEditId, _eDesign;
     private decimal? _eQtt, _eEpv;
+    private AreaAssinatura? _area;
+    private string _nomeAssinante = "";
+    private bool _temTraco;
+
+    // Ficha externa em curso ainda sem a assinatura da empresa: tem de assinar antes de concluir.
+    private bool PrecisaAssinatura => !_viaDetalhe && _i is { Estado: EstadoIntervencao.EmCurso, Externa: true, TemAssinaturaExterna: false };
+
+    private void AoMudarTraco(bool temTraco) => _temTraco = temTraco;
+
+    private async Task LimparAssinaturaAsync()
+    {
+        if (_area is null) return;
+        try { await _area.LimparAsync(); } catch (Exception) { /* a tela já não existe */ }
+    }
+
+    // "" = assinada (ou não precisa); senão a mensagem a mostrar. Grava online ou na fila, como o resto.
+    private async Task<string> AssinarAsync()
+    {
+        if (!PrecisaAssinatura) return "";
+        if ((_nomeAssinante ?? "").Trim().Length < RegrasIntervencao.MinNomeAssinante) return "Escreva o nome de quem assina.";
+        if (_area is null || !_temTraco) return "A empresa externa tem de assinar.";
+        string png;
+        try { png = await _area.ExportarAsync(); }
+        catch (Exception) { return "Não foi possível ler a assinatura. Tente outra vez."; }
+        if (RegrasIntervencao.ValidarAssinaturaExterna(_nomeAssinante, png) is { } erro) return erro;
+        _a_gravar = true;
+        try { Usar(await Intervencoes.AssinarExternaAsync(Id, _nomeAssinante.Trim(), png)); return ""; }
+        catch (InvalidOperationException ex) { return ex.Message; }
+        catch (Exception) { return "Não foi possível guardar a assinatura. Tente outra vez."; }
+        finally { _a_gravar = false; }
+    }
 
     protected override void OnInitialized() => Offline.Mudou += AoMudarOffline;
 
@@ -503,7 +552,12 @@
         }
         _erro = RegrasIntervencao.ValidarConclusao(_feito, _inicio, _fim) ?? "";
         if (_erro.Length > 0) return;
-        await Gravar(() => Intervencoes.ConcluirAsync(Id, _feito, _inicio!.Value, _fim!.Value));
+        // A assinatura atualiza a ficha (Usar repõe as horas): guardam-se antes de assinar.
+        var inicio = _inicio!.Value;
+        var fim = _fim!.Value;
+        _erro = await AssinarAsync();
+        if (_erro.Length > 0) return;
+        await Gravar(() => Intervencoes.ConcluirAsync(Id, _feito, inicio, fim));
         // Feito: volta à lista (a que o utilizador usa no terreno) e confirma com um aviso de 2 s, sem ecrã de sucesso a pedir mais um toque.
         if (_erro.Length == 0 && _i is { Estado: EstadoIntervencao.Concluida })
         {

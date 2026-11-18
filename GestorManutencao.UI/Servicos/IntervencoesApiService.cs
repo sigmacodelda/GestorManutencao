@@ -7,8 +7,23 @@ using GestorManutencao.UI.Offline;
 namespace GestorManutencao.UI.Servicos;
 
 // Intervenções e equipamentos através da API; o token vem da sessão atual.
-public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao) : IIntervencoesRemoto
+public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao) : IIntervencoesRemoto, IDispositivosRemoto
 {
+    public Task RegistarAsync(string jwt, string token, CancellationToken ct = default) => DispositivoAsync(HttpMethod.Post, jwt, token, ct);
+
+    public Task DesregistarAsync(string jwt, string token, CancellationToken ct = default) => DispositivoAsync(HttpMethod.Delete, jwt, token, ct);
+
+    private async Task DispositivoAsync(HttpMethod metodo, string jwt, string token, CancellationToken ct)
+    {
+        using var pedido = new HttpRequestMessage(metodo, "dispositivos")
+        {
+            Headers = { Authorization = new AuthenticationHeaderValue("Bearer", jwt) },
+            Content = JsonContent.Create(new { token })
+        };
+        using var resposta = await http.SendAsync(pedido, ct);
+        resposta.EnsureSuccessStatusCode();
+    }
+
     public async Task<IReadOnlyList<Intervencao>> ListarMinhasAsync(CancellationToken ct = default)
     {
         using var resposta = await EnviarAsync(HttpMethod.Get, "intervencoes", null, ct);
@@ -43,6 +58,9 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
 
     public Task<Intervencao> ConcluirAsync(string id, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/concluir", new { feito, inicio, fim }, ct);
+
+    public Task<Intervencao> AssinarExternaAsync(string id, string nome, string assinatura, CancellationToken ct = default) =>
+        AlterarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/assinatura-externa", new { nome, assinatura }, ct);
 
     public Task<Intervencao> PausarAsync(string id, CancellationToken ct = default) =>
         PausaAsync($"intervencoes/{Uri.EscapeDataString(id)}/pausar", MensagensIntervencao.NaoPausa, ct);
@@ -152,6 +170,16 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
         await VerificarAsync(resposta, ct);
         return await resposta.Content.ReadFromJsonAsync<List<Intervencao>>(ct) ?? [];
     }
+
+    public async Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default)
+    {
+        using var resposta = await EnviarAsync(HttpMethod.Get, "qualidade", null, ct);
+        await VerificarAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<List<Intervencao>>(ct) ?? [];
+    }
+
+    public Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default) =>
+        AlterarAsync(HttpMethod.Post, $"qualidade/{Uri.EscapeDataString(id)}/concluir", new { higienizacao }, ct);
 
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"validacao/{Uri.EscapeDataString(id)}", null, ct);

@@ -56,6 +56,34 @@ public sealed class RepositorioUtilizadoresMemoria : IRepositorioUtilizadores
         }
     }
 
+    private readonly Dictionary<string, string> _assinaturas = [];
+
+    public Task<string?> ObterAssinaturaAsync(string codigo, CancellationToken ct)
+    {
+        lock (_trinco) return Task.FromResult(_assinaturas.GetValueOrDefault(codigo));
+    }
+
+    public Task<ResultadoPin> DefinirAssinaturaAsync(string codigo, string assinatura, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (!_dados.ContainsKey(codigo)) return Task.FromResult(ResultadoPin.NaoExiste);
+            _assinaturas[codigo] = assinatura;
+            return Task.FromResult(ResultadoPin.Ok);
+        }
+    }
+
+    public Task<ResultadoPin> DefinirAtivoAsync(string codigo, bool ativo, string porQuem, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (!_dados.TryGetValue(codigo, out var x)) return Task.FromResult(ResultadoPin.NaoExiste);
+            if (x.U.Perfil == Perfil.Supervisor) return Task.FromResult(ResultadoPin.Protegido);
+            _dados[codigo] = (x.U with { Ativo = ativo, Versao = ++_versao }, x.Hash);
+            return Task.FromResult(ResultadoPin.Ok);
+        }
+    }
+
     public Task<ResultadoPin> DefinirPinAsync(string codigo, string pinHash, bool provisorio, string porQuem, CancellationToken ct, string? pinHashAtual = null)
     {
         lock (_trinco)
@@ -112,7 +140,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
 
     private static UtilizadorApp Ler(SqlDataReader r) => new(
         r.GetString(0).Trim(), r.GetString(1).Trim(),
-        string.Equals(r.GetString(2).Trim(), "SUPERVISOR", StringComparison.OrdinalIgnoreCase) ? Perfil.Supervisor : Perfil.Operador,
+        r.GetString(2).Trim().ToUpperInvariant() switch { "SUPERVISOR" => Perfil.Supervisor, "QUALIDADE" => Perfil.Qualidade, _ => Perfil.Operador },
         r.GetBoolean(3), r.GetBoolean(4), r.IsDBNull(5) ? 0 : r.GetDateTime(5).Ticks, (int)r.GetDecimal(6));
 
     private static void Texto(SqlCommand cmd, string nome, int tamanho, string valor) =>
@@ -178,6 +206,48 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         return await cmd.ExecuteNonQueryAsync(ct) == 0 ? ResultadoPin.NaoExiste : ResultadoPin.Ok;
     });
 
+    private const string SqlAssinatura = "select cast(isnull(assinatura, '') as varchar(max)) from u_manutil with (nolock) where utilizador = @codigo";
+    private const string SqlDefinirAssinatura =
+        """
+        update u_manutil set assinatura = @assinatura, usrinis = @por, usrdata = @dia, usrhora = @hora
+        where utilizador = @codigo
+        """;
+
+    public Task<string?> ObterAssinaturaAsync(string codigo, CancellationToken ct) => Executar(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlAssinatura, conn);
+        Texto(cmd, "@codigo", 30, codigo);
+        return await cmd.ExecuteScalarAsync(ct) as string;
+    });
+
+    public Task<ResultadoPin> DefinirAssinaturaAsync(string codigo, string assinatura, CancellationToken ct) => Executar(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlDefinirAssinatura, conn);
+        Texto(cmd, "@codigo", 30, codigo);
+        cmd.Parameters.Add("@assinatura", SqlDbType.VarChar, -1).Value = assinatura;
+        Auditoria(cmd, codigo);
+        return await cmd.ExecuteNonQueryAsync(ct) == 0 ? ResultadoPin.NaoExiste : ResultadoPin.Ok;
+    });
+
+    // O perfil vai na própria condição: um supervisor nunca se inativa por aqui. Os utilizadores nunca se apagam.
+    private const string SqlDefinirAtivo =
+        """
+        update u_manutil set ativo = @ativo, usrinis = @por, usrdata = @dia, usrhora = @hora
+        where utilizador = @codigo and upper(rtrim(perfil)) <> 'SUPERVISOR'
+        """;
+
+    public Task<ResultadoPin> DefinirAtivoAsync(string codigo, bool ativo, string porQuem, CancellationToken ct) => Executar(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlDefinirAtivo, conn);
+        Texto(cmd, "@codigo", 30, codigo);
+        cmd.Parameters.Add("@ativo", SqlDbType.Bit).Value = ativo;
+        Auditoria(cmd, porQuem);
+        if (await cmd.ExecuteNonQueryAsync(ct) > 0) return ResultadoPin.Ok;
+        await using var existe = new SqlCommand("select count(*) from u_manutil with (nolock) where utilizador = @codigo", conn);
+        Texto(existe, "@codigo", 30, codigo);
+        return (int)(await existe.ExecuteScalarAsync(ct))! > 0 ? ResultadoPin.Protegido : ResultadoPin.NaoExiste;
+    });
+
     public async Task<ResultadoPin> CriarUtilizadorAsync(string codigo, string nome, Perfil perfil, int tecno, string pinHash, string porQuem, CancellationToken ct)
     {
         try
@@ -190,7 +260,7 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
                 Texto(cmd, "@stamp", 25, NovoStamp());
                 Texto(cmd, "@codigo", 30, codigo);
                 Texto(cmd, "@nome", 60, nome);
-                Texto(cmd, "@perfil", 12, perfil == Perfil.Supervisor ? "SUPERVISOR" : "OPERADOR");
+                Texto(cmd, "@perfil", 12, perfil switch { Perfil.Supervisor => "SUPERVISOR", Perfil.Qualidade => "QUALIDADE", _ => "OPERADOR" });
                 Texto(cmd, "@hash", 64, pinHash);
                 Auditoria(cmd, porQuem);
                 await cmd.ExecuteNonQueryAsync(ct);

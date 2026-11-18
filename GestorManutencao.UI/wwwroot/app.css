@@ -294,7 +294,7 @@ a.intervencao { color: inherit; text-decoration: none; }
 .ficha-acoes { grid-column: 1 / -1; display: flex; gap: var(--esp-3); margin-top: var(--esp-3); }
 .ficha-acoes .btn { flex: 1; }
 
-.ficha-texto textarea, .ficha-texto select, .ficha-acoes input {
+.ficha-texto textarea, .ficha-texto select, .ficha-texto input[type=text], .ficha-acoes input {
     width: 100%; min-height: var(--alvo); padding: var(--esp-3);
     background: var(--superficie); color: var(--texto);
     border: 2px solid var(--borda); border-radius: var(--raio); font: 400 1rem var(--fonte-corpo);
@@ -414,6 +414,10 @@ h1 { letter-spacing: -.015em; }
 .contador-num { font: 800 2.75rem/1 var(--fonte-titulos); font-variant-numeric: tabular-nums; margin-top: auto; letter-spacing: -.02em; }
 .alerta-led .contador-num { color: var(--erro); }
 .contador-rot { font: 600 .875rem var(--fonte-corpo); color: var(--texto-suave); }
+/* O que está a zero fica em segundo plano; o que tem trabalho pendente chama a atenção. */
+.contador-zero .contador-num { color: var(--texto-suave); font-weight: 700; }
+.contador-vivo .led { background: var(--primario); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primario) 22%, transparent); }
+.contador-vivo .contador-num { color: var(--primario); }
 
 .segmentos { background: var(--superficie-2); border: 1px solid var(--borda-suave); box-shadow: var(--campo-sombra, 0 2px 6px rgb(0 0 0 / .12) inset); border-radius: 16px; }
 .segmento { border-radius: 12px; transition: background-color .2s ease, box-shadow .15s ease; }
@@ -497,7 +501,7 @@ a.intervencao:active { transform: translateY(1px); }
 @media (max-height: 860px) and (max-width: 899px) { .engr-login { --g: 120px; right: -10px; top: 8px; } }
 
 /* ---------- Campos ---------- */
-.entrada input, .formulario input, .formulario textarea, .formulario select, .ficha-texto textarea, .ficha-texto select, .ficha-acoes input {
+.entrada input, .formulario input, .formulario textarea, .formulario select, .ficha-texto textarea, .ficha-texto select, .ficha-texto input[type=text], .ficha-acoes input {
     background: var(--superficie); border: 2px solid var(--borda-suave); border-radius: 12px; box-shadow: var(--campo-sombra, 0 2px 6px rgb(0 0 0 / .14) inset);
 }
 
@@ -630,7 +634,7 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
     .nav-rotulo { text-overflow: clip; }
     .nav-icone { width: 100%; max-width: 56px; }
     /* A engrenagem fica toda dentro do cartão, sem sair do ecrã. */
-    .engr-hero { --g: 120px; right: 16px; bottom: 16px; top: auto; }
+    .engr-hero { --g: 112px; right: 12px; bottom: 0; top: auto; }
 }
 /* ---------- Notificações ---------- */
 .so-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -688,11 +692,11 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 @media (max-width: 719px) {
     .so-largo { display: none; }
     .conteudo-wrap { padding-top: calc(var(--esp-4) + env(safe-area-inset-top)); }
-    .hero-acoes { display: flex; gap: var(--esp-1); position: absolute; top: var(--esp-3); right: var(--esp-3); z-index: 2; }
+    .hero-acoes { display: flex; gap: var(--esp-3); position: absolute; top: var(--esp-3); right: var(--esp-3); z-index: 2; }
 }
 
 /* ---------- Ditado por voz ---------- */
-.ditado { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-3); }
+.ditado { display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-3); margin-block-end: var(--esp-2); }
 .ditado .btn { width: auto; min-height: 44px; padding-inline: var(--esp-4); gap: var(--esp-2); }
 .ditado .btn .icone { width: 20px; height: 20px; }
 .ditado-estado { color: var(--texto-suave); font-size: .875rem; font-weight: 600; }
@@ -750,3 +754,50 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 }
 .barra-fixa .btn { flex: 1; width: auto; }
 @media (min-width: 900px) { .barra-fixa { bottom: var(--esp-4); } }
+
+/* ---------- Sinal de ligação no topo (verde = ligado, amarelo = a sincronizar, cinzento com x vermelho = sem ligação) ---------- */
+.ligacao { position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 14px; text-decoration: none; }
+.ligacao .icone { width: 24px; height: 24px; }
+.ligacao-ok { color: #3fbf6b; }
+.ligacao-sinc { color: #f2b705; }
+.ligacao-sinc .icone { animation: ligacao-pulsa 1.2s ease-in-out infinite; }
+.ligacao-sem { color: #9a9a9a; }
+.ligacao-x { position: absolute; right: 3px; bottom: 3px; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; background: #fff; color: #d93025; }
+.ligacao-x .icone { width: 11px; height: 11px; stroke-width: 3.5; }
+.ligacao-rever { position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--erro); color: #fff; font: 800 .6875rem/16px var(--fonte-titulos); text-align: center; }
+@keyframes ligacao-pulsa { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .ligacao-sinc .icone { animation: none; } }
+
+/* Rótulo e ajuda de um grupo de opções (ex.: perfil na Equipa) */
+.campo-rotulo { font-weight: 600; font-size: .9375rem; }
+.campo-ajuda { color: var(--texto-suave); font-size: .875rem; }
+
+/* Sinal de ligação: no topo em ecrã largo; flutuante no canto em ecrã estreito (onde o topo não aparece) */
+.ligacao-flutuante { display: none; }
+@media (max-width: 719px) {
+    .ligacao-flutuante {
+        display: block; position: fixed; z-index: 60;
+        top: calc(env(safe-area-inset-top) + 6px); right: calc(env(safe-area-inset-right) + 8px);
+    }
+    .ligacao-flutuante .ligacao { width: 32px; height: 32px; border-radius: 10px; background: color-mix(in srgb, var(--superficie) 82%, transparent); box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
+    .ligacao-flutuante .ligacao .icone { width: 20px; height: 20px; }
+    .so-largo-ligacao { display: none; }
+    .hero-ligacao { display: inline-flex; align-items: center; }
+    .hero-ligacao .ligacao { width: 44px; height: 44px; }
+    .conteudo-wrap { padding-top: calc(var(--esp-4) + 22px + env(safe-area-inset-top)); }
+}
+
+
+/* Assinatura desenhada: tela branca (o traço é azul-escuro), com proporção fixa em qualquer largura. */
+.assinatura-tela { display: block; width: 100%; max-width: 600px; aspect-ratio: 5 / 2; height: auto; background: #fff; border: 2px solid var(--borda, #CAC9C9); border-radius: 12px; touch-action: none; cursor: crosshair; }
+
+.segmento:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Assinatura da empresa externa na ficha completa (só leitura): imagem contida, sobre fundo branco. */
+.assinatura-lida { margin-top: var(--esp-3); }
+.assinatura-img { display: block; width: 100%; max-width: 300px; height: auto; background: #fff; border: 1px solid var(--borda, #CAC9C9); border-radius: 8px; }
+
+.ficha-texto .campo small { color: var(--texto-suave); font-size: .875rem; }
+
+/* No cartão do Início o sinal vê-se sobre o fundo escuro: sem caixa branca. */
+.hero-ligacao .ligacao { background: transparent; box-shadow: none; }

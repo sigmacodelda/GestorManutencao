@@ -11,6 +11,7 @@ public enum TipoIntervencao { Preventiva, Curativa }
 
 // PodePausar: ficha em curso e o utilizador que consulta tem linha de tempo aberta (só então pausa/retoma); EmPausa é a pausa dessa linha (só vale com PodePausar).
 // Última, Cancelada e DataPrevista só vêm nas planeadas. Tecno é o número de utilizador do PHC de quem tem a ficha (0 = sem dono). PodeValidar só conta na lista de validação.
+// Externa: tipo de manutenção externo (a conclusão exige a assinatura da empresa); TemAssinaturaExterna diz se já está assinada.
 // Motivo só vem nas fichas devolvidas pelo supervisor (em curso com observação gravada). Adicionais: técnicos além do principal (omissão = nenhum).
 public sealed record IntervencaoDto(
     string Id, string Equipamento, string Zona, TipoIntervencao Tipo, DateOnly DataPlaneada, EstadoIntervencao Estado,
@@ -18,7 +19,8 @@ public sealed record IntervencaoDto(
     string? Tecnico = null, int Tecno = 0, bool PodeValidar = true,
     DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null,
     bool PodeAbrir = false, string? Motivo = null, IReadOnlyList<TecnicoFichaDto>? Adicionais = null,
-    int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false, bool EmPausa = false, bool PodePausar = false);
+    int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false, bool EmPausa = false, bool PodePausar = false,
+    bool Externa = false, bool TemAssinaturaExterna = false);
 
 // Técnico adicional da intervenção: o número vem do memo tecnos da ficha e o nome resolve-se na API (nunca fica gravado na ficha).
 public sealed record TecnicoFichaDto(int Tecno, string Nome);
@@ -64,13 +66,15 @@ public sealed record PedidoMaterial(string? Design, decimal? Qtt, decimal? Epv);
 
 public sealed record PedidoDevolucao(string? Motivo);
 
+public sealed record PedidoAssinaturaExterna(string? Nome, string? Assinatura);
+
 public sealed record PedidoAtribuicao(int? Tecno);
 
 public sealed record PedidoAdicionais(IReadOnlyList<int>? Tecnos);
 
 public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros, int PorRegularizar = 0);
 
-public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, InstrucaoObsoleta }
+public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, InstrucaoObsoleta, ExigeAssinatura, NaoExterna, JaAssinada }
 
 // O nome vai em tecnome (45); nas colunas de auditoria vai o código (30); a identidade da pessoa nas fichas é o Tecno.
 public sealed record TecnicoAtual(string Codigo, int Tecno, string Nome);
@@ -78,6 +82,16 @@ public sealed record TecnicoAtual(string Codigo, int Tecno, string Nome);
 public static class RegrasIntervencao
 {
     public const int MaxAnomalia = 200, MaxFeito = 254;
+
+    // Assinatura da empresa externa: nome de quem assina (assinaturaextnome é varchar(60)).
+    public const int MinNomeAssinante = 2, MaxNomeAssinante = 60;
+
+    public static string? ValidarAssinaturaExterna(string? nome, string? assinatura) =>
+        (nome ?? "").Trim().Length is < MinNomeAssinante or > MaxNomeAssinante ? $"Indique o nome de quem assina ({MinNomeAssinante} a {MaxNomeAssinante} letras)."
+        : !RegrasAssinatura.Valida(assinatura) ? "A assinatura não é válida."
+        : null;
+
+    public static bool EhExterna(string? tipoManut) => string.Equals((tipoManut ?? "").Trim(), RegrasManutencao.TipoExterna, StringComparison.OrdinalIgnoreCase);
 
     // Técnicos adicionais: memo tecnos de u_fichaint com os números entre ponto e vírgula (";12;45;", vazio = nenhum); nunca inclui o principal.
     public const string ColunaTecnos = "tecnos";
@@ -187,6 +201,8 @@ public interface IRepositorioIntervencoes
     Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct, string? opId = null);
     Task<(ResultadoIntervencao, IntervencaoDto?)> IniciarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirAsync(string id, TecnicoAtual tecnico, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct);
+    // Assinatura da empresa externa (só fichas externas, em curso ou concluídas por fechar): grava-se uma só vez; repetir o mesmo pedido é idempotente.
+    Task<(ResultadoIntervencao, IntervencaoDto?)> AssinarExternaAsync(string id, string nome, string assinatura, TecnicoAtual quem, bool supervisor, CancellationToken ct);
     // Pausa da ficha em curso (o estado não muda): repetir o pedido é idempotente; concluir em pausa fecha a pausa.
     Task<(ResultadoIntervencao, IntervencaoDto?)> PausarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> RetomarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
@@ -195,6 +211,12 @@ public interface IRepositorioIntervencoes
     Task<IReadOnlyList<IntervencaoDto>> ListarPorValidarAsync(TecnicoAtual supervisor, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> ValidarAsync(string id, TecnicoAtual supervisor, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> DevolverAsync(string id, string motivo, TecnicoAtual supervisor, CancellationToken ct);
+
+    // Qualidade: fichas validadas por concluir (Validada, fechada = 0) e conclusão com o nome de quem higienizou (grava-se uma só vez).
+    Task<IReadOnlyList<IntervencaoDto>> ListarPorConcluirAsync(CancellationToken ct);
+    // Detalhe só leitura de uma ficha que aguarda a Qualidade (null = não existe ou não está nessa fase).
+    Task<FichaDetalheDto?> ObterDetalheQualidadeAsync(string id, TecnicoAtual qualidade, CancellationToken ct);
+    Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirQualidadeAsync(string id, string higienizacao, TecnicoAtual qualidade, CancellationToken ct);
 
     // Supervisor: planeadas e em curso de todos, atribuição de técnico (tecno 0 = sem dono) e geração das planeadas.
     Task<IReadOnlyList<IntervencaoDto>> ListarPlaneadasAsync(CancellationToken ct);
@@ -260,6 +282,14 @@ public static partial class EndpointsIntervencoes
             {
                 try { await Microsoft.AspNetCore.SignalR.ClientProxyExtensions.SendAsync(ctx.HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<AvisosHub>>().Clients.All, AvisosHub.Evento); }
                 catch (Exception) { /* o aviso em tempo real é um extra: a verificação periódica apanha a mudança */ }
+                // Escritas recusadas (4xx/5xx) não mudaram nada: não acordam os aparelhos.
+                if (resultado is not Microsoft.AspNetCore.Http.IStatusCodeHttpResult { StatusCode: >= 400 })
+                try
+                {
+                    var u = ctx.HttpContext.User;
+                    ctx.HttpContext.RequestServices.GetRequiredService<INotificadorPush>().Notificar(u.FindFirstValue("sub") ?? u.FindFirstValue(ClaimTypes.NameIdentifier));
+                }
+                catch (Exception) { /* o push é um extra e nunca pode falhar o pedido */ }
             }
             return resultado;
         });
@@ -377,6 +407,11 @@ public static partial class EndpointsIntervencoes
             RegrasIntervencao.ValidarConclusao(p.Feito, p.Inicio, p.Fim) is not null
                 ? Task.FromResult(Results.BadRequest())
                 : ComoTecnico(eu, utilizadores, ct, async t => Resposta(await repo.ConcluirAsync(id, t, p.Feito!.Trim(), p.Inicio!.Value, p.Fim!.Value, ct))));
+
+        g.MapPost("/intervencoes/{id}/assinatura-externa", (string id, PedidoAssinaturaExterna p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            RegrasIntervencao.ValidarAssinaturaExterna(p.Nome, p.Assinatura) is { } erro
+                ? Task.FromResult(PedidoInvalido(erro))
+                : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) => Resposta(await repo.AssinarExternaAsync(id, p.Nome!.Trim(), p.Assinatura!, t, sup, ct))));
 
         g.MapGet("/intervencoes/{id}/materiais", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             ComoTecnico(eu, utilizadores, ct, async t => await repo.ListarMateriaisAsync(id, t, ct) is { } m ? Results.Ok(m) : Results.NotFound()));
@@ -523,6 +558,17 @@ public static partial class EndpointsIntervencoes
                 ? Task.FromResult(Results.BadRequest())
                 : ComoSupervisor(eu, utilizadores, ct, async s => Resposta(await repo.DevolverAsync(id, p.Motivo.Trim(), s, ct)))).RequireAuthorization("Supervisor");
 
+        g.MapGet("/qualidade", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoQualidade(eu, utilizadores, ct, async _ => Results.Ok(await repo.ListarPorConcluirAsync(ct)))).RequireAuthorization("Qualidade");
+
+        g.MapGet("/qualidade/{id}/detalhe", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            ComoQualidade(eu, utilizadores, ct, async q => await repo.ObterDetalheQualidadeAsync(id, q, ct) is { } d ? Results.Ok(d) : Results.NotFound())).RequireAuthorization("Qualidade");
+
+        g.MapPost("/qualidade/{id}/concluir", (string id, PedidoConclusaoQualidade p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+            RegrasQualidade.ValidarHigienizacao(p.Higienizacao) is { } erro
+                ? Task.FromResult(PedidoInvalido(erro))
+                : ComoQualidade(eu, utilizadores, ct, async q => Resposta(await repo.ConcluirQualidadeAsync(id, p.Higienizacao!.Trim(), q, ct)))).RequireAuthorization("Qualidade");
+
         g.MapGet("/planeadas", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             ComoSupervisor(eu, utilizadores, ct, async _ => Results.Ok(await repo.ListarPlaneadasAsync(ct)))).RequireAuthorization("Supervisor");
 
@@ -566,13 +612,15 @@ public static partial class EndpointsIntervencoes
             IReadOnlyList<IntervencaoDto> l => l.Any(Tem),
             PaginaFichasDto pg => pg.Itens.Any(Tem),
             FichaEquipamentoDto f => f.Historico.Any(Tem),
-            FichaDetalheDto d => d.Adicionais is { Count: > 0 },
+            FichaDetalheDto d => d.Adicionais is { Count: > 0 } || d.Historico is { Count: > 0 },
             _ => false
         };
         if (!precisa) return resultado;
 
         var nomes = (await http.RequestServices.GetRequiredService<IRepositorioUtilizadores>().ListarAsync(http.RequestAborted))
             .Where(u => u.Tecno > 0).GroupBy(u => u.Tecno).ToDictionary(g => g.Key, g => Truncar(g.First().Nome));
+        var porCodigo = (await http.RequestServices.GetRequiredService<IRepositorioUtilizadores>().ListarAsync(http.RequestAborted))
+            .GroupBy(u => u.Codigo, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => Truncar(g.First().Nome), StringComparer.OrdinalIgnoreCase);
         IntervencaoDto N(IntervencaoDto i) => i.Adicionais is null ? i
             : i with { Adicionais = i.Adicionais.Select(a => a with { Nome = nomes.GetValueOrDefault(a.Tecno, "PHC " + a.Tecno) }).ToList() };
         return valor switch
@@ -581,7 +629,12 @@ public static partial class EndpointsIntervencoes
             IReadOnlyList<IntervencaoDto> l => Results.Ok((IReadOnlyList<IntervencaoDto>)l.Select(N).ToList()),
             PaginaFichasDto pg => Results.Ok(pg with { Itens = pg.Itens.Select(N).ToList() }),
             FichaEquipamentoDto f => Results.Ok(f with { Historico = f.Historico.Select(N).ToList() }),
-            FichaDetalheDto d => Results.Ok(d with { Adicionais = d.Adicionais!.Select(a => a with { Nome = nomes.GetValueOrDefault(a.Tecno, "PHC " + a.Tecno) }).ToList() }),
+            FichaDetalheDto d => Results.Ok(d with
+            {
+                Adicionais = d.Adicionais?.Select(a => a with { Nome = nomes.GetValueOrDefault(a.Tecno, "PHC " + a.Tecno) }).ToList(),
+                Historico = d.Historico?.Select(e => e.Etapa is RegrasQualidade.EtapaExecucao or RegrasQualidade.EtapaHigienizacao || e.Quem is null ? e
+                    : e with { Quem = porCodigo.GetValueOrDefault(e.Quem, e.Quem) }).ToList()
+            }),
             _ => resultado
         };
     }
@@ -605,7 +658,7 @@ public static partial class EndpointsIntervencoes
     // Sem utilizador ativo não há acesso; sem número de técnico do PHC não há fichas (a app explica e pede ao supervisor).
     private static async Task<IResult> ComoTecnico(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, Task<IResult>> acao)
     {
-        if (await Ativo(eu, utilizadores, ct) is not { } u) return Results.Forbid();
+        if (await Ativo(eu, utilizadores, ct) is not { } u || u.Perfil == Perfil.Qualidade) return Results.Forbid();
         if (u.Tecno <= 0) return Results.Json(new { erro = "sem_tecno" }, statusCode: StatusCodes.Status403Forbidden);
         return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)));
     }
@@ -613,7 +666,7 @@ public static partial class EndpointsIntervencoes
     // Supervisor (mesmo sem número de técnico) ou técnico com número; o supervisor lê qualquer ficha.
     private static async Task<IResult> ComoTecnicoOuSupervisor(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, bool, Task<IResult>> acao)
     {
-        if (await Ativo(eu, utilizadores, ct) is not { } u) return Results.Forbid();
+        if (await Ativo(eu, utilizadores, ct) is not { } u || u.Perfil == Perfil.Qualidade) return Results.Forbid();
         var supervisor = u.Perfil == Perfil.Supervisor;
         if (!supervisor && u.Tecno <= 0) return Results.Json(new { erro = "sem_tecno" }, statusCode: StatusCodes.Status403Forbidden);
         return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)), supervisor);
@@ -623,6 +676,12 @@ public static partial class EndpointsIntervencoes
     private static async Task<IResult> ComoSupervisor(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, Task<IResult>> acao)
     {
         if (await Ativo(eu, utilizadores, ct) is not { Perfil: Perfil.Supervisor } u) return Results.Forbid();
+        return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)));
+    }
+
+    private static async Task<IResult> ComoQualidade(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, Task<IResult>> acao)
+    {
+        if (await Ativo(eu, utilizadores, ct) is not { Perfil: Perfil.Qualidade } u) return Results.Forbid();
         return await acao(new TecnicoAtual(u.Codigo, u.Tecno, Truncar(u.Nome)));
     }
 
@@ -650,6 +709,9 @@ public static partial class EndpointsIntervencoes
         ResultadoIntervencao.TecnicoInvalido => Results.Json(new { erro = "tecnico_invalido" }, statusCode: StatusCodes.Status404NotFound),
         ResultadoIntervencao.ForaDeOrdem => Conflito("fora_de_ordem"),
         ResultadoIntervencao.ExigeDocumento => Conflito("externa_sem_documento"),
+        ResultadoIntervencao.ExigeAssinatura => Conflito("externa_sem_assinatura"),
+        ResultadoIntervencao.NaoExterna => Conflito("nao_externa"),
+        ResultadoIntervencao.JaAssinada => Conflito("ja_assinada"),
         ResultadoIntervencao.Propria => Conflito("propria"),
         ResultadoIntervencao.LimiteFotos => Conflito("limite_fotos"),
         ResultadoIntervencao.SemPermissao => Results.Json(new { erro = "sem_permissao" }, statusCode: StatusCodes.Status403Forbidden),

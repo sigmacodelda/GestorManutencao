@@ -1,0 +1,114 @@
+@page "/assinatura"
+@implements IAsyncDisposable
+@inject SessaoService Sessao
+@inject IAssinaturaService Servico
+@inject ToastService Toast
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>A minha assinatura · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        @if (!Sessao.AssinaturaEmFalta)
+        {
+            <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        }
+        <h1 tabindex="-1">@(Sessao.AssinaturaEmFalta ? "Desenhe a sua assinatura" : "A minha assinatura")</h1>
+        <p class="login-sub">@(Sessao.AssinaturaEmFalta ? "Antes de continuar, desenhe a sua assinatura. É obrigatória e fica associada ao seu nome." : "Desenhe a assinatura que fica associada ao seu nome. Só você a altera.")</p>
+    </div>
+
+    @if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else
+    {
+        <form class="formulario" @onsubmit="GuardarAsync" novalidate>
+            <div class="campo">
+                <label id="assinatura-rotulo">Assinatura</label>
+                <canvas id="assinatura-tela" class="assinatura-tela" width="600" height="240" role="img" aria-labelledby="assinatura-rotulo"></canvas>
+                <small class="campo-ajuda">Desenhe com o dedo ou com o rato.</small>
+            </div>
+
+            <p class="campo-erro" role="alert">@_erro</p>
+
+            <div class="ficha-acoes">
+                <button type="submit" class="btn btn-primario btn-grande" disabled="@(_ocupado || !_carregada || !_temTraco)">
+                    <Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Guardar")</span>
+                </button>
+                <button type="button" class="btn btn-secundario" disabled="@(_ocupado || !_temTraco)" @onclick="LimparAsync">Limpar</button>
+            </div>
+        </form>
+    }
+</section>
+
+@code {
+    private string _atual = "", _erro = "";
+    private bool _a_carregar = true, _ocupado, _carregada, _temTraco, _iniciada;
+    private DotNetObjectReference<Assinatura>? _ref;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Servico.LerAsync(Sessao.Utilizador?.Token);
+        if (r.Resultado == ResultadoAssinatura.Ok) { _atual = r.Texto; _carregada = true; }
+        else _erro = "Não foi possível carregar a assinatura. Precisa de ligação à rede.";
+        _a_carregar = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool primeira)
+    {
+        if (_iniciada || _a_carregar) return;
+        _iniciada = true;
+        _ref = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("gmAssinatura.iniciar", "assinatura-tela", _ref);
+            if (RegrasAssinatura.EImagem(_atual)) { await JS.InvokeVoidAsync("gmAssinatura.carregar", "assinatura-tela", _atual); }
+        }
+        catch (Exception) { _erro = "Não foi possível abrir a área de desenho."; StateHasChanged(); }
+    }
+
+    [JSInvokable]
+    public void AoMudar(bool temTraco)
+    {
+        _temTraco = temTraco;
+        StateHasChanged();
+    }
+
+    private async Task LimparAsync()
+    {
+        _erro = "";
+        await JS.InvokeVoidAsync("gmAssinatura.limpar", "assinatura-tela");
+    }
+
+    private async Task GuardarAsync()
+    {
+        _erro = "";
+        if (!_temTraco) { _erro = "Desenhe a sua assinatura."; return; }
+        _ocupado = true;
+        try
+        {
+            var png = await JS.InvokeAsync<string>("gmAssinatura.exportar", "assinatura-tela");
+            if (!RegrasAssinatura.EImagem(png)) { _erro = "A assinatura é demasiado grande ou inválida. Limpe e desenhe outra vez."; return; }
+            var r = await Servico.GuardarAsync(Sessao.Utilizador?.Token, png);
+            switch (r.Resultado)
+            {
+                case ResultadoAssinatura.Ok:
+                    _atual = png; Toast.Sucesso("Assinatura guardada.");
+                    if (Sessao.AssinaturaEmFalta) { Sessao.DefinirAssinaturaEmFalta(false); Nav.NavigateTo("", replace: true); }
+                    break;
+                case ResultadoAssinatura.Invalida: _erro = "A assinatura não foi aceite. Limpe e desenhe outra vez."; break;
+                default: _erro = "Não foi possível guardar. Precisa de ligação à rede."; break;
+            }
+        }
+        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _ocupado = false; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("gmAssinatura.parar", "assinatura-tela"); } catch (Exception) { /* a página já fechou */ }
+        _ref?.Dispose();
+    }
+}

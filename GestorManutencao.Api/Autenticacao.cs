@@ -8,7 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace GestorManutencao.Api;
 
 [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
-public enum Perfil { Operador, Supervisor }
+public enum Perfil { Operador, Supervisor, Qualidade }
 
 // Versao muda sempre que o PIN muda; vai no token e permite revogar os tokens antigos.
 // Tecno é o número de utilizador do PHC (0 = ainda sem número): é a identidade da pessoa nas fichas de intervenção.
@@ -17,6 +17,25 @@ public sealed record UtilizadorApp(string Codigo, string Nome, Perfil Perfil, bo
 public sealed record PedidoLogin(string? Pin)
 {
     private bool PrintMembers(StringBuilder sb) { sb.Append("***"); return true; }
+}
+
+public sealed record PedidoAtivo(bool Ativo);
+public sealed record PedidoAssinatura(string? Assinatura);
+
+// A assinatura é um desenho (PNG em data URL) guardado no memo do utilizador.
+public static class RegrasAssinatura
+{
+    public const string Prefixo = "data:image/png;base64,";
+    public const int Max = 200_000;
+    private static readonly byte[] CabecalhoPng = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    public static bool Valida(string? texto)
+    {
+        if (string.IsNullOrEmpty(texto) || texto.Length > Max || !texto.StartsWith(Prefixo, StringComparison.Ordinal)) return false;
+        var dados = texto.AsSpan(Prefixo.Length);
+        var buffer = new byte[dados.Length / 4 * 3 + 3];
+        return Convert.TryFromBase64Chars(dados, buffer, out var n) && n > CabecalhoPng.Length && buffer.AsSpan(0, CabecalhoPng.Length).SequenceEqual(CabecalhoPng);
+    }
 }
 
 public sealed record PedidoMudarPin(string? PinAtual, string? PinNovo)
@@ -101,7 +120,7 @@ public sealed class PinHasher(Microsoft.Extensions.Options.IOptions<PinOpcoes> o
     public string VersaoDev => DevAtivo ? Hash("dev-versao:" + opcoes.Value.Dev)[..16] : "";
 }
 
-public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste, TecnoEmUso }
+public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste, TecnoEmUso, Protegido }
 
 public sealed class RepositorioIndisponivelException(Exception? interna = null)
     : Exception("A base de dados dos utilizadores não está disponível.", interna);
@@ -116,6 +135,11 @@ public interface IRepositorioUtilizadores
     Task<ResultadoPin> CriarUtilizadorAsync(string codigo, string nome, Perfil perfil, int tecno, string pinHash, string porQuem, CancellationToken ct);
     // Cada número do PHC só pode estar numa pessoa (0 = sem número).
     Task<ResultadoPin> DefinirTecnoAsync(string codigo, int tecno, string porQuem, CancellationToken ct);
+    // Inativa ou reativa o utilizador; nunca se apaga (Protegido = é supervisor: esses não se inativam por aqui). Inativo deixa de entrar e as fichas ficam com o código dele.
+    Task<ResultadoPin> DefinirAtivoAsync(string codigo, bool ativo, string porQuem, CancellationToken ct);
+    // Assinatura escrita pela própria pessoa (memo em u_manutil); só se guarda, não se usa em mais nada por agora.
+    Task<string?> ObterAssinaturaAsync(string codigo, CancellationToken ct);
+    Task<ResultadoPin> DefinirAssinaturaAsync(string codigo, string assinatura, CancellationToken ct);
     // Com pinHashAtual só muda se o PIN ainda for esse (evita que duas alterações em simultâneo se atropelem).
     Task<ResultadoPin> DefinirPinAsync(string codigo, string pinHash, bool provisorio, string porQuem, CancellationToken ct, string? pinHashAtual = null);
 }

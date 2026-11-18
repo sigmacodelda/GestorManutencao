@@ -57,9 +57,14 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
         """;
 
-    private const string Selecao = SelecaoCampos + ", " + PausaSel + SelecaoDe;
+    // Colunas lidas por nome em Ler: ficha de manutenção externa e se já tem a assinatura da empresa (assinaturaextdata = 1900 é sem assinatura).
+    private const string ExtSel =
+        "case when upper(ltrim(rtrim(f.tipomanut))) = 'EXTERNA' then 1 else 0 end as externa, " +
+        "case when f.assinaturaextdata > '19000101' then 1 else 0 end as temassext";
 
-    private const string SelecaoSemPausa = SelecaoCampos + ", 0" + SelecaoDe;
+    private const string Selecao = SelecaoCampos + ", " + PausaSel + ", " + ExtSel + SelecaoDe;
+
+    private const string SelecaoSemPausa = SelecaoCampos + ", 0, " + ExtSel + SelecaoDe;
 
     // Do técnico, principal ou adicional (ou sem dono e já dentro da antecedência); em curso e planeadas, sem viaturas.
     private const string SqlListar = Selecao +
@@ -87,7 +92,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         $"""
         select f.u_fichaintstamp, case when f.design <> '' then f.design else isnull(e.design, '') end, isnull(e.[local], ''),
                f.tipointerv, f.data, rtrim(f.estado), f.problema, f.resolucao, {HIniSel}, {HFimSel}, f.tecnome, f.tecno, isnull(f.valobs, ''), {TecnosSel}, 0,
-               coalesce(c.feita, lg.ultima), c.cancelada, isnull(pp.unidade, ''), isnull(pp.intervalo, 0)
+               coalesce(c.feita, lg.ultima), c.cancelada, isnull(pp.unidade, ''), isnull(pp.intervalo, 0), {ExtSel}
         from u_fichaint f with (nolock)
         left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
         left join u_itmanutli l with (nolock) on l.u_itmanutlistamp = f.uitmanutlistamp
@@ -117,7 +122,8 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlAtual =
         $"""
-        select rtrim(f.estado), f.uitmanutlistamp, f.tipomanut, f.nofornec, f.docexterno, f.tecno, isnull(e.[local], ''), {HIniSel}, {TecnosSel}
+        select rtrim(f.estado), f.uitmanutlistamp, f.tipomanut, f.nofornec, f.docexterno, f.tecno, isnull(e.[local], ''), {HIniSel}, {TecnosSel},
+               case when f.assinaturaextdata > '19000101' then 1 else 0 end
         from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp
         where f.u_fichaintstamp = @id and f.obsoleto = 0 and e.tipoequip = 1
         """;
@@ -219,11 +225,11 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string FromFicha = " from u_fichaint f with (nolock) left join u_equip e with (nolock) on e.u_equipstamp = f.u_equipstamp";
 
-    private const string CamposFicha = CamposFichaBase + FromFicha;
+    private const string CamposFicha = CamposFichaBase + ", " + ExtSel + FromFicha;
 
     // Lista do supervisor: mais número, total, fechada, supervisão, fora de ordem e ficha antiga (estado vazio).
     private const string CamposTodas = CamposFichaBase +
-        ", f.no, isnull(f.totmo, 0) + isnull(f.totref, 0), f.fechada, f.supervisao, f.foraordem, case when rtrim(f.estado) = '' then 1 else 0 end" + FromFicha;
+        ", f.no, isnull(f.totmo, 0) + isnull(f.totref, 0), f.fechada, f.supervisao, f.foraordem, case when rtrim(f.estado) = '' then 1 else 0 end, " + ExtSel + FromFicha;
 
     // Histórico do equipamento: as planeadas (ainda por fazer) ficam nas tarefas.
     private const string SqlHistoricoEquipamento = "select top 50" + CamposFicha +
@@ -327,6 +333,19 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         where u_fichaintstamp = @id and fechada = 0 and obsoleto = 0 and estado = 'EmCurso' and (tecno = @tecno or tecno = 0 or {EmTecnosSemAlias})
         """;
 
+    // Assinatura da empresa externa (ver docs/assinatura-externa.md): só grava se ainda não há assinatura e a ficha está em curso ou concluída por fechar.
+    private const string SqlAssinarExterna =
+        $"""
+        update u_fichaint set assinaturaext = @assinatura, assinaturaextnome = @nome, assinaturaextdata = @agora,
+               usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        where u_fichaintstamp = @id and obsoleto = 0 and fechada = 0 and rtrim(estado) in ('EmCurso', 'Concluida')
+          and upper(ltrim(rtrim(tipomanut))) = 'EXTERNA' and assinaturaextdata <= '19000101'
+          and (@supervisor = 1 or tecno = @tecno or tecno = 0 or {EmTecnosSemAlias})
+        """;
+
+    private const string SqlAssinaturaExterna =
+        "select cast(isnull(assinaturaext, '') as varchar(max)), isnull(assinaturaextnome, ''), assinaturaextdata from u_fichaint with (nolock) where u_fichaintstamp = @id";
+
     // Pausa: um só par pausaini/pausafim por linha, por isso (pausafim - pausaini) é sempre o total pausado.
     // Pausar depois de já ter retomado desloca pausaini para (agora - pausa anterior) e limpa pausafim; retomar põe pausafim = agora.
     // Só a linha aberta do técnico (sem datafim) de uma ficha em curso; o UPDATE é idempotente (não repete uma pausa já aberta).
@@ -385,9 +404,25 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlValidar =
         """
-        update u_fichaint set estado = 'Validada', fechada = 1, supervisao = 1, valinis = @codigo, valdata = @agora,
+        update u_fichaint set estado = 'Validada', fechada = 0, supervisao = 1, valinis = @codigo, valdata = @agora,
                usrinis = @codigo, usrdata = @dia, usrhora = @hora
         where u_fichaintstamp = @id and estado = 'Concluida'
+        """;
+
+    // Fila da Qualidade: validada pelo supervisor e ainda não fechada; as validadas antigas estão todas fechadas.
+    private const string SqlPorConcluir = SelecaoSemPausa +
+        """
+
+        where f.estado = 'Validada' and f.fechada = 0 and f.obsoleto = 0 and e.tipoequip = 1
+        order by f.data, f.no
+        """;
+
+    // O nome de quem higienizou só se grava uma vez (higienizadopor vazio) e só a Qualidade chega aqui.
+    private const string SqlConcluirQualidade =
+        """
+        update u_fichaint set fechada = 1, limrem = 1, higienizadopor = @higienizacao, higienizadata = @agora, qualinis = @codigo, qualdata = @agora,
+               usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        where u_fichaintstamp = @id and estado = 'Validada' and fechada = 0 and obsoleto = 0 and isnull(higienizadopor, '') = ''
         """;
 
     // Ao concluir já se gerou a seguinte; ao devolver, essa planeada ainda por tocar sai (uma só em aberto por tarefa).
@@ -401,7 +436,8 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     private const string SqlDevolver =
         """
-        update u_fichaint set estado = 'EmCurso', valobs = @motivo, usrinis = @codigo, usrdata = @dia, usrhora = @hora
+        update u_fichaint set estado = 'EmCurso', valobs = @motivo,
+               histdevol = case when isnull(cast(histdevol as varchar(max)), '') = '' then @linha else cast(histdevol as varchar(max)) + char(10) + @linha end, usrinis = @codigo, usrdata = @dia, usrhora = @hora
         where u_fichaintstamp = @id and estado = 'Concluida'
         """;
 
@@ -490,7 +526,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
           and exists (select 1 from u_itmanutli l join u_itmanut i on i.u_itmanutstamp = l.u_itmanutstamp where l.u_itmanutlistamp = @tarefa and i.obsoleto = 0)
         """;
 
-    private sealed record Atual(string Estado, string Tarefa, string TipoManut, decimal NoFornecedor, string DocExterno, decimal Tecno, string Local, DateTime Hini, string Tecnos);
+    private sealed record Atual(string Estado, string Tarefa, string TipoManut, decimal NoFornecedor, string DocExterno, decimal Tecno, string Local, DateTime Hini, string Tecnos, bool TemAssinaturaExt);
 
     private sealed record Candidata(string Stamp, string EquipStamp, string Ref, string Design, string Periodo, string TipoManut, string Responsabilidade,
         string Descricao, string Unidade, decimal Intervalo, DateTime? UltimaFeita, DateTime? UltimaCancelada, DateTime? UltimaLegado, bool Aberta);
@@ -587,7 +623,8 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
             Vazio(r.GetString(10)), (int)r.GetDecimal(11), podeValidar,
             Motivo: estado == EstadoIntervencao.EmCurso ? Vazio(r.GetString(12)) : null,
             Adicionais: RegrasIntervencao.AdicionaisDe(r.GetString(13), (int)r.GetDecimal(11)),
-            EmPausa: r.GetInt32(14) == 2, PodePausar: r.GetInt32(14) >= 1);
+            EmPausa: r.GetInt32(14) == 2, PodePausar: r.GetInt32(14) >= 1,
+            Externa: r.GetInt32(r.GetOrdinal("externa")) == 1, TemAssinaturaExterna: r.GetInt32(r.GetOrdinal("temassext")) == 1);
     }
 
     // Data prevista = a mais recente entre a última feita e a última cancelada (cancelar salta uma ocorrência) + periodicidade.
@@ -617,7 +654,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         Texto(cmd, "@id", 25, id);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct)
-            ? new Atual(r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim(), r.GetDecimal(3), r.GetString(4), r.GetDecimal(5), r.GetString(6).Trim(), r.GetDateTime(7), r.GetString(8))
+            ? new Atual(r.GetString(0).Trim(), r.GetString(1).Trim(), r.GetString(2).Trim(), r.GetDecimal(3), r.GetString(4), r.GetDecimal(5), r.GetString(6).Trim(), r.GetDateTime(7), r.GetString(8), r.GetInt32(9) == 1)
             : null;
     }
 
@@ -885,6 +922,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
         var cfg = await LerConfiguracaoAsync(conn, ct);
         if (cfg.ExtExigeDoc && RegrasManutencao.FaltaParaFechar(a.TipoManut, a.NoFornecedor, a.DocExterno) is not null) return (ResultadoIntervencao.ExigeDocumento, null);
+        if (RegrasIntervencao.EhExterna(a.TipoManut) && !a.TemAssinaturaExt) return (ResultadoIntervencao.ExigeAssinatura, null);
 
         // As horas ficam no dia em que a ficha foi iniciada; a data da ficha passa a ser esse dia (base da próxima).
         var agora = await AgoraAsync(conn, ct);
@@ -944,6 +982,38 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         await GerarSeguinteAsync(conn, a.Tarefa, tecnico.Codigo, ct);
         return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct));
     });
+
+    // Imutável: o UPDATE só grava com assinaturaextdata em 1900 (sem assinatura); se não gravar, distingue-se já assinada (repetição idêntica = ok) de ficha que já não aceita.
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> AssinarExternaAsync(string id, string nome, string assinatura, TecnicoAtual quem, bool supervisor, CancellationToken ct) => Executar<(ResultadoIntervencao, IntervencaoDto?)>(async conn =>
+    {
+        if (await LerAtualAsync(conn, id, ct) is not { } a || (!supervisor && !Minha(a, quem))) return (ResultadoIntervencao.NaoExiste, null);
+        if (!RegrasIntervencao.EhExterna(a.TipoManut)) return (ResultadoIntervencao.NaoExterna, null);
+        var dono = supervisor ? null : quem;
+        if (a.TemAssinaturaExt) return await JaAssinadaAsync(conn, id, nome, assinatura, dono, ct);
+        if (a.Estado is not ("EmCurso" or "Concluida")) return (ResultadoIntervencao.Conflito, null);
+
+        await using var cmd = new SqlCommand(SqlAssinarExterna, conn);
+        Texto(cmd, "@id", 25, id);
+        Texto(cmd, "@nome", RegrasIntervencao.MaxNomeAssinante, nome);
+        cmd.Parameters.Add("@assinatura", SqlDbType.VarChar, -1).Value = assinatura;
+        cmd.Parameters.Add("@supervisor", SqlDbType.Bit).Value = supervisor;
+        Numero(cmd, "@tecno", quem.Tecno, 5);
+        ParametroTecnos(cmd, quem.Tecno);
+        Auditoria(cmd, quem.Codigo, await AgoraAsync(conn, ct));
+        if (await cmd.ExecuteNonQueryAsync(ct) > 0) return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct, dono));
+        // Outro pedido chegou primeiro ou a ficha mudou de estado entretanto.
+        if (await LerAtualAsync(conn, id, ct) is not { } depois) return (ResultadoIntervencao.NaoExiste, null);
+        return depois.TemAssinaturaExt ? await JaAssinadaAsync(conn, id, nome, assinatura, dono, ct) : (ResultadoIntervencao.Conflito, null);
+    });
+
+    private static async Task<(ResultadoIntervencao, IntervencaoDto?)> JaAssinadaAsync(SqlConnection conn, string id, string nome, string assinatura, TecnicoAtual? dono, CancellationToken ct)
+    {
+        await using var cmd = new SqlCommand(SqlAssinaturaExterna, conn);
+        Texto(cmd, "@id", 25, id);
+        await using (var r = await cmd.ExecuteReaderAsync(ct))
+            if (!await r.ReadAsync(ct) || r.GetString(0) != assinatura || r.GetString(1).Trim() != nome) return (ResultadoIntervencao.JaAssinada, null);
+        return (ResultadoIntervencao.Ok, await LerUmaAsync(conn, id, ct, dono));
+    }
 
     public Task<(ResultadoIntervencao, IntervencaoDto?)> PausarAsync(string id, TecnicoAtual tecnico, CancellationToken ct) => Pausa(id, tecnico, true, ct);
 
@@ -1018,6 +1088,26 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         return await Resultado(conn, cmd, id, ct);
     });
 
+    public Task<IReadOnlyList<IntervencaoDto>> ListarPorConcluirAsync(CancellationToken ct) => Executar<IReadOnlyList<IntervencaoDto>>(async conn =>
+    {
+        await using var cmd = new SqlCommand(SqlPorConcluir, conn);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        var lista = new List<IntervencaoDto>();
+        while (lista.Count < 300 && await r.ReadAsync(ct)) lista.Add(Ler(r));
+        return lista;
+    });
+
+    public Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirQualidadeAsync(string id, string higienizacao, TecnicoAtual qualidade, CancellationToken ct) => Executar<(ResultadoIntervencao, IntervencaoDto?)>(async conn =>
+    {
+        if (await LerAtualAsync(conn, id, ct) is not { } a) return (ResultadoIntervencao.NaoExiste, null);
+        if (a.Estado != "Validada") return (ResultadoIntervencao.Conflito, null);
+        await using var cmd = new SqlCommand(SqlConcluirQualidade, conn);
+        Texto(cmd, "@id", 25, id);
+        Texto(cmd, "@higienizacao", RegrasQualidade.MaxHigienizacao, higienizacao);
+        Auditoria(cmd, qualidade.Codigo, await AgoraAsync(conn, ct));
+        return await Resultado(conn, cmd, id, ct);
+    });
+
     public Task<(ResultadoIntervencao, IntervencaoDto?)> DevolverAsync(string id, string motivo, TecnicoAtual supervisor, CancellationToken ct) => Executar<(ResultadoIntervencao, IntervencaoDto?)>(async conn =>
     {
         if (await LerAtualAsync(conn, id, ct) is not { } a) return (ResultadoIntervencao.NaoExiste, null);
@@ -1035,6 +1125,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         await using var cmd = new SqlCommand(SqlDevolver, conn, tx);
         Texto(cmd, "@id", 25, id);
         Texto(cmd, "@motivo", 254, RegrasManutencao.Cortar(motivo, RegrasManutencao.TamanhoMotivo));
+        cmd.Parameters.Add("@linha", SqlDbType.VarChar, -1).Value = RegrasQualidade.AcrescentarDevolucao(null, agora.Agora, supervisor.Codigo, RegrasManutencao.Cortar(motivo, RegrasManutencao.TamanhoMotivo));
         Auditoria(cmd, supervisor.Codigo, agora);
         if (await cmd.ExecuteNonQueryAsync(ct) == 0) { await tx.RollbackAsync(ct); return (ResultadoIntervencao.Conflito, null); }
         await tx.CommitAsync(ct);

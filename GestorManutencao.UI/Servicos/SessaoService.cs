@@ -12,6 +12,17 @@ public sealed class SessaoService(IAutenticacaoService autenticacao, IArmazemSes
     public ModoTrabalho Modo { get; private set; } = ModoTrabalho.Operador;
     public bool TemSessao => Utilizador is not null;
     public bool PodeSerSupervisor => Utilizador?.Perfil == Perfil.Supervisor;
+    public bool EQualidade => Utilizador?.Perfil == Perfil.Qualidade;
+
+    // Sem assinatura a pessoa só vê a página da assinatura. Só é verdadeiro depois de o servidor dizer que está vazia: sem rede não bloqueia.
+    public bool AssinaturaEmFalta { get; private set; }
+
+    public void DefinirAssinaturaEmFalta(bool emFalta)
+    {
+        if (AssinaturaEmFalta == emFalta) return;
+        AssinaturaEmFalta = emFalta;
+        Alterada?.Invoke();
+    }
 
     public event Action? Alterada;
 
@@ -52,6 +63,7 @@ public sealed class SessaoService(IAutenticacaoService autenticacao, IArmazemSes
     public async Task SairAsync()
     {
         Utilizador = null;
+        AssinaturaEmFalta = false;
         Modo = ModoTrabalho.Operador;
         await armazem.LimparAsync();
         Alterada?.Invoke();
@@ -66,7 +78,7 @@ public sealed class SessaoService(IAutenticacaoService autenticacao, IArmazemSes
 
     // Um supervisor abre logo no modo supervisor; pode passar a operador quando trabalha na linha.
     private void DefinirModoInicial() =>
-        Modo = PodeSerSupervisor ? ModoTrabalho.Supervisor : ModoTrabalho.Operador;
+        Modo = PodeSerSupervisor ? ModoTrabalho.Supervisor : EQualidade ? ModoTrabalho.Qualidade : ModoTrabalho.Operador;
 }
 
 public sealed class ArmazemSessaoMemoria : IArmazemSessao
@@ -86,6 +98,7 @@ public static class ServicosExtensions
         services.AddSingleton(GestorManutencao.UI.Temas.Tema.Carregar(tema)).AddScoped<SessaoService>();
         services.AddSingleton<CicloVidaApp>().AddScoped<NotificacaoService>().AddScoped<ToastService>();
         services.TryAddSingleton<IAvisoSistema, AvisoSistemaNenhum>();
+        services.TryAddSingleton<IPushToken, PushTokenNenhum>();
         services.TryAddSingleton<ITempoReal, TempoRealNenhum>();
         services.TryAddSingleton<IArmazemAvisos, ArmazemAvisosMemoria>();
         services.TryAddSingleton<IDitado, DitadoNenhum>();

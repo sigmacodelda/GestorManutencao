@@ -1,0 +1,136 @@
+@page "/qualidade"
+@implements IDisposable
+@inject SessaoService Sessao
+@inject ToastService Toast
+@inject IIntervencoesService Intervencoes
+@inject NotificacaoService Notificacoes
+
+<PageTitle>Qualidade · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <h1 tabindex="-1">Qualidade</h1>
+    </div>
+
+    @if (!Sessao.EQualidade)
+    {
+        <p class="estado-lista" role="status">Esta área é só para o perfil Qualidade.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_falhou)
+    {
+        <div class="estado-lista" role="alert">
+            <p>Não foi possível carregar as fichas.</p>
+            <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
+        </div>
+    }
+    else
+    {
+        @if (_erro is not null)
+        {
+            <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>@_erro</span></p>
+        }
+        @if (_fichas.Count == 0)
+        {
+            <p class="estado-lista" role="status">Não há intervenções à espera de conclusão.</p>
+        }
+        else
+        {
+            <h2 class="titulo-grupo">Por concluir <span class="contagem">@_fichas.Count</span></h2>
+            <ul class="lista-intervencoes">
+                @foreach (var f in _fichas)
+                {
+                    <li class="intervencao ficha-validar">
+                        <span class="intervencao-titulo">@f.Equipamento</span>
+                        <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(f.Zona) ? "Sem zona" : f.Zona)@(f.Tecnico is null ? "" : " · " + f.Tecnico)</span>
+                        <span class="chips">
+                            <span class="chip chip-ok">Validada</span>
+                            <span class="chip @(f.Tipo == TipoIntervencao.Curativa ? "chip-aviso" : "")">@(f.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                        </span>
+                        <span class="intervencao-data">@f.DataPlaneada.ToString("dd/MM")</span>
+                        @if (!string.IsNullOrWhiteSpace(f.Anomalia))
+                        {
+                            <p class="ficha-texto"><strong>Problema:</strong> @f.Anomalia</p>
+                        }
+                        <p class="ficha-texto"><strong>Feito:</strong> @(f.Feito ?? "—")</p>
+                        @if (_aConcluir == f.Id)
+                        {
+                            <div class="campo ficha-texto">
+                                <label for="higien-@f.Id">Quem realizou a higienização?</label>
+                                <input id="higien-@f.Id" type="text" maxlength="@RegrasQualidade.MaxHigienizacao" @bind="_higienizacao" @bind:event="oninput" />
+                                <small>Depois de concluir, este nome já não se pode alterar.</small>
+                            </div>
+                            <div class="ficha-acoes">
+                                <button type="button" class="btn" disabled="@(_ocupado || RegrasQualidade.ValidarHigienizacao(_higienizacao) is not null)" @onclick="() => ConcluirAsync(f)">
+                                    <Icone Nome="circle-check" /><span>Concluir</span>
+                                </button>
+                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aConcluir = null">Cancelar</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="ficha-acoes">
+                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => { _aConcluir = f.Id; _higienizacao = string.Empty; }">
+                                    <Icone Nome="shield-check" /><span>Concluir intervenção</span>
+                                </button>
+                            </div>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    }
+</section>
+
+@code {
+    private List<Intervencao> _fichas = [];
+    private bool _a_carregar = true, _falhou, _ocupado;
+    private string? _aConcluir, _erro;
+    private string _higienizacao = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Notificacoes.DadosMudaram += AoMudarDados;
+        if (Sessao.EQualidade) await CarregarAsync();
+        else _a_carregar = false;
+    }
+
+    // O servidor avisa que as fichas mudaram: recarrega, salvo se a pessoa estiver a preencher uma conclusão.
+    private void AoMudarDados() => InvokeAsync(async () =>
+    {
+        if (!Sessao.EQualidade || _ocupado || _aConcluir is not null) return;
+        await CarregarAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Notificacoes.DadosMudaram -= AoMudarDados;
+
+    private async Task CarregarAsync()
+    {
+        _a_carregar = true; _falhou = false; _aConcluir = null;
+        try { _fichas = (await Intervencoes.ListarPorConcluirAsync()).ToList(); }
+        catch (Exception) { _falhou = true; }
+        finally { _a_carregar = false; }
+    }
+
+    private async Task ConcluirAsync(Intervencao f)
+    {
+        _ocupado = true; _erro = null;
+        try
+        {
+            var resultado = await Intervencoes.ConcluirQualidadeAsync(f.Id, _higienizacao.Trim());
+            _fichas.Remove(f);
+            Toast.Sucesso(resultado.Pendente ? "Guardado. Será enviado quando houver rede." : $"Concluída: {f.Equipamento}.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            await CarregarAsync();
+            _erro = ex.Message;
+        }
+        catch (Exception) { _erro = "Não foi possível guardar. Tente outra vez."; }
+        finally { _ocupado = false; _aConcluir = null; }
+    }
+}

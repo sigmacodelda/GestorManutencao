@@ -195,7 +195,7 @@ public sealed class ArmazenamentoSqliteTests : IAsyncLifetime
     {
         var c = new Cenario(new CacheLocalSqlite(_bd), new FilaSaidaSqlite(_bd), new ArmazemFotosPendentesFicheiro(Path.Combine(_pasta, "fotos")));
         await c.SemearEmCacheAsync("T1", "Câmara de frio 01", EstadoIntervencao.Planeada);
-        await c.Svc.PesquisarAsync("");
+        await c.Atualizador.AtualizarCacheAsync();
         c.Remoto.Rede = false;
 
         var avaria = await c.Svc.RegistarAvariaAsync("E1", "Compressor a fazer ruído");

@@ -22,6 +22,23 @@
     {
         <p class="alerta alerta-pin" role="status"><Icone Nome="clock" /><span>@SeccoesFicha.TextoSituacao(d)@(d.Supervisao ? " · supervisionada" : " · por supervisionar").</span></p>
     }
+    @if (d.Historico is { Count: > 0 })
+    {
+        <h2 class="titulo-grupo"><Icone Nome="clock" /> Histórico</h2>
+        <ul class="lista-intervencoes" aria-label="Histórico da intervenção">
+            @foreach (var e in d.Historico)
+            {
+                <li class="intervencao">
+                    <span class="intervencao-titulo">@e.Etapa</span>
+                    <span class="intervencao-desc">@(e.Quem ?? "—")@(e.Quando is { } q ? " · " + q.ToString("dd/MM/yyyy HH:mm") : "")</span>
+                    @if (!string.IsNullOrWhiteSpace(e.Texto))
+                    {
+                        <p class="ficha-texto">@e.Texto</p>
+                    }
+                </li>
+            }
+        </ul>
+    }
     @if (d.Estado == EstadoIntervencao.Cancelada && !string.IsNullOrWhiteSpace(d.Motivo))
     {
         <div class="alerta alerta-devolvida" role="status"><Icone Nome="x" /><div><strong>Cancelada</strong><p>@d.Motivo</p></div></div>
@@ -151,6 +168,14 @@
                             <label for="fc-matext">Material externo (€)</label>
                             <input id="fc-matext" type="number" inputmode="decimal" step="0.01" min="0" disabled="@(!editar)" @bind="_form.MatExterno" />
                         </div>
+                    </div>
+                }
+                @if (SeccoesFicha.EhExterna(d) && RegrasAssinatura.EImagem(d.AssinaturaExt))
+                {
+                    <div class="assinatura-lida">
+                        <p class="ficha-texto">Assinatura da empresa externa</p>
+                        <img class="assinatura-img" src="@d.AssinaturaExt" alt="Assinatura da empresa externa" />
+                        <p class="ficha-texto"><strong>@d.AssinaturaExtNome</strong>@(d.AssinaturaExtData is { } quando ? " · " + quando.ToString("dd/MM/yyyy HH:mm") : "")</p>
                     </div>
                 }
             </section>
