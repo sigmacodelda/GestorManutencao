@@ -5,7 +5,7 @@
         <div class="campo">
             <label for="peca-texto">Peça</label>
             <input id="peca-texto" type="search" autocomplete="off" maxlength="60" placeholder="Referência, nome ou código de barras"
-                   aria-describedby="peca-erro" @bind="_texto" @bind:event="oninput" />
+                   aria-describedby="peca-erro" @ref="_campo" @bind="_texto" @bind:event="oninput" />
         </div>
         <button type="submit" class="btn btn-secundario" disabled="@_a_pesquisar" aria-label="Pesquisar peça"><Icone Nome="search" /></button>
     </div>
@@ -35,9 +35,13 @@ else if (_resultado is not null)
                 </li>
             }
         </ul>
-        @if (_resultado.HaMais || _resultado.Pecas.Count > MaxVisiveis)
+        @if (_resultado.HaMais)
         {
-            <p class="estado-lista" role="status">+@(Math.Max(_resultado.Pecas.Count - MaxVisiveis, 1)), escreva mais</p>
+            <p class="estado-lista" role="status">Há mais resultados, escreva mais para os filtrar.</p>
+        }
+        else if (_resultado.Pecas.Count > MaxVisiveis)
+        {
+            <p class="estado-lista" role="status">+@(_resultado.Pecas.Count - MaxVisiveis), escreva mais</p>
         }
     }
 }
@@ -50,6 +54,9 @@ else if (_resultado is not null)
     private string _texto = "", _erro = "";
     private bool _a_pesquisar;
     private ResultadoPecas? _resultado;
+    private ElementReference _campo;
+
+    public async Task FocarAsync() => await _campo.FocusAsync();
 
     // Ponto de ligação do leitor (câmara/PDA): quem ler uma etiqueta chama isto com o código lido.
     public async Task LerCodigoAsync(string codigo)
@@ -62,21 +69,21 @@ else if (_resultado is not null)
     // Enter com só dígitos (leitor tipo teclado) vai direto à peça; se não existir, cai na pesquisa por texto.
     private async Task PesquisarAsync()
     {
+        if (_a_pesquisar) return;
         _erro = "";
         var texto = _texto.Trim();
         if (texto.Length == 0) { _resultado = null; return; }
         _a_pesquisar = true;
         try
         {
-            if (LogicaEcras.PareceCodigoDeBarras(texto) && await Pecas.ObterPorCodigoAsync(texto) is { } peca)
+            if (LogicaEcraPecas.PareceCodigoDeBarras(texto) && await Pecas.ObterPorCodigoAsync(texto) is { } peca)
             {
                 await EscolherAsync(peca);
                 return;
             }
             _resultado = await Pecas.PesquisarAsync(texto);
         }
-        catch (InvalidOperationException e) { _erro = e.Message; }
-        catch (Exception) { _erro = "Não foi possível pesquisar. Tente outra vez."; }
+        catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível pesquisar. Tente outra vez."); }
         finally { _a_pesquisar = false; }
     }
 

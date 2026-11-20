@@ -1,6 +1,8 @@
 @page "/pecas/entrada"
 @inject IPecasService Pecas
+@implements IDisposable
 @inject IRedeEstado Rede
+@inject SessaoService Sessao
 
 <PageTitle>Entrada de peças · Gestor de Manutenção</PageTitle>
 
@@ -10,6 +12,12 @@
         <h1 tabindex="-1">Entrada de peças</h1>
     </div>
 
+    @if (Sessao.EQualidade)
+    {
+        <p class="estado-lista" role="status">Esta área não é para o seu perfil.</p>
+        return;
+    }
+
     @if (!Rede.Disponivel)
     {
         <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>Sem ligação: a entrada de peças precisa de rede.</span></p>
@@ -17,7 +25,7 @@
 
     @if (_peca is null)
     {
-        <PecaPesquisa OnEscolher="Escolher" />
+        <PecaPesquisa @ref="_pesquisa" OnEscolher="Escolher" />
     }
     else
     {
@@ -26,7 +34,7 @@
             <p class="intervencao-desc">Stock @_peca.Stock.ToString("0.###") · @(_peca.Local.Length > 0 ? _peca.Local : "Sem local")</p>
             <div class="campo">
                 <label for="peca-qtt">Quantidade</label>
-                <input id="peca-qtt" type="number" min="0.001" step="any" inputmode="decimal" @bind="_qtt" @bind:event="oninput" />
+                <input id="peca-qtt" type="number" min="0.001" step="any" inputmode="decimal" @ref="_campoQtt" @bind="_qtt" />
             </div>
             <div class="dialogo-acoes">
                 <button type="submit" class="btn btn-primario" disabled="@(!Rede.Disponivel || _a_gravar)">Dar entrada</button>
@@ -66,7 +74,7 @@
     @if (_paraAnular is { } a)
     {
         <ConfirmaSaida Titulo="Anular entrada?" Texto="@($"Vai anular a entrada de {a.Qtt:0.###} de {a.Ref} {a.Design}. O stock volta ao valor anterior.")"
-                       TextoSair="Anular" Sair="AnularAsync" Ficar="() => _paraAnular = null" />
+                       TextoSair="Anular" TextoFicar="Manter" Sair="AnularAsync" Ficar="() => _paraAnular = null" />
     }
 </section>
 
@@ -74,38 +82,67 @@
     private Peca? _peca;
     private decimal? _qtt = 1;
     private string _erro = "", _feito = "";
-    private bool _a_gravar;
+    private bool _a_gravar, _focarQtt, _focarPesquisa;
     private IReadOnlyList<EntradaPeca>? _entradas;
     private EntradaPeca? _paraAnular;
+    private PecaPesquisa? _pesquisa;
+    private ElementReference _campoQtt;
 
-    protected override async Task OnInitializedAsync() => await CarregarEntradasAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        Rede.Alterada += AoMudarRede;
+        if (!Sessao.EQualidade) await CarregarEntradasAsync();
+    }
 
-    private void Escolher(Peca p) { _peca = p; _qtt = 1; _erro = ""; _feito = ""; }
+    public void Dispose() => Rede.Alterada -= AoMudarRede;
 
-    private void Cancelar() { _peca = null; _erro = ""; }
+    protected override async Task OnAfterRenderAsync(bool primeira)
+    {
+        if (_focarQtt) { _focarQtt = false; await _campoQtt.FocusAsync(); }
+        else if (_focarPesquisa && _pesquisa is not null) { _focarPesquisa = false; await _pesquisa.FocarAsync(); }
+    }
+
+    private void AoMudarRede(bool disponivel) => _ = InvokeAsync(async () =>
+    {
+        if (disponivel && !Sessao.EQualidade) await CarregarEntradasAsync();
+        StateHasChanged();
+    });
+
+    private void Escolher(Peca p) { _peca = p; _qtt = 1; _erro = ""; _feito = ""; _focarQtt = true; }
+
+    private void Cancelar() { _peca = null; _erro = ""; _focarPesquisa = true; }
 
     private async Task CarregarEntradasAsync()
     {
         try { _entradas = await Pecas.EntradasDeHojeAsync(); }
-        catch (InvalidOperationException e) { _entradas ??= []; _erro = e.Message; }
-        catch (Exception) { _entradas ??= []; _erro = "Não foi possível carregar as entradas de hoje."; }
+        catch (Exception e) { _entradas ??= []; _erro = MensagensGestao.Para(e, "Não foi possível carregar as entradas de hoje."); }
     }
+
+    // Sem resposta (rede, timeout, 5xx) não se sabe se a entrada ficou gravada.
+    private static bool ResultadoIncerto(Exception e) =>
+        e is FalhaDeRedePecasException or TaskCanceledException
+        || e is HttpRequestException { StatusCode: not System.Net.HttpStatusCode.Unauthorized };
 
     private async Task DarEntradaAsync()
     {
         if (_peca is null || _a_gravar) return;
         _erro = "";
-        if (_qtt is not > 0) { _erro = "Indique uma quantidade positiva."; return; }
+        if (LogicaEcraPecas.ValidarQuantidade(_qtt) is { } invalida) { _erro = invalida; return; }
         _a_gravar = true;
         try
         {
-            var e = await Pecas.DarEntradaAsync(_peca.Ref, _qtt.Value);
+            var e = await Pecas.DarEntradaAsync(_peca.Ref, _qtt!.Value);
             _feito = $"Entrada dada: {e.Qtt:0.###} de {e.Ref} {e.Design}.";
             _peca = null;
+            _focarPesquisa = true;
             await CarregarEntradasAsync();
         }
-        catch (InvalidOperationException e) { _erro = e.Message; }
-        catch (Exception) { _erro = "Não foi possível dar a entrada. Tente outra vez."; }
+        catch (Exception e) when (ResultadoIncerto(e))
+        {
+            await CarregarEntradasAsync();
+            _erro = "Confirme na lista de hoje antes de repetir a entrada.";
+        }
+        catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível dar a entrada."); }
         finally { _a_gravar = false; }
     }
 
@@ -122,8 +159,7 @@
             _feito = $"Entrada anulada: {a.Qtt:0.###} de {a.Ref}.";
             await CarregarEntradasAsync();
         }
-        catch (InvalidOperationException e) { _erro = e.Message; }
-        catch (Exception) { _erro = "Não foi possível anular. Tente outra vez."; }
+        catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível anular. Tente outra vez."); }
         finally { _a_gravar = false; }
     }
 }

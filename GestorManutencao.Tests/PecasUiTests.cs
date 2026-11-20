@@ -13,15 +13,15 @@ public class PecasUiTests
     [InlineData("", false)]
     [InlineData(null, false)]
     public void PareceCodigo_so_digitos_com_pelo_menos_6(string? texto, bool esperado)
-        => Assert.Equal(esperado, LogicaEcras.PareceCodigoDeBarras(texto));
+        => Assert.Equal(esperado, LogicaEcraPecas.PareceCodigoDeBarras(texto));
 
     [Fact]
     public void Avisos_de_stock_usam_a_regra_unica()
     {
-        Assert.Equal("Stock insuficiente: há 2 e pede 3.", LogicaEcras.AvisoStock(3, 2));
-        Assert.Equal("Sem stock desta peça.", LogicaEcras.AvisoStock(1, 0));
-        Assert.Null(LogicaEcras.AvisoStock(2, 2));
-        Assert.Null(LogicaEcras.AvisoStock(0, 0));
+        Assert.Equal("Stock insuficiente: há 2 e pede 3.", LogicaEcraPecas.AvisoStock(3, 2));
+        Assert.Equal("Sem stock desta peça.", LogicaEcraPecas.AvisoStock(1, 0));
+        Assert.Null(LogicaEcraPecas.AvisoStock(2, 2));
+        Assert.Null(LogicaEcraPecas.AvisoStock(0, 0));
     }
 
     [Fact]
@@ -96,15 +96,61 @@ public class PecasUiTests
     public async Task Api_codigo_inexistente_404_da_null()
         => Assert.Null(await Api(new Fixo(System.Net.HttpStatusCode.NotFound)).ObterPorCodigoAsync("999999"));
 
-    [Theory]
-    [InlineData(System.Net.HttpStatusCode.BadRequest)]
-    [InlineData(System.Net.HttpStatusCode.Conflict)]
-    public async Task Api_400_e_409_levam_a_mensagem_do_campo_erro(System.Net.HttpStatusCode codigo)
+    [Fact]
+    public async Task Api_400_le_a_mensagem_do_corpo_real()
     {
-        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(codigo, "{\"erro\":\"Outro movimento em curso, tente outra vez.\"}")).DarEntradaAsync("P001", 1));
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.BadRequest,
+            "{\"erro\":\"pedido_invalido\",\"mensagem\":\"Peça inexistente.\"}")).DarEntradaAsync("P001", 1));
+
+        Assert.Equal("Peça inexistente.", e.Message);
+    }
+
+    [Fact]
+    public async Task Api_409_le_o_campo_erro()
+    {
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.Conflict,
+            "{\"erro\":\"Outro movimento em curso, tente outra vez.\"}")).DarEntradaAsync("P001", 1));
 
         Assert.Equal("Outro movimento em curso, tente outra vez.", e.Message);
     }
+
+    [Fact]
+    public async Task Api_401_sai_como_sessao_terminada_403_e_503_com_mensagem()
+    {
+        var u = await Assert.ThrowsAsync<HttpRequestException>(() => Api(new Fixo(System.Net.HttpStatusCode.Unauthorized)).EntradasDeHojeAsync());
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, u.StatusCode);
+        Assert.Equal("A sessão terminou. Entre outra vez.", MensagensGestao.Para(u, "x"));
+
+        var f = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.Forbidden)).EntradasDeHojeAsync());
+        Assert.Equal("Não tem permissão para as peças.", f.Message);
+
+        var p = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.ServiceUnavailable)).DarEntradaAsync("P001", 1));
+        Assert.Equal("O PHC não está a responder. Tente outra vez daqui a pouco.", p.Message);
+    }
+
+    [Fact]
+    public async Task Api_envia_o_token_da_sessao_em_Bearer()
+    {
+        var sessao = new SessaoService(new DevAutenticacaoService(), new ArmazemSessaoMemoria());
+        Assert.True((await sessao.EntrarAsync("7953")).Sucesso);
+        var h = new Fixo(System.Net.HttpStatusCode.OK, "[]");
+
+        await new PecasApiService(new HttpClient(h) { BaseAddress = new Uri("https://exemplo.invalid/") }, sessao).EntradasDeHojeAsync();
+
+        Assert.Equal("Bearer", h.Ultimo!.Headers.Authorization!.Scheme);
+        Assert.Equal(sessao.Utilizador!.Token, h.Ultimo.Headers.Authorization.Parameter);
+    }
+
+    [Theory]
+    [InlineData(1.0, null)]
+    [InlineData(0.001, null)]
+    [InlineData(999999.0, null)]
+    [InlineData(1000000.0, "A quantidade máxima é 999999.")]
+    [InlineData(0.0001, "A quantidade tem no máximo 3 casas decimais.")]
+    [InlineData(0.0, "Indique uma quantidade positiva.")]
+    [InlineData(null, "Indique uma quantidade positiva.")]
+    public void Quantidade_valida_no_cliente_como_a_api(double? qtt, string? esperado)
+        => Assert.Equal(esperado, LogicaEcraPecas.ValidarQuantidade(qtt is null ? null : (decimal)qtt));
 
     [Fact]
     public async Task Api_anular_404_nao_falha_e_500_falha()

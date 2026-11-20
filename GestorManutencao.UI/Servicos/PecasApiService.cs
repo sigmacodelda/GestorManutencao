@@ -10,7 +10,7 @@ namespace GestorManutencao.UI.Servicos;
 public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPecasService
 {
     private sealed record PedidoEntrada(string Ref, decimal Qtt);
-    private sealed record CorpoErro(string? Erro);
+    private sealed record CorpoErro(string? Erro, string? Mensagem);
 
     public async Task<ResultadoPecas> PesquisarAsync(string texto, CancellationToken ct = default)
     {
@@ -49,17 +49,29 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
         await VerificarAsync(r, ct);
     }
 
-    // 400 e 409 trazem {erro} já escrito para o utilizador; o resto fica como erro genérico.
+    // 400 traz {erro:"pedido_invalido", mensagem}; 409 traz {erro:"texto"} já escrito para o utilizador.
     private static async Task VerificarAsync(HttpResponseMessage r, CancellationToken ct)
     {
-        if (r.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Conflict)
-            throw new InvalidOperationException(await LerErroAsync(r, ct) ?? "Não foi possível gravar o movimento.");
+        if (r.IsSuccessStatusCode) return;
+        switch (r.StatusCode)
+        {
+            case HttpStatusCode.BadRequest:
+            case HttpStatusCode.Conflict:
+                var c = await LerCorpoAsync(r, ct);
+                var texto = r.StatusCode == HttpStatusCode.BadRequest
+                    ? c?.Mensagem ?? (c?.Erro is not (null or "pedido_invalido") ? c.Erro : null)
+                    : c?.Erro;
+                throw new InvalidOperationException(texto ?? "Não foi possível gravar o movimento.");
+            case HttpStatusCode.Unauthorized: throw new HttpRequestException("A sessão terminou.", null, HttpStatusCode.Unauthorized);
+            case HttpStatusCode.Forbidden: throw new InvalidOperationException("Não tem permissão para as peças.");
+            case HttpStatusCode.ServiceUnavailable: throw new InvalidOperationException("O PHC não está a responder. Tente outra vez daqui a pouco.");
+        }
         r.EnsureSuccessStatusCode();
     }
 
-    private static async Task<string?> LerErroAsync(HttpResponseMessage r, CancellationToken ct)
+    private static async Task<CorpoErro?> LerCorpoAsync(HttpResponseMessage r, CancellationToken ct)
     {
-        try { return (await r.Content.ReadFromJsonAsync<CorpoErro>(ct))?.Erro; }
+        try { return await r.Content.ReadFromJsonAsync<CorpoErro>(ct); }
         catch (System.Text.Json.JsonException) { return null; }
     }
 
@@ -71,6 +83,9 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
             Content = corpo is null ? null : JsonContent.Create(corpo)
         };
         try { return await http.SendAsync(pedido, ct); }
-        catch (Exception e) when (ClassificacaoErros.FalhaDeRede(e, ct)) { throw new InvalidOperationException(MensagensIntervencao.SemRede); }
+        catch (Exception e) when (ClassificacaoErros.FalhaDeRede(e, ct)) { throw new FalhaDeRedePecasException(); }
     }
 }
+
+// Sem resposta do servidor: numa entrada não se sabe se chegou a gravar, por isso o ecrã confirma na lista antes de repetir.
+public sealed class FalhaDeRedePecasException() : InvalidOperationException(MensagensIntervencao.SemRede);

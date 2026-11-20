@@ -119,6 +119,7 @@ public static class MauiProgram
 			builder.Services.AddSingleton<IAssinaturaService, DevAssinaturaService>();
 			builder.Services.AddSingleton<IGestaoService, GestaoDevService>();
 			builder.Services.AddSingleton<IPecasService, PecasDevService>();
+			builder.Services.AddSingleton<IRedeEstado, RedeEstadoManual>();
 			builder.Services.AddSingleton<IArmazemGeracaoDiaria, ArmazemGeracaoDiariaMemoria>();
 			builder.Services.AddSingleton<GeracaoDiaria>(sp => new GeracaoDiaria(sp.GetRequiredService<IArmazemGeracaoDiaria>(), TimeProvider.System));
 			builder.Services.AddSingleton<DevIntervencoesService>();
