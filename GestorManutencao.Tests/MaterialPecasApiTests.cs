@@ -216,9 +216,6 @@ public class MaterialPecasApiTests : IDisposable
 
         public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct) => memoria.ListarAsync(texto, maximo, ct);
         public Task<PecaDto?> ObterPorCodigoAsync(string codigo, CancellationToken ct) => memoria.ObterPorCodigoAsync(codigo, ct);
-        public Task<ResultadoMovimento> DarEntradaAsync(string refPeca, decimal qtt, string iniciais, CancellationToken ct) => memoria.DarEntradaAsync(refPeca, qtt, iniciais, ct);
-        public Task<IReadOnlyList<EntradaPecaDto>> EntradasDeHojeAsync(CancellationToken ct) => memoria.EntradasDeHojeAsync(ct);
-        public Task<ResultadoMovimento> AnularEntradaAsync(string id, CancellationToken ct) => memoria.AnularEntradaAsync(id, ct);
         public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
         {
             if (SaidaIndisponivel) throw new RepositorioIndisponivelException();

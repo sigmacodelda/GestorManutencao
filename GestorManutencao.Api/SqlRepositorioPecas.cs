@@ -4,7 +4,7 @@ using Microsoft.Data.SqlClient;
 
 namespace GestorManutencao.Api;
 
-// Peças e movimentos de armazém por dossier PHC (63 saída por ficha, 64 entrada por dia), como a LandeiroMaui.
+// Peças e movimentos de armazém por dossier PHC (63 saída por ficha; a entrada é da LandeiroMaui), como a LandeiroMaui.
 // Os "toques" (UPDATE x = x) fazem os triggers do PHC moverem o stock. Só na base de testes até estar validado.
 public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<SqlRepositorioPecas> log) : IRepositorioPecas
 {
@@ -147,47 +147,6 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return await r.ReadAsync(ct) ? Ler(r) : null;
     });
 
-    // ---------- Entrada (dossier 64, um por dia)
-
-    public Task<ResultadoMovimento> DarEntradaAsync(string refPeca, decimal qtt, string iniciais, CancellationToken ct) => Executar(async conn =>
-    {
-        iniciais = string.IsNullOrWhiteSpace(iniciais) ? "XX" : iniciais.Trim();
-        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
-        try
-        {
-            if (!await BloquearAsync(conn, tx, RegrasPecas.NdosEntrada, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
-            if (!await EPecaAsync(conn, tx, refPeca, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Referência não é uma peça de manutenção."); }
-            await using var proc = Cmd(conn, tx, "SELECT TOP 1 bostamp FROM bo WITH (NOLOCK) WHERE ndos = @ndos AND CAST(dataopen AS date) = CAST(GETDATE() AS date) ORDER BY obrano",
-                ("@ndos", RegrasPecas.NdosEntrada));
-            var bostamp = await proc.ExecuteScalarAsync(ct) as string
-                ?? await CriarDossierAsync(conn, tx, RegrasPecas.NdosEntrada, $"Entradas {DateTime.Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}", iniciais, ct);
-            var linha = await InserirLinhaAsync(conn, tx, bostamp, RegrasPecas.NdosEntrada, refPeca, qtt, "", iniciais, ct);
-            await tx.CommitAsync(ct);
-            return ResultadoMovimento.Sucesso(linha);
-        }
-        catch (Exception ex) when (ErroDeNegocio(ex))
-        {
-            await RollbackSeguroAsync(tx);
-            return Falhou(ex);
-        }
-    });
-
-    public Task<IReadOnlyList<EntradaPecaDto>> EntradasDeHojeAsync(CancellationToken ct) => Executar<IReadOnlyList<EntradaPecaDto>>(async conn =>
-    {
-        await using var cmd = Cmd(conn, null, """
-            SELECT i.bistamp, LTRIM(RTRIM(i.ref)), LTRIM(RTRIM(i.design)), i.qtt, LTRIM(RTRIM(i.ousrinis)), LTRIM(RTRIM(i.ousrhora))
-            FROM bi i WITH (NOLOCK) JOIN bo b WITH (NOLOCK) ON b.bostamp = i.bostamp
-            WHERE b.ndos = @ndos AND CAST(b.dataopen AS date) = CAST(GETDATE() AS date)
-            ORDER BY i.ousrhora DESC, i.lordem DESC
-            """, ("@ndos", RegrasPecas.NdosEntrada));
-        var lista = new List<EntradaPecaDto>();
-        await using var r = await cmd.ExecuteReaderAsync(ct);
-        while (await r.ReadAsync(ct)) lista.Add(new EntradaPecaDto(r.GetString(0).Trim(), r.GetString(1), r.GetString(2), r.GetDecimal(3), r.GetString(4), r.GetString(5)));
-        return lista;
-    });
-
-    public Task<ResultadoMovimento> AnularEntradaAsync(string id, CancellationToken ct) => ApagarLinhaAsync(id, RegrasPecas.NdosEntrada, ct);
-
     // ---------- Saída (dossier 63, um por ficha; ligação = bi.lobs = stamp do material)
 
     public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) => Executar(async conn =>
@@ -326,7 +285,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return bostamp;
     }
 
-    // lobs = stamp do material (saída) ou vazio (entrada). Devolve o bistamp. RAISERROR classe 16 se a referência não existir.
+    // lobs = stamp do material. Devolve o bistamp. RAISERROR classe 16 se a referência não existir.
     private static async Task<string> InserirLinhaAsync(SqlConnection conn, SqlTransaction tx, string bostamp, int ndos, string refPeca,
         decimal qtt, string lobs, string iniciais, CancellationToken ct)
     {
@@ -373,22 +332,4 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
                 await d.ExecuteNonQueryAsync(ct);
         return true;
     }
-
-    private Task<ResultadoMovimento> ApagarLinhaAsync(string bistamp, int ndos, CancellationToken ct) => Executar(async conn =>
-    {
-        bistamp = bistamp.Trim();
-        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
-        try
-        {
-            if (!await BloquearAsync(conn, tx, ndos, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
-            if (!await ApagarNaTransacaoAsync(conn, tx, bistamp, ndos, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroLinhaInexistente); }
-            await tx.CommitAsync(ct);
-            return ResultadoMovimento.Sucesso(bistamp);
-        }
-        catch (Exception ex) when (ErroDeNegocio(ex))
-        {
-            await RollbackSeguroAsync(tx);
-            return Falhou(ex);
-        }
-    });
 }

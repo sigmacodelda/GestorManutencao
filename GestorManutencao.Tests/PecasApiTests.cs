@@ -66,64 +66,11 @@ public class PecasApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Entrada_sobe_o_stock_lista_hoje_e_anula()
-    {
-        var c = await ComoAnaAsync();
-        var r = await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P002", 3));
-        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
-        var entrada = await r.Content.ReadFromJsonAsync<EntradaPecaDto>();
-        Assert.Equal(3, (await c.GetFromJsonAsync<PecaDto>("/pecas/codigo/P002"))!.Stock);
-        Assert.Single((await c.GetFromJsonAsync<List<EntradaPecaDto>>("/pecas/entradas/hoje"))!);
-
-        Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync($"/pecas/entradas/{entrada!.Id}")).StatusCode);
-        Assert.Equal(0, (await c.GetFromJsonAsync<PecaDto>("/pecas/codigo/P002"))!.Stock);
-        Assert.Empty((await c.GetFromJsonAsync<List<EntradaPecaDto>>("/pecas/entradas/hoje"))!);
-    }
-
-    [Theory]
-    [InlineData("P001", 0)]
-    [InlineData("P001", -2)]
-    [InlineData("", 1)]
-    [InlineData("INEXISTENTE", 1)]
-    public async Task Entrada_invalida_recusa(string refPeca, int qtt)
-    {
-        var c = await ComoAnaAsync();
-        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada(refPeca, qtt))).StatusCode);
-    }
-
-    [Fact]
-    public async Task Entrada_e_anulacao_sem_sessao_recusam()
-    {
-        var c = _fabrica.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        Assert.Equal(HttpStatusCode.Unauthorized, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 1))).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await c.DeleteAsync("/pecas/entradas/abc")).StatusCode);
-    }
-
-    [Fact]
-    public async Task Anular_entrada_inexistente_da_404()
-    {
-        var c = await ComoAnaAsync();
-        Assert.Equal(HttpStatusCode.NotFound, (await c.DeleteAsync("/pecas/entradas/naoexiste")).StatusCode);
-    }
-
-    [Fact]
-    public async Task Quantidade_nula_ou_acima_do_limite_recusa()
-    {
-        var c = await ComoAnaAsync();
-        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", null))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 1000000))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada(new string('X', 19), 1))).StatusCode);
-    }
-
-    [Fact]
     public async Task Perfil_sem_acesso_e_recusado_em_todas_as_rotas()
     {
         var c = await ComoAnaAsync("715329");
         Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/pecas")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/pecas/codigo/560001")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/pecas/entradas/hoje")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 1))).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.DeleteAsync("/pecas/entradas/abc")).StatusCode);
     }
 
     [Fact]
@@ -134,14 +81,11 @@ public class PecasApiTests : IDisposable
         Assert.Equal(2, r!.Pecas.Count);
     }
 
-    private sealed class RepositorioFalso(Func<ResultadoMovimento>? anular = null, bool indisponivel = false) : IRepositorioPecas
+    private sealed class RepositorioFalso(bool indisponivel = false) : IRepositorioPecas
     {
         private static Exception Indisp() => new RepositorioIndisponivelException();
         public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult(new ResultadoPecasDto(true, [], false));
         public Task<PecaDto?> ObterPorCodigoAsync(string codigo, CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult<PecaDto?>(null);
-        public Task<ResultadoMovimento> DarEntradaAsync(string refPeca, decimal qtt, string iniciais, CancellationToken ct) => Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado));
-        public Task<IReadOnlyList<EntradaPecaDto>> EntradasDeHojeAsync(CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult<IReadOnlyList<EntradaPecaDto>>([]);
-        public Task<ResultadoMovimento> AnularEntradaAsync(string id, CancellationToken ct) => Task.FromResult(anular!());
         public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) => throw new NotSupportedException();
         public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => throw new NotSupportedException();
@@ -158,27 +102,10 @@ public class PecasApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Anular_com_recusa_do_repositorio_da_409_com_a_mensagem()
-    {
-        var c = await ComoAnaComAsync(new RepositorioFalso(() => ResultadoMovimento.Falha("recusado")));
-        var r = await c.DeleteAsync("/pecas/entradas/abc");
-        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
-        Assert.Contains("recusado", await r.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
-    public async Task Entrada_com_bloqueio_ocupado_da_409()
-    {
-        var c = await ComoAnaComAsync(new RepositorioFalso());
-        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 1))).StatusCode);
-    }
-
-    [Fact]
     public async Task Repositorio_indisponivel_da_503()
     {
         var c = await ComoAnaComAsync(new RepositorioFalso(indisponivel: true));
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await c.GetAsync("/pecas")).StatusCode);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await c.GetAsync("/pecas/entradas/hoje")).StatusCode);
     }
 
     [Fact]
@@ -188,15 +115,6 @@ public class PecasApiTests : IDisposable
         Assert.Equal(ResultadoPin.Ok, await _utilizadores.DefinirAtivoAsync("ana", false, "chefe", CancellationToken.None));
         var r = await c.GetAsync("/pecas");
         Assert.Contains(r.StatusCode, new[] { HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized });
-        Assert.Contains((await c.DeleteAsync("/pecas/entradas/abc")).StatusCode, new[] { HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized });
     }
 
-    [Fact]
-    public async Task Corpo_do_400_tem_o_formato_pedido_invalido()
-    {
-        var c = await ComoAnaAsync();
-        var r = await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 0));
-        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
-        Assert.Contains("pedido_invalido", await r.Content.ReadAsStringAsync());
-    }
 }

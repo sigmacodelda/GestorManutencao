@@ -7,7 +7,4 @@ public interface IPecasService
 {
     Task<ResultadoPecas> PesquisarAsync(string texto, CancellationToken ct = default);
     Task<Peca?> ObterPorCodigoAsync(string codigo, CancellationToken ct = default);
-    Task<IReadOnlyList<EntradaPeca>> EntradasDeHojeAsync(CancellationToken ct = default);
-    Task<EntradaPeca> DarEntradaAsync(string refPeca, decimal qtt, CancellationToken ct = default);
-    Task AnularEntradaAsync(string id, CancellationToken ct = default);
 }

@@ -101,7 +101,7 @@ public static class MauiProgram
 			})));
 			builder.Services.AddSingleton<IEquipaService>(new EquipaApiService(http));
 			builder.Services.AddSingleton<IAssinaturaService>(new AssinaturaApiService(http));
-			// Peças: só online (entrada de material), sem fila de saída.
+			// Peças: só online (pesquisa e leitor), sem fila de saída.
 			builder.Services.AddScoped<IPecasService>(sp => new PecasApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IntervencoesApiService>(sp => new IntervencoesApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IIntervencoesRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());

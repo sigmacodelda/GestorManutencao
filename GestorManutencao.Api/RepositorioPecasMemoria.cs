@@ -1,11 +1,10 @@
 namespace GestorManutencao.Api;
 
-// Modo Development e testes: mesmas regras do SQL, sem base. Stock = soma das entradas − saídas.
+// Modo Development e testes: mesmas regras do SQL, sem base. Stock inicial menos as saídas.
 public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) : IRepositorioPecas
 {
     private readonly object _trinco = new();
     private readonly Dictionary<string, PecaDto> _pecas = (pecas ?? Amostra()).ToDictionary(p => p.Ref, StringComparer.OrdinalIgnoreCase);
-    private readonly List<EntradaPecaDto> _entradas = [];
     private readonly Dictionary<string, (string Ref, decimal Qtt)> _saidas = []; // materialId → saída
     private readonly Dictionary<string, string> _ligacoes = []; // materialId → peça por dar (sem saída)
 
@@ -39,35 +38,6 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
         codigo = codigo.Trim();
         lock (_trinco)
             return Task.FromResult(_pecas.Values.FirstOrDefault(p => p.Codigo == codigo) ?? _pecas.GetValueOrDefault(codigo));
-    }
-
-    public Task<ResultadoMovimento> DarEntradaAsync(string refPeca, decimal qtt, string iniciais, CancellationToken ct)
-    {
-        lock (_trinco)
-        {
-            if (!_pecas.TryGetValue(refPeca.Trim(), out var p)) return Task.FromResult(ResultadoMovimento.Falha("Referência inexistente."));
-            var e = new EntradaPecaDto(Guid.NewGuid().ToString("N")[..25], p.Ref, p.Design, qtt, iniciais, DateTime.Now.ToString("HH:mm:ss"));
-            _entradas.Add(e);
-            Mexer(p.Ref, qtt);
-            return Task.FromResult(ResultadoMovimento.Sucesso(e.Id));
-        }
-    }
-
-    public Task<IReadOnlyList<EntradaPecaDto>> EntradasDeHojeAsync(CancellationToken ct)
-    {
-        lock (_trinco) return Task.FromResult<IReadOnlyList<EntradaPecaDto>>(_entradas.AsEnumerable().Reverse().ToList());
-    }
-
-    public Task<ResultadoMovimento> AnularEntradaAsync(string id, CancellationToken ct)
-    {
-        lock (_trinco)
-        {
-            var e = _entradas.FirstOrDefault(x => x.Id == id);
-            if (e is null) return Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroLinhaInexistente));
-            _entradas.Remove(e);
-            Mexer(e.Ref, -e.Qtt);
-            return Task.FromResult(ResultadoMovimento.Sucesso(id));
-        }
     }
 
     public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
