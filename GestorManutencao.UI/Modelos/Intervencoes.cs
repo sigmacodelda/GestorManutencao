@@ -104,7 +104,7 @@ public static class RegrasPesquisa
     public static bool TextoValido(string? texto) => (texto ?? "").Trim() is { Length: 0 } or { Length: >= 2 and <= MaxTexto };
 }
 
-public sealed record Material(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo);
+public sealed record Material(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo, string Ref = "", bool SaidaDada = false);
 
 public sealed record Foto(string Id, string Nome, int Bytes);
 

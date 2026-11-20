@@ -179,7 +179,16 @@
                                 @if (ClassificacaoErros.IdLocal(m.Id)) { <span class="chip chip-pendente">Por enviar</span> }
                                 <br />
                                 <span class="intervencao-desc">@m.Qtt.ToString("0.###") × @m.Epv.ToString("0.00") € = @m.Custo.ToString("0.00") €</span>
+                                @if (m.Ref != "")
+                                {
+                                    <br />
+                                    <span class="intervencao-desc">Peça @m.Ref · @TextoSaida(m)</span>
+                                }
                             </span>
+                            @if (m.Ref != "" && !m.SaidaDada && !ClassificacaoErros.IdLocal(m.Id) && _d is { PodeEditar: true })
+                            {
+                                <button type="button" class="btn-texto" disabled="@_a_gravar" @onclick="() => RepetirSaidaAsync(m)">Repetir saída</button>
+                            }
                             @if (_d is { PodeEditar: true } && !ClassificacaoErros.IdLocal(m.Id))
                             {
                                 <button type="button" class="btn-texto" aria-label="Editar @m.Design" disabled="@_a_gravar" @onclick="() => EditarMaterial(m)"><Icone Nome="wrench" /></button>
@@ -194,6 +203,12 @@
                 @if (_matEditId is not null)
                 {
                     <form class="formulario" @onsubmit="GuardarMaterialEditadoAsync" novalidate>
+                        <PecaPesquisa OnEscolher="EscolherPecaEditada" />
+                        @if (_eRef != "")
+                        {
+                            <p class="campo-aviso" role="status">Peça @_eRef <button type="button" class="btn-texto" @onclick="TirarPecaEditada">Tirar peça</button></p>
+                        }
+                        @if (_eAvisoStock is not null) { <p class="campo-aviso" role="status">@_eAvisoStock</p> }
                         <div class="material-novo">
                             <div class="campo">
                                 <label for="e-material">Material</label>
@@ -201,7 +216,7 @@
                             </div>
                             <div class="campo">
                                 <label for="e-qtt">Quantidade</label>
-                                <input id="e-qtt" type="number" inputmode="decimal" step="any" min="0" @bind="_eQtt" />
+                                <input id="e-qtt" type="number" inputmode="decimal" step="any" min="0" @bind="_eQtt" @bind:after="RecalcularAvisoEditado" />
                             </div>
                             <div class="campo">
                                 <label for="e-epv">Preço (€)</label>
@@ -216,6 +231,12 @@
                 @if (_i.Estado == EstadoIntervencao.EmCurso)
                 {
                     <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
+                        <PecaPesquisa OnEscolher="EscolherPeca" />
+                        @if (_pecaRef != "")
+                        {
+                            <p class="campo-aviso" role="status">Peça @_pecaRef <button type="button" class="btn-texto" @onclick="TirarPeca">Tirar peça</button></p>
+                        }
+                        @if (_avisoStock is not null) { <p class="campo-aviso" role="status">@_avisoStock</p> }
                         <div class="material-novo">
                             <div class="campo">
                                 <label for="material">Material</label>
@@ -224,7 +245,7 @@
                             </div>
                             <div class="campo">
                                 <label for="qtt">Quantidade</label>
-                                <input id="qtt" type="number" inputmode="decimal" step="any" min="0" @bind="_qtt" />
+                                <input id="qtt" type="number" inputmode="decimal" step="any" min="0" @bind="_qtt" @bind:after="RecalcularAviso" />
                             </div>
                             <div class="campo">
                                 <label for="epv">Preço (€, se souber)</label>
@@ -291,6 +312,10 @@
     private bool _viaDetalhe;
     private string? _avisoOnline, _matEditId, _eDesign;
     private decimal? _eQtt, _eEpv;
+    // Peça escolhida (vazia = material sem peça) e stock da peça só para o aviso, que nunca bloqueia.
+    private string _pecaRef = "", _eRef = "";
+    private decimal? _stockPeca, _eStockPeca;
+    private string? _avisoStock, _eAvisoStock;
     private AreaAssinatura? _area;
     private string _nomeAssinante = "";
     private bool _temTraco;
@@ -406,7 +431,50 @@
         StateHasChanged();
     }
 
-    private void EditarMaterial(Material m) { _matEditId = m.Id; _eDesign = m.Design; _eQtt = m.Qtt; _eEpv = m.Epv; _erroMaterial = ""; }
+    private void EditarMaterial(Material m)
+    {
+        _matEditId = m.Id; _eDesign = m.Design; _eQtt = m.Qtt; _eEpv = m.Epv; _erroMaterial = "";
+        _eRef = m.Ref; _eStockPeca = null; _eAvisoStock = null;
+    }
+
+    private static string TextoSaida(Material m) =>
+        m.SaidaDada ? "Saída dada" : ClassificacaoErros.IdLocal(m.Id) ? "Saída por dar (sem ligação)" : "Saída por dar";
+
+    private static string Cortar35(string texto) => texto.Length > 35 ? texto[..35] : texto;
+
+    private void EscolherPeca(Peca p)
+    {
+        _pecaRef = p.Ref; _material = Cortar35(p.Design); _epv = p.Preco; _stockPeca = p.Stock;
+        RecalcularAviso();
+    }
+
+    private void TirarPeca() { _pecaRef = ""; _stockPeca = null; _avisoStock = null; }
+
+    private void RecalcularAviso() =>
+        _avisoStock = _pecaRef != "" && _stockPeca is { } s ? LogicaEcraPecas.AvisoStock(_qtt ?? 1, s) : null;
+
+    private void EscolherPecaEditada(Peca p)
+    {
+        _eRef = p.Ref; _eDesign = Cortar35(p.Design); _eEpv = p.Preco; _eStockPeca = p.Stock;
+        RecalcularAvisoEditado();
+    }
+
+    private void TirarPecaEditada() { _eRef = ""; _eStockPeca = null; _eAvisoStock = null; }
+
+    private void RecalcularAvisoEditado() =>
+        _eAvisoStock = _eRef != "" && _eStockPeca is { } s ? LogicaEcraPecas.AvisoStock(_eQtt ?? 1, s) : null;
+
+    private async Task RepetirSaidaAsync(Material m)
+    {
+        _a_gravar = true; _erroMaterial = "";
+        try
+        {
+            await Intervencoes.RepetirSaidaAsync(Id, m.Id);
+            await RecarregarAsync();
+        }
+        catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível dar saída. Tente outra vez."); }
+        finally { _a_gravar = false; }
+    }
 
     private async Task GuardarMaterialEditadoAsync()
     {
@@ -415,7 +483,7 @@
         _a_gravar = true;
         try
         {
-            await Intervencoes.EditarMaterialAsync(Id, _matEditId, _eDesign!.Trim(), _eQtt!.Value, _eEpv ?? 0);
+            await Intervencoes.EditarMaterialAsync(Id, _matEditId, _eDesign!.Trim(), _eQtt!.Value, _eEpv ?? 0, _eRef);
             _matEditId = null;
             await RecarregarAsync();
         }
@@ -502,8 +570,8 @@
         _a_gravar = true;
         try
         {
-            await Intervencoes.AdicionarMaterialAsync(Id, _material.Trim(), _qtt!.Value, _epv ?? 0);
-            _material = ""; _qtt = _epv = null;
+            await Intervencoes.AdicionarMaterialAsync(Id, _material.Trim(), _qtt!.Value, _epv ?? 0, _pecaRef);
+            _material = ""; _qtt = _epv = null; TirarPeca();
             await RefrescarFichaAsync();
             await CarregarMateriaisAsync();
         }
@@ -516,7 +584,7 @@
     {
         _a_gravar = true; _erroMaterial = "";
         try { await Intervencoes.ApagarMaterialAsync(Id, m.Id); await RefrescarFichaAsync(); await CarregarMateriaisAsync(); }
-        catch (Exception) { _erroMaterial = "Não foi possível tirar o material. Tente outra vez."; }
+        catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível tirar o material. Tente outra vez."); }
         finally { _a_gravar = false; }
     }
 

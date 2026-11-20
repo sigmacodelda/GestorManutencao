@@ -115,12 +115,18 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
         return await resposta.Content.ReadFromJsonAsync<List<Material>>(ct) ?? [];
     }
 
-    public async Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, CancellationToken ct = default)
+    public async Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default)
     {
-        using var resposta = await EnviarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/materiais", new { design, qtt, epv }, ct);
+        using var resposta = await EnviarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/materiais", new { design, qtt, epv, @ref = refPeca }, ct);
+        // Com peça, o 400 traz a explicação (peça inexistente, quantidade inválida).
+        if (resposta.StatusCode == HttpStatusCode.BadRequest && refPeca != "")
+            throw new InvalidOperationException(await LerMensagemAsync(resposta, ct) ?? MensagensIntervencao.Para("pedido_invalido"));
         await VerificarAsync(resposta, ct);
         return await resposta.Content.ReadFromJsonAsync<Material>(ct) ?? throw new HttpRequestException();
     }
+
+    public Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default) =>
+        JsonAsync<Material>(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}/saida", null, ct);
 
     public async Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
     {
@@ -264,8 +270,8 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
         JsonAsync<FichaDetalhe>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/antiga", new { supervisao, fechada }, ct);
 
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default) =>
-        JsonAsync<Material>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}", new { design, qtt, epv }, ct);
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default) =>
+        JsonAsync<Material>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}", new { design, qtt, epv, @ref = refPeca }, ct);
 
     public async Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default)
     {
@@ -341,7 +347,12 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
     private static async Task VerificarAsync(HttpResponseMessage resposta, CancellationToken ct)
     {
         if (resposta.StatusCode == HttpStatusCode.Forbidden && (await LerErroAsync(resposta, ct)) == "sem_tecno") throw new SemNumeroTecnicoException();
-        if (resposta.StatusCode == HttpStatusCode.Conflict) throw new InvalidOperationException(MensagensIntervencao.Para(await LerErroAsync(resposta, ct)));
+        if (resposta.StatusCode == HttpStatusCode.Conflict)
+        {
+            // Os códigos não têm espaços; um texto com espaços é a explicação da API (ex.: falha na saída de stock).
+            var erro = await LerErroAsync(resposta, ct);
+            throw new InvalidOperationException(erro is { } e && e.Contains(' ') ? e : MensagensIntervencao.Para(erro));
+        }
         resposta.EnsureSuccessStatusCode();
     }
 

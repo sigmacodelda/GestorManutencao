@@ -224,7 +224,7 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
             material = (await remoto.ListarMateriaisAsync(operacao.FichaId, ct))
                 .FirstOrDefault(m => !conhecidos.Contains(m.Id) && m.Design.Trim() == carga.Design.Trim() && m.Qtt == carga.Qtt && m.Epv == carga.Epv);
         }
-        material ??= await remoto.AdicionarMaterialAsync(operacao.FichaId, carga.Design, carga.Qtt, carga.Epv, ct);
+        material ??= await remoto.AdicionarMaterialAsync(operacao.FichaId, carga.Design, carga.Qtt, carga.Epv, carga.Ref, ct);
 
         await NoDonoAsync(dono, async () =>
         {

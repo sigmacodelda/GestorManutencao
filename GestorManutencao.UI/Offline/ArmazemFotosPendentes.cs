@@ -31,7 +31,7 @@ public sealed class ArmazemFotosPendentesMemoria : IArmazemFotosPendentes
 // Conteúdo (JSON) das operações da fila.
 internal sealed record CargaAvaria(string EquipamentoId, string Anomalia);
 internal sealed record CargaConclusao(string Feito, TimeOnly Inicio, TimeOnly Fim);
-internal sealed record CargaMaterial(string MaterialId, string Design, decimal Qtt, decimal Epv);
+internal sealed record CargaMaterial(string MaterialId, string Design, decimal Qtt, decimal Epv, string Ref = "");
 internal sealed record CargaApagar(string ItemId);
 // Validar, Devolver (Texto = motivo) e ConcluirQualidade (Texto = quem higienizou); o equipamento serve ao aviso de conflito.
 internal sealed record CargaDecisao(string Equipamento, string? Texto);

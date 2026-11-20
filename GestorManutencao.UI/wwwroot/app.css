@@ -142,6 +142,7 @@ h1:focus-visible { outline: none; }
 }
 .entrada-acao:hover { color: var(--texto); background: var(--superficie-2); }
 .campo-erro { color: var(--erro); font-size: .875rem; font-weight: 600; }
+.campo-aviso { color: var(--texto); font-size: .875rem; font-weight: 600; border-left: 3px solid var(--primario); padding-left: .5rem; margin: 0; }
 .campo-ok { color: var(--ok); font-size: .875rem; font-weight: 600; }
 
 .alerta {

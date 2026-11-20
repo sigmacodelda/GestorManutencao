@@ -276,16 +276,17 @@ public sealed class OfflineIntervencoesService(
         return resultado;
     }
 
-    public async Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, CancellationToken ct = default)
+    public async Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default)
     {
+        refPeca = (refPeca ?? "").Trim();
         if (RegrasMaterial.Validar(design, qtt, epv) is { } erro) throw new InvalidOperationException(erro);
-        if (await mc.GarantirDonoAsync() is not { } dono) return await remoto.AdicionarMaterialAsync(id, design, qtt, epv, ct);
+        if (await mc.GarantirDonoAsync() is not { } dono) return await remoto.AdicionarMaterialAsync(id, design, qtt, epv, refPeca, ct);
         id = await mc.ResolverIdAsync(id);
         var incerta = false;
         if (await PodeOnlineAsync(dono, id))
             try
             {
-                var criado = await remoto.AdicionarMaterialAsync(id, design, qtt, epv, ct);
+                var criado = await remoto.AdicionarMaterialAsync(id, design, qtt, epv, refPeca, ct);
                 await mc.ComTrincoAsync(async () =>
                 {
                     if (await Cache.LerMateriaisAsync(id) is { } lista && lista.All(m => m.Id != criado.Id)) await Cache.GuardarMateriaisAsync(id, [.. lista, criado]);
@@ -300,10 +301,10 @@ public sealed class OfflineIntervencoesService(
         {
             var ficha = await Cache.ObterFichaAsync(id) ?? throw FichaMudou();
             if (ficha.Estado != EstadoIntervencao.EmCurso) throw FichaMudou();
-            var local = new Material(NovoIdLocal(), design.Trim(), qtt, epv, Math.Round(qtt * epv, 3));
+            var local = new Material(NovoIdLocal(), design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), refPeca);
             var lista = (await Cache.LerMateriaisAsync(id))?.ToList() ?? [];
             lista.Add(local);
-            await fila.AdicionarAsync(NovaOperacao(dono, TipoOperacao.AdicionarMaterial, id, CargasFila.Escrever(new CargaMaterial(local.Id, local.Design, qtt, epv)), null, incerta));
+            await fila.AdicionarAsync(NovaOperacao(dono, TipoOperacao.AdicionarMaterial, id, CargasFila.Escrever(new CargaMaterial(local.Id, local.Design, qtt, epv, refPeca)), null, incerta));
             await Cache.GuardarMateriaisAsync(id, lista);
             await Cache.GuardarFichasAsync([ficha with { Pendente = true }]);
             return local;
@@ -660,8 +661,13 @@ public sealed class OfflineIntervencoesService(
 
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
         SoOnlineAsync(id, i => remoto.FecharFichaAntigaAsync(i, supervisao, fechada, ct), true, ct: ct);
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default) =>
-        SoOnlineAsync(id, i => remoto.EditarMaterialAsync(i, materialId, design, qtt, epv, ct), true, ct: ct);
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default) =>
+        SoOnlineAsync(id, i => remoto.EditarMaterialAsync(i, materialId, design, qtt, epv, refPeca, ct), true, ct: ct);
+
+    public Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default) =>
+        IdLocal(materialId)
+            ? throw new InvalidOperationException(MensagensIntervencao.SemRede)
+            : SoOnlineAsync(id, i => remoto.RepetirSaidaAsync(i, materialId, ct), true, ct: ct);
     public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) => SoOnlineAsync(id, i => remoto.ListarMaoDeObraAsync(i, ct), ct: ct);
     public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) =>
         SoOnlineAsync(id, i => remoto.AdicionarMaoDeObraAsync(i, tecno, horas, custoHora, ct), true, true, ct);

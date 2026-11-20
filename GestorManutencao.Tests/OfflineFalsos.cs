@@ -180,14 +180,20 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
         lock (_trinco) return Task.FromResult<IReadOnlyList<Material>>(Materiais.GetValueOrDefault(id)?.ToList() ?? []);
     }
 
-    public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, CancellationToken ct = default)
+    // Pecas recebidas em cada AdicionarMaterial (por ordem), para os testes verem o que a fila enviou.
+    public List<string> RefsMaterial { get; } = [];
+
+    public Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default) => throw new NotSupportedException();
+
+    public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default)
     {
         Entrar("AdicionarMaterial", id);
         Material m;
         lock (_trinco)
         {
             if (Fichas.GetValueOrDefault(id) is not { Estado: EstadoIntervencao.EmCurso }) throw new InvalidOperationException(MensagensIntervencao.Mudou);
-            m = new Material("M" + ++_seq, design.Trim(), qtt, epv, qtt * epv);
+            RefsMaterial.Add(refPeca);
+            m = new Material("M" + ++_seq, design.Trim(), qtt, epv, qtt * epv, refPeca, refPeca != "");
             if (!Materiais.TryGetValue(id, out var lista)) Materiais[id] = lista = [];
             lista.Add(m);
         }
@@ -350,7 +356,7 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     }
 
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) { Entrar("ListarMaoDeObra", id); return Task.FromResult<IReadOnlyList<TempoMaoDeObra>>([]); }
     public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default)
     {
