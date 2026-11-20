@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using GestorManutencao.Api;
 using Microsoft.AspNetCore.Hosting;
@@ -23,10 +25,15 @@ public class FichaConferenciaApiTests : IDisposable
         new PecaDto("P002", "Rolamento 6204", "560002", "A-01-2-03", 0, 2, 5.5m)
     ]));
 
+    private readonly LugaresEspia _lugares;
+    private RecusaProxy _recusa = null!;
+    private RepositorioIntervencoesMemoria? _interno;
+
     private readonly WebApplicationFactory<Program> _fabrica;
 
     public FichaConferenciaApiTests()
     {
+        _lugares = new LugaresEspia(new RepositorioLocalizacoesMemoria(_pecas));
         _fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
             .UseEnvironment("Development")
             .UseSetting("Pin:Pepper", Pepper)
@@ -39,8 +46,16 @@ public class FichaConferenciaApiTests : IDisposable
                     (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), Hasher.Hash("603918"))
                 ])));
                 s.Replace(ServiceDescriptor.Singleton<IRepositorioIntervencoes>(sp =>
-                    new RepositorioIntervencoesMemoria(sp.GetRequiredService<TimeProvider>(), new ConfigManutencao(AvancaOrdem: true, ExtExigeDoc: false))));
+                {
+                    _interno = new RepositorioIntervencoesMemoria(sp.GetRequiredService<TimeProvider>(), new ConfigManutencao(AvancaOrdem: true, ExtExigeDoc: false));
+                    var proxy = DispatchProxy.Create<IRepositorioIntervencoes, RecusaProxy>();
+                    _recusa = (RecusaProxy)(object)proxy;
+                    _recusa.Alvo = _interno;
+                    return proxy;
+                }));
+                s.Replace(ServiceDescriptor.Singleton<IRepositorioGestao>(sp => { sp.GetRequiredService<IRepositorioIntervencoes>(); return _interno!; }));
                 s.Replace(ServiceDescriptor.Singleton<IRepositorioPecas>(_pecas));
+                s.Replace(ServiceDescriptor.Singleton<IRepositorioLocalizacoes>(_lugares));
             }));
     }
 
@@ -307,11 +322,20 @@ public class FichaConferenciaApiTests : IDisposable
         Assert.Equal("F1", corpo.GetProperty("id").GetString());
         Assert.Equal(10, (await PecaAsync(chefe)).Stock);
 
+        // Repetir com a confirmação ainda a falhar devolve a mesma ficha, com o aviso.
+        var repetida = (await (await chefe.PostAsync("/validacao/F1", null)).Content.ReadFromJsonAsync<IntervencaoDto>())!;
+        Assert.Equal("F1", repetida.Id);
+        Assert.Equal(EstadoIntervencao.Validada, repetida.Estado);
+        Assert.Equal("Conferência por confirmar", repetida.AvisoStock);
+
         _pecas.FalharConfirmar = false;
         var segunda = await chefe.PostAsync("/validacao/F1", null);
 
         Assert.Equal(HttpStatusCode.OK, segunda.StatusCode);
-        Assert.Null(JsonDocument.Parse(await segunda.Content.ReadAsStringAsync()).RootElement.GetProperty("avisoStock").GetString());
+        var ficha = (await segunda.Content.ReadFromJsonAsync<IntervencaoDto>())!;
+        Assert.Equal("F1", ficha.Id);
+        Assert.Equal(EstadoIntervencao.Validada, ficha.Estado);
+        Assert.Null(ficha.AvisoStock);
         Assert.Equal(8, (await PecaAsync(chefe)).Stock);
     }
 
@@ -362,7 +386,9 @@ public class FichaConferenciaApiTests : IDisposable
         var r = await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"));
 
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
-        Assert.Equal(EstadoIntervencao.Cancelada, (await r.Content.ReadFromJsonAsync<IntervencaoDto>())!.Estado);
+        var ficha = (await r.Content.ReadFromJsonAsync<IntervencaoDto>())!;
+        Assert.Equal(EstadoIntervencao.Cancelada, ficha.Estado);
+        Assert.Equal("Conferência por cancelar", ficha.AvisoStock);
         Assert.Equal(1, await NoLugarAsync(chefe, "A-02-1-01"));
     }
 
@@ -373,9 +399,333 @@ public class FichaConferenciaApiTests : IDisposable
         Assert.True((await r.DarSaidaAsync("F1", "M1", "P001", 1, "AA", default, "A-02-1-01")).Ok);
         Assert.True((await r.DarSaidaAsync("F1", "M2", "P001", 1, "AA", default)).Ok);
 
-        Assert.Equal("A-02-1-01", await r.LugarDaSaidaAsync("M1", default));
-        Assert.Null(await r.LugarDaSaidaAsync("M2", default));
-        Assert.Null(await r.LugarDaSaidaAsync("NAOEXISTE", default));
+        var lista = await r.EnriquecerMateriaisAsync([new MaterialDto("M1", "x", 1, 0, 0), new MaterialDto("M2", "x", 1, 0, 0), new MaterialDto("M3", "x", 1, 0, 0)], default);
+
+        Assert.Equal("A-02-1-01", lista[0].Local);
+        Assert.Null(lista[1].Local);
+        Assert.False(lista[2].SaidaDada);
+    }
+
+    [Fact]
+    public void Lobs_leva_o_stamp_e_so_com_lugar_o_separador_e_o_lugar()
+    {
+        var stamp = new string('S', 25);
+        Assert.Equal(stamp, RegrasPecas.MontarLobs(stamp, null));
+        Assert.Equal(stamp, RegrasPecas.MontarLobs(stamp, "  "));
+        Assert.Equal($"{stamp}|A-02-1-01", RegrasPecas.MontarLobs(stamp, "A-02-1-01"));
+        Assert.Equal($"{stamp}|AAA-999-99-99", RegrasPecas.MontarLobs(stamp, "AAA-999-99-99")); // 13 caracteres: o máximo
+        Assert.Null(RegrasPecas.MontarLobs(stamp, "AAAA-999-99-99")); // 14
+        Assert.Null(RegrasPecas.MontarLobs(new string('S', 30), "AAA-999-99-99")); // 44 > 40
+        Assert.True(RegrasPecas.MontarLobs(stamp, "AAA-999-99-99")!.Length <= RegrasPecas.TamanhoLobs);
+    }
+
+    [Fact]
+    public async Task Memoria_recusa_a_saida_com_lugar_que_nao_cabe_em_lobs()
+    {
+        var r = new RepositorioPecasMemoria();
+
+        var f = await r.DarSaidaAsync("F1", "M1", "P001", 1, "AA", default, "AAAA-999-99-99");
+
+        Assert.False(f.Ok);
+        Assert.Contains("bi.lobs", f.Erro);
+    }
+
+    // ---------- Editar, apagar e repetir a saída: o lugar só se repõe se foi descontado
+
+    private static async Task<MaterialDto> MaterialAsync(HttpResponseMessage r) => (await r.Content.ReadFromJsonAsync<MaterialDto>())!;
+
+    private static Task<HttpResponseMessage> EditarAsync(HttpClient c, string id, decimal qtt, string peca = "P001", string? local = null, string ficha = "F1") =>
+        c.PutAsJsonAsync($"/intervencoes/{ficha}/materiais/{id}", new PedidoMaterial("Peça", qtt, 1m, peca, local));
+
+    [Fact]
+    public async Task Editar_material_que_saiu_com_lugar_insuficiente_nunca_repoe_o_que_nao_descontou()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 5, "A-02-1-01")); // o lugar só tem 3: sai sem descontar
+        Assert.Null(m.Local);
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+
+        var e = await MaterialAsync(await EditarAsync(c, m.Id, 2));
+
+        Assert.Equal("A-02-1-01", e.Local);
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01")); // 3 - 2; repor 5 daria 6
+    }
+
+    [Fact]
+    public async Task Apagar_material_que_saiu_com_lugar_insuficiente_nunca_repoe_o_que_nao_descontou()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 5, "A-02-1-01"));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync($"/intervencoes/F1/materiais/{m.Id}")).StatusCode);
+
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.Equal(10, (await PecaAsync(c)).Disponivel);
+    }
+
+    [Fact]
+    public async Task Editar_mudando_de_peca_repoe_o_lugar_da_antiga_e_a_nova_sem_lugar_avisa()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 2));
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+
+        var e = await MaterialAsync(await EditarAsync(c, m.Id, 1, "P002"));
+
+        Assert.Equal("P002", e.Ref);
+        Assert.True(e.SaidaDada);
+        Assert.Null(e.Local);
+        Assert.Contains("sem localização", e.AvisoStock);
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.Equal(10, (await PecaAsync(c)).Disponivel);
+    }
+
+    [Fact]
+    public async Task Editar_recusado_pela_ficha_deixa_a_saida_e_o_lugar_como_estavam()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 2));
+        _recusa.RecusarMaterial = true;
+
+        var r = await EditarAsync(c, m.Id, 3);
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+        var depois = Assert.Single(await ListaAsync(c));
+        Assert.True(depois.SaidaDada);
+        Assert.Equal("A-02-1-01", depois.Local);
+        Assert.Equal(8, (await PecaAsync(c)).Disponivel);
+    }
+
+    [Fact]
+    public async Task Apagar_recusado_pela_ficha_deixa_a_saida_e_o_lugar_como_estavam()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 2));
+        _recusa.RecusarMaterial = true;
+
+        var r = await c.DeleteAsync($"/intervencoes/F1/materiais/{m.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.True(Assert.Single(await ListaAsync(c)).SaidaDada);
+    }
+
+    [Fact]
+    public async Task Editar_recusado_com_a_reposicao_a_falhar_nao_desconta_duas_vezes()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 2));
+        _recusa.RecusarMaterial = true;
+        _lugares.FalharRepor = true;
+
+        var r = await EditarAsync(c, m.Id, 3);
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01")); // continuou descontado: nada a repor nem a descontar de novo
+        var depois = Assert.Single(await ListaAsync(c));
+        Assert.True(depois.SaidaDada);
+        Assert.Equal("A-02-1-01", depois.Local);
+    }
+
+    [Fact]
+    public async Task Editar_com_a_reposicao_a_falhar_avisa_lugares_por_repor()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 2));
+        _lugares.FalharRepor = true;
+
+        var e = await MaterialAsync(await EditarAsync(c, m.Id, 1));
+
+        Assert.True(e.SaidaDada);
+        Assert.Contains("Lugares por repor", e.AvisoStock);
+    }
+
+    [Fact]
+    public async Task Apagar_com_a_reposicao_a_falhar_apaga_e_avisa_que_saiu_sem_repor()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 2));
+        _lugares.FalharRepor = true;
+
+        var r = await c.DeleteAsync($"/intervencoes/F1/materiais/{m.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Contains("sem repor", JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement.GetProperty("avisoStock").GetString());
+        Assert.Empty(await ListaAsync(c));
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+    }
+
+    [Fact]
+    public async Task Editar_com_local_invalido_da_400_mesmo_sem_lugar_antigo_e_nao_mexe_em_nada()
+    {
+        var c = await ComoAnaAsync();
+        var semLugar = await MaterialAsync(await JuntarAsync(c, 1, peca: "P002"));
+        var comLugar = await MaterialAsync(await JuntarAsync(c, 2));
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await EditarAsync(c, semLugar.Id, 1, "P002", "xx")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await EditarAsync(c, comLugar.Id, 2, "P001", "A-02-1")).StatusCode);
+
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.All(await ListaAsync(c), x => Assert.True(x.SaidaDada));
+    }
+
+    [Fact]
+    public async Task Local_sem_peca_da_400_ao_juntar_e_ao_editar()
+    {
+        var c = await ComoAnaAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await JuntarAsync(c, 1, "A-02-1-01", peca: "")).StatusCode);
+        Assert.Empty(await ListaAsync(c));
+
+        var m = await MaterialAsync(await c.PostAsJsonAsync("/intervencoes/F1/materiais", new PedidoMaterial("Fita", 1, 1m)));
+        Assert.Equal(HttpStatusCode.BadRequest, (await EditarAsync(c, m.Id, 1, "", "A-02-1-01")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Saida_repetida_com_local_desconta_desse_lugar()
+    {
+        var c = await ComoAnaAsync();
+        _pecas.FalharSaida = true;
+        var m = await MaterialAsync(await JuntarAsync(c, 2, "A-02-1-01"));
+        Assert.False(m.SaidaDada);
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        _pecas.FalharSaida = false;
+
+        var r = await c.PostAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}/saida", new PedidoSaida(null, "LOC-A-02-1-01"));
+
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal("A-02-1-01", (await MaterialAsync(r)).Local);
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+    }
+
+    [Fact]
+    public async Task Saida_repetida_com_varios_lugares_pede_a_escolha_e_com_local_invalido_da_400()
+    {
+        var c = await ComoAnaAsync();
+        await Arrumar(c, "A-03-2-01", 2);
+        _pecas.FalharSaida = true;
+        var m = await MaterialAsync(await JuntarAsync(c, 1, "A-02-1-01"));
+        _pecas.FalharSaida = false;
+
+        var sem = await c.PostAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}/saida", new PedidoSaida(null));
+        Assert.Equal(HttpStatusCode.Conflict, sem.StatusCode);
+        var corpo = JsonDocument.Parse(await sem.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("escolha_o_lugar", corpo.GetProperty("erro").GetString());
+        Assert.Equal(2, corpo.GetProperty("lugares").GetArrayLength());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}/saida", new PedidoSaida(null, "xx"))).StatusCode);
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+
+        var ok = await c.PostAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}/saida", new PedidoSaida(null, "A-03-2-01"));
+        Assert.Equal("A-03-2-01", (await MaterialAsync(ok)).Local);
+        Assert.Equal(1, await NoLugarAsync(c, "A-03-2-01"));
+    }
+
+    [Fact]
+    public async Task Editar_apagar_e_saida_por_tecnico_sem_acesso_da_404_e_nao_mexem_nos_lugares()
+    {
+        var c = await ComoAnaAsync(); // a F2 é de outro técnico
+
+        Assert.Equal(HttpStatusCode.NotFound, (await EditarAsync(c, "M1", 1, "P001", "A-02-1-01", "F2")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.DeleteAsync("/intervencoes/F2/materiais/M1")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsJsonAsync("/intervencoes/F2/materiais/M1/saida", new PedidoSaida("P001", "A-02-1-01"))).StatusCode);
+
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.Equal(10, (await PecaAsync(c)).Disponivel);
+    }
+
+    // ---------- Falhas das localizações
+
+    [Fact]
+    public async Task Localizacoes_indisponiveis_a_saida_da_se_e_avisa_que_nao_descontou()
+    {
+        var c = await ComoAnaAsync();
+        _lugares.Indisponivel = true;
+
+        var semLocal = await MaterialAsync(await JuntarAsync(c, 1));
+        var comLocal = await MaterialAsync(await JuntarAsync(c, 1, "A-02-1-01"));
+
+        Assert.True(semLocal.SaidaDada);
+        Assert.Contains("sem descontar de nenhum lugar", semLocal.AvisoStock);
+        Assert.True(comLocal.SaidaDada);
+        Assert.Null(comLocal.Local);
+        Assert.Contains("sem descontar do lugar", comLocal.AvisoStock);
+        Assert.Equal(8, (await PecaAsync(c)).Disponivel);
+        _lugares.Indisponivel = false;
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+    }
+
+    [Fact]
+    public async Task Lugar_ocupado_nao_da_a_saida_e_a_peca_fica_por_dar_ate_repetir()
+    {
+        var c = await ComoAnaAsync();
+        _lugares.Ocupado = true;
+
+        var m = await MaterialAsync(await JuntarAsync(c, 2, "A-02-1-01"));
+
+        Assert.False(m.SaidaDada);
+        Assert.Equal("P001", m.Ref);
+        Assert.Contains("ocupado", m.AvisoStock);
+        Assert.Equal(10, (await PecaAsync(c)).Disponivel);
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        var lido = Assert.Single(await ListaAsync(c));
+        Assert.False(lido.SaidaDada);
+        Assert.Equal("P001", lido.Ref);
+
+        _lugares.Ocupado = false;
+        var r = await c.PostAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}/saida", new PedidoSaida(null, "A-02-1-01"));
+
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.Equal(8, (await PecaAsync(c)).Disponivel);
+    }
+
+    // ---------- Cancelar
+
+    [Fact]
+    public async Task Cancelar_com_a_conferencia_a_falhar_avisa_e_repetir_limpa_e_repoe_os_lugares()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        await JuntarAsync(ana, 2);
+        _pecas.FalharCancelar = true;
+
+        var primeira = (await (await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"))).Content.ReadFromJsonAsync<IntervencaoDto>())!;
+
+        Assert.Equal(EstadoIntervencao.Cancelada, primeira.Estado);
+        Assert.Equal("Conferência por cancelar", primeira.AvisoStock);
+        Assert.Equal(1, await NoLugarAsync(chefe, "A-02-1-01"));
+        Assert.Empty(_pecas.Canceladas);
+
+        _pecas.FalharCancelar = false;
+        var segunda = await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"));
+
+        Assert.Equal(HttpStatusCode.OK, segunda.StatusCode);
+        var ficha = (await segunda.Content.ReadFromJsonAsync<IntervencaoDto>())!;
+        Assert.Equal(EstadoIntervencao.Cancelada, ficha.Estado);
+        Assert.Null(ficha.AvisoStock);
+        Assert.Equal(["F1"], _pecas.Canceladas);
+        Assert.Equal(3, await NoLugarAsync(chefe, "A-02-1-01"));
+
+        // Com a limpeza feita, cancelar outra vez é recusado e não repõe de novo.
+        Assert.Equal(HttpStatusCode.Conflict, (await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"))).StatusCode);
+        Assert.Equal(3, await NoLugarAsync(chefe, "A-02-1-01"));
+    }
+
+    [Fact]
+    public async Task Cancelar_com_a_reposicao_a_falhar_avisa_lugares_por_repor()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        await JuntarAsync(ana, 2);
+        _lugares.FalharRepor = true;
+
+        var r = (await (await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"))).Content.ReadFromJsonAsync<IntervencaoDto>())!;
+
+        Assert.Equal(EstadoIntervencao.Cancelada, r.Estado);
+        Assert.Equal("Lugares por repor", r.AvisoStock);
+        Assert.Equal(["F1"], _pecas.Canceladas);
     }
 
     // Repositório de peças que regista as chamadas e falha onde se pedir; o resto é o de memória.
@@ -417,6 +767,42 @@ public class FichaConferenciaApiTests : IDisposable
             memoria.EmConferenciaPorPecaAsync(refs, excetoFichaId, ct);
         public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => memoria.LigarPecaAsync(stampMaterial, refPeca, usrinis, ct);
         public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => memoria.EnriquecerMateriaisAsync(materiais, ct);
-        public Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct) => memoria.LugarDaSaidaAsync(materialId, ct);
+    }
+
+    // Localizações de memória que falham onde se pedir.
+    private sealed class LugaresEspia(IRepositorioLocalizacoes interno) : IRepositorioLocalizacoes
+    {
+        public bool Indisponivel, Ocupado, FalharRepor;
+
+        private void Verificar() { if (Indisponivel) throw new RepositorioIndisponivelException(); }
+
+        public Task<LocalizacoesPecaDto> ListarAsync(string refPeca, CancellationToken ct) { Verificar(); return interno.ListarAsync(refPeca, ct); }
+        public Task<ResultadoMovimento> ArrumarAsync(string refPeca, string corredor, int estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct) =>
+            interno.ArrumarAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
+        public Task<ResultadoMovimento> DescontarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
+        {
+            Verificar();
+            return Ocupado ? Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado)) : interno.DescontarAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
+        }
+        public Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct) =>
+            FalharRepor ? Task.FromResult(ResultadoMovimento.Falha("Não foi possível repor.")) : interno.ReporAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
+        public Task<string> VerificarTabelaAsync(CancellationToken ct) { Verificar(); return interno.VerificarTabelaAsync(ct); }
+    }
+
+    // Faz o repositório de fichas recusar a edição e a remoção de material (a ficha mudou entretanto); o resto é o de memória.
+    public class RecusaProxy : DispatchProxy
+    {
+        public IRepositorioIntervencoes Alvo = null!;
+        public bool RecusarMaterial;
+
+        protected override object? Invoke(MethodInfo? metodo, object?[]? args)
+        {
+            if (RecusarMaterial && metodo!.Name == nameof(IRepositorioIntervencoes.EditarMaterialAsync))
+                return Task.FromResult<(ResultadoIntervencao, MaterialDto?)>((ResultadoIntervencao.Conflito, null));
+            if (RecusarMaterial && metodo!.Name == nameof(IRepositorioIntervencoes.ApagarMaterialAsync))
+                return Task.FromResult(ResultadoIntervencao.Conflito);
+            try { return metodo!.Invoke(Alvo, args); }
+            catch (TargetInvocationException e) { ExceptionDispatchInfo.Capture(e.InnerException!).Throw(); throw; }
+        }
     }
 }

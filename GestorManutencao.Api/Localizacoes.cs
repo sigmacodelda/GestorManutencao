@@ -47,6 +47,10 @@ public static class RegrasLocalizacao
         return (p[0], estante, nivel, posicao);
     }
 
+    // Lugar completo (com posição) a partir do texto; sem posição não serve para descontar.
+    public static LugarDto? LerLugar(string? texto) =>
+        LerLocal(texto) is { Posicao: { } posicao } l ? new LugarDto(l.Corredor, NormalizarEstante(l.Corredor, l.Estante), l.Nivel, posicao, 0) : null;
+
     public static string NormalizarEstante(string corredor, int estante) => $"{corredor.Trim().ToUpperInvariant()}-{estante:00}";
 
     public static decimal Calcular(decimal stock, decimal localizado) => Math.Max(0, stock - localizado);

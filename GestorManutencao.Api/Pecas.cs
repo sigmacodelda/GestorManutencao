@@ -44,6 +44,18 @@ public static class RegrasPecas
     public const string ErroSemFicha = "A ficha já não existe.";
     public const string ErroSemEmconf = "O PHC não tem o campo emconf nas linhas do dossier; não é possível usar a conferência.";
 
+    // bi.lobs (C40) guarda o stamp do material (25) e, se a saída tem lugar, "|<lugar>" (no máximo 13). null = não cabe.
+    public const int TamanhoStamp = 25, TamanhoLugarMax = 13, TamanhoLobs = 40;
+
+    public static string? MontarLobs(string materialId, string? local)
+    {
+        materialId = materialId.Trim();
+        if (string.IsNullOrWhiteSpace(local)) return materialId;
+        local = local.Trim();
+        var lobs = $"{materialId}|{local}";
+        return local.Length > TamanhoLugarMax || lobs.Length > TamanhoLobs ? null : lobs;
+    }
+
     public static bool ReferenciaValida(string? r) => !string.IsNullOrWhiteSpace(r) && r.Trim().Length <= TamanhoRef;
 
     public static bool QuantidadeValida(decimal? q) => q is > 0 and < QuantidadeMaxima + 1 && decimal.Round(q.Value, 3) == q.Value;
@@ -63,7 +75,7 @@ public interface IRepositorioPecas
     // Dossier 63 da ficha em conferência: bo.emconf=1 (bo, bo2, bo3). Idempotente: se já existe devolve o id.
     Task<ResultadoMovimento> AbrirConferenciaAsync(string fichaId, string iniciais, CancellationToken ct);
     // Linha bi.emconf=1 do material (bi.lobs = materialId, armazém 104); cria o dossier se faltar. Grava também u_matinterv.ref.
-    // local = texto normalizado do lugar de onde saiu (A-02-1-01), gravado em bi.lobs2 (campo por confirmar na Task 7).
+    // local = texto normalizado do lugar de onde saiu (A-02-1-01), gravado em bi.lobs a seguir ao stamp ("<stamp>|<lugar>"; Falha se não couber).
     Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct, string? local = null);
     // Apaga a linha em conferência e limpa u_matinterv.ref na mesma transação; o dossier mantém-se até validar ou cancelar.
     Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct);
@@ -76,9 +88,6 @@ public interface IRepositorioPecas
 
     // Liga a peça ao material sem movimento (a saída falhou): Ref preenchida e SaidaDada = false = "por dar".
     Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct);
-
-    // Lugar gravado na saída em conferência do material (null se não há saída ou não tem lugar).
-    Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct);
 
     // Junta a Ref ligada, o lugar e se a saída existe (SaidaDada) aos materiais lidos da ficha.
     Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct);

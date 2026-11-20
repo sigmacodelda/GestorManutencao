@@ -64,6 +64,7 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
         {
             if (!_pecas.ContainsKey(refPeca.Trim())) return Task.FromResult(ResultadoMovimento.Falha("Referência inexistente."));
             if (_saidas.ContainsKey(materialId)) return Task.FromResult(ResultadoMovimento.Falha("Já foi dada saída desta peça."));
+            if (RegrasPecas.MontarLobs(materialId, local) is null) return Task.FromResult(ResultadoMovimento.Falha("O lugar da saída não cabe em bi.lobs."));
             if (_dossiers.TryGetValue(fichaId, out var emConf) && !emConf) return Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroValidada));
             _dossiers[fichaId] = true;
             _ligacoes.Remove(materialId);
@@ -88,12 +89,6 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
             return Task.FromResult<IReadOnlyList<MaterialDto>>(materiais
                 .Select(m => _saidas.TryGetValue(m.Id, out var s) ? m with { Ref = s.Ref, SaidaDada = true, Local = s.Local }
                     : _ligacoes.TryGetValue(m.Id, out var l) ? m with { Ref = l, SaidaDada = false } : m).ToList());
-    }
-
-    public Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct)
-    {
-        lock (_trinco)
-            return Task.FromResult(_saidas.TryGetValue(materialId, out var s) ? s.Local : null);
     }
 
     public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct)

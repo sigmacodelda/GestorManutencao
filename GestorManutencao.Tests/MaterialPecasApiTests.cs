@@ -232,7 +232,6 @@ public class MaterialPecasApiTests : IDisposable
             if (FalharSaidaAposAnular) SaidaFalha = true;
             return r;
         }
-        public Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct) => memoria.LugarDaSaidaAsync(materialId, ct);
         public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => memoria.LigarPecaAsync(stampMaterial, refPeca, usrinis, ct);
         public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) =>
             EnriquecerIndisponivel ? throw new RepositorioIndisponivelException() : memoria.EnriquecerMateriaisAsync(materiais, ct);

@@ -92,7 +92,6 @@ public class PecasApiTests : IDisposable
         public Task<ResultadoMovimento> CancelarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct) => throw new NotSupportedException();
         public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct) => throw new NotSupportedException();
-        public Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => throw new NotSupportedException();
     }
