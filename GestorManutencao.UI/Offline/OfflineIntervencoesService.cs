@@ -103,7 +103,36 @@ public sealed class OfflineIntervencoesService(
                 return lista;
             }
             catch (Exception e) when (FalhaDeRede(e, ct)) { }
-        return await Cache.LerMateriaisAsync(id) ?? [];
+        return await MarcarFaltaLugarAsync(dono, id, await Cache.LerMateriaisAsync(id) ?? []);
+    }
+
+    // O material na fila que o servidor não aceitou por faltar o lugar aparece marcado (o estado vive na fila, não na cache).
+    private async Task<IReadOnlyList<Material>> MarcarFaltaLugarAsync(string dono, string fichaId, IReadOnlyList<Material> lista)
+    {
+        if (!lista.Any(m => IdLocal(m.Id))) return lista;
+        var faltam = new HashSet<string>();
+        foreach (var o in (await fila.ListarAsync(dono)).Where(o => o.FichaId == fichaId && o.Tipo == TipoOperacao.AdicionarMaterial && o.Estado == EstadoOperacao.PorEscolherLugar))
+            try { faltam.Add(CargasFila.Ler<CargaMaterial>(o.Payload).MaterialId); }
+            catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException) { }
+        return faltam.Count == 0 ? lista : lista.Select(m => faltam.Contains(m.Id) ? m with { FaltaLugar = true } : m).ToList();
+    }
+
+    // O utilizador escolheu o lugar de um material que ficou à espera: a operação volta a ser enviável com esse lugar.
+    public async Task DefinirLugarMaterialAsync(string id, string materialId, string localPeca, CancellationToken ct = default)
+    {
+        localPeca = (localPeca ?? "").Trim();
+        if (localPeca.Length == 0) throw new InvalidOperationException(MensagensIntervencao.EscolhaLugar);
+        if (await mc.GarantirDonoAsync() is not { } dono) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+        id = await mc.ResolverIdAsync(id);
+        await mc.ComTrincoAsync(async () =>
+        {
+            var operacao = (await fila.ListarAsync(dono)).FirstOrDefault(o => o.FichaId == id && o.Tipo == TipoOperacao.AdicionarMaterial && o.Estado == EstadoOperacao.PorEscolherLugar
+                && CargasFila.Ler<CargaMaterial>(o.Payload).MaterialId == materialId) ?? throw FichaMudou();
+            var carga = CargasFila.Ler<CargaMaterial>(operacao.Payload) with { Local = localPeca };
+            await fila.AtualizarAsync(operacao with { Payload = CargasFila.Escrever(carga), Estado = EstadoOperacao.Pendente, Tentativas = 0, UltimoErro = null });
+        });
+        await sinc.AtualizarContagensAsync();
+        AvisarEscrita();
     }
 
     public async Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default)
@@ -276,17 +305,18 @@ public sealed class OfflineIntervencoesService(
         return resultado;
     }
 
-    public async Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default)
+    public async Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default)
     {
         refPeca = (refPeca ?? "").Trim();
+        localPeca = refPeca == "" ? "" : (localPeca ?? "").Trim();
         if (RegrasMaterial.Validar(design, qtt, epv) is { } erro) throw new InvalidOperationException(erro);
-        if (await mc.GarantirDonoAsync() is not { } dono) return await remoto.AdicionarMaterialAsync(id, design, qtt, epv, refPeca, ct);
+        if (await mc.GarantirDonoAsync() is not { } dono) return await remoto.AdicionarMaterialAsync(id, design, qtt, epv, refPeca, localPeca, ct);
         id = await mc.ResolverIdAsync(id);
         var incerta = false;
         if (await PodeOnlineAsync(dono, id))
             try
             {
-                var criado = await remoto.AdicionarMaterialAsync(id, design, qtt, epv, refPeca, ct);
+                var criado = await remoto.AdicionarMaterialAsync(id, design, qtt, epv, refPeca, localPeca, ct);
                 await mc.ComTrincoAsync(async () =>
                 {
                     if (await Cache.LerMateriaisAsync(id) is { } lista && lista.All(m => m.Id != criado.Id)) await Cache.GuardarMateriaisAsync(id, [.. lista, criado]);
@@ -301,10 +331,10 @@ public sealed class OfflineIntervencoesService(
         {
             var ficha = await Cache.ObterFichaAsync(id) ?? throw FichaMudou();
             if (ficha.Estado != EstadoIntervencao.EmCurso) throw FichaMudou();
-            var local = new Material(NovoIdLocal(), design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), refPeca);
+            var local = new Material(NovoIdLocal(), design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), refPeca, Local: localPeca == "" ? null : localPeca);
             var lista = (await Cache.LerMateriaisAsync(id))?.ToList() ?? [];
             lista.Add(local);
-            await fila.AdicionarAsync(NovaOperacao(dono, TipoOperacao.AdicionarMaterial, id, CargasFila.Escrever(new CargaMaterial(local.Id, local.Design, qtt, epv, refPeca)), null, incerta));
+            await fila.AdicionarAsync(NovaOperacao(dono, TipoOperacao.AdicionarMaterial, id, CargasFila.Escrever(new CargaMaterial(local.Id, local.Design, qtt, epv, refPeca, localPeca)), null, incerta));
             await Cache.GuardarMateriaisAsync(id, lista);
             await Cache.GuardarFichasAsync([ficha with { Pendente = true }]);
             return local;
@@ -313,22 +343,22 @@ public sealed class OfflineIntervencoesService(
         return material;
     }
 
-    public async Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
+    public async Task<string?> ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
     {
-        if (await mc.GarantirDonoAsync() is not { } dono) { await remoto.ApagarMaterialAsync(id, materialId, ct); return; }
+        if (await mc.GarantirDonoAsync() is not { } dono) return await remoto.ApagarMaterialAsync(id, materialId, ct);
         id = await mc.ResolverIdAsync(id);
-        if (IdLocal(materialId)) { await CancelarAdicaoAsync(dono, id, TipoOperacao.AdicionarMaterial, materialId, null); return; }
+        if (IdLocal(materialId)) { await CancelarAdicaoAsync(dono, id, TipoOperacao.AdicionarMaterial, materialId, null); return null; }
 
         if (await PodeOnlineAsync(dono, id))
             try
             {
-                await remoto.ApagarMaterialAsync(id, materialId, ct);
+                var aviso = await remoto.ApagarMaterialAsync(id, materialId, ct);
                 await mc.ComTrincoAsync(async () =>
                 {
                     if (await Cache.LerMateriaisAsync(id) is { } lista) await Cache.GuardarMateriaisAsync(id, lista.Where(m => m.Id != materialId).ToList());
                 });
                 AvisarEscrita();
-                return;
+                return aviso;
             }
             catch (Exception e) when (FalhaDeRede(e, ct)) { }
 
@@ -340,6 +370,7 @@ public sealed class OfflineIntervencoesService(
             await Cache.GuardarFichasAsync([ficha with { Pendente = true }]);
         });
         await sinc.AtualizarContagensAsync();
+        return null;
     }
 
     // Apagar o que ainda só existe no telemóvel cancela a operação de adicionar em vez de criar uma de apagar.
@@ -661,13 +692,13 @@ public sealed class OfflineIntervencoesService(
 
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
         SoOnlineAsync(id, i => remoto.FecharFichaAntigaAsync(i, supervisao, fechada, ct), true, ct: ct);
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default) =>
-        SoOnlineAsync(id, i => remoto.EditarMaterialAsync(i, materialId, design, qtt, epv, refPeca, ct), true, ct: ct);
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) =>
+        SoOnlineAsync(id, i => remoto.EditarMaterialAsync(i, materialId, design, qtt, epv, refPeca, localPeca, ct), true, ct: ct);
 
-    public Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default) =>
+    public Task<Material> RepetirSaidaAsync(string id, string materialId, string localPeca = "", CancellationToken ct = default) =>
         IdLocal(materialId)
             ? throw new InvalidOperationException(MensagensIntervencao.SemRede)
-            : SoOnlineAsync(id, i => remoto.RepetirSaidaAsync(i, materialId, ct), true, ct: ct);
+            : SoOnlineAsync(id, i => remoto.RepetirSaidaAsync(i, materialId, localPeca, ct), true, ct: ct);
     public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) => SoOnlineAsync(id, i => remoto.ListarMaoDeObraAsync(i, ct), ct: ct);
     public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) =>
         SoOnlineAsync(id, i => remoto.AdicionarMaoDeObraAsync(i, tecno, horas, custoHora, ct), true, true, ct);

@@ -115,9 +115,10 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
         return await resposta.Content.ReadFromJsonAsync<List<Material>>(ct) ?? [];
     }
 
-    public async Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default)
+    public async Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default)
     {
-        using var resposta = await EnviarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/materiais", new { design, qtt, epv, @ref = refPeca }, ct);
+        using var resposta = await EnviarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/materiais", CorpoMaterial(design, qtt, epv, refPeca, localPeca), ct);
+        await VerificarEscolhaLugarAsync(resposta, ct);
         // Com peça, o 400 traz a explicação (peça inexistente, quantidade inválida).
         if (resposta.StatusCode == HttpStatusCode.BadRequest && refPeca != "")
             throw new InvalidOperationException(await LerMensagemAsync(resposta, ct) ?? MensagensIntervencao.Para("pedido_invalido"));
@@ -125,13 +126,45 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
         return await resposta.Content.ReadFromJsonAsync<Material>(ct) ?? throw new HttpRequestException();
     }
 
-    public Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default) =>
-        JsonAsync<Material>(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}/saida", null, ct);
+    // Local vazio: sem corpo, como antes (a API usa a peça já ligada ao material).
+    public Task<Material> RepetirSaidaAsync(string id, string materialId, string localPeca = "", CancellationToken ct = default) =>
+        MaterialJsonAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}/saida", string.IsNullOrWhiteSpace(localPeca) ? null : new { local = localPeca.Trim() }, ct);
 
-    public async Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
+    // 204 = lugar reposto; 200 {avisoStock} = o material foi apagado mas a peça saiu sem repor o lugar.
+    public async Task<string?> ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
     {
         using var resposta = await EnviarAsync(HttpMethod.Delete, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}", null, ct);
-        if (resposta.StatusCode != HttpStatusCode.NotFound) await VerificarAsync(resposta, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return null;
+        await VerificarAsync(resposta, ct);
+        if (resposta.StatusCode != HttpStatusCode.OK) return null;
+        try { return (await resposta.Content.ReadFromJsonAsync<CorpoAviso>(ct))?.AvisoStock; }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
+
+    private sealed record CorpoAviso(string? AvisoStock);
+
+    private static object CorpoMaterial(string design, decimal qtt, decimal epv, string refPeca, string localPeca) =>
+        string.IsNullOrWhiteSpace(localPeca) ? new { design, qtt, epv, @ref = refPeca } : new { design, qtt, epv, @ref = refPeca, local = localPeca.Trim() };
+
+    private async Task<Material> MaterialJsonAsync(HttpMethod metodo, string url, object? corpo, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(metodo, url, corpo, ct);
+        await VerificarEscolhaLugarAsync(resposta, ct);
+        await VerificarNovoAsync(resposta, ct);
+        return await resposta.Content.ReadFromJsonAsync<Material>(ct) ?? throw new HttpRequestException();
+    }
+
+    private sealed record CorpoEscolha(string? Erro, List<Lugar>? Lugares);
+
+    // 409 escolha_o_lugar traz a lista dos lugares com stock: o utilizador escolhe um e repete.
+    private static async Task VerificarEscolhaLugarAsync(HttpResponseMessage resposta, CancellationToken ct)
+    {
+        if (resposta.StatusCode != HttpStatusCode.Conflict) return;
+        // Lê-se como texto (e não como fluxo): o corpo volta a ser lido a seguir se não for esta escolha (mensagem do 409 normal).
+        CorpoEscolha? corpo;
+        try { corpo = System.Text.Json.JsonSerializer.Deserialize<CorpoEscolha>(await resposta.Content.ReadAsStringAsync(ct), System.Text.Json.JsonSerializerOptions.Web); }
+        catch (System.Text.Json.JsonException) { return; }
+        if (corpo is { Erro: "escolha_o_lugar", Lugares: { Count: > 0 } lugares }) throw new EscolhaLugarException(lugares);
     }
 
     public async Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default)
@@ -270,8 +303,8 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
         JsonAsync<FichaDetalhe>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/antiga", new { supervisao, fechada }, ct);
 
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default) =>
-        JsonAsync<Material>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}", new { design, qtt, epv, @ref = refPeca }, ct);
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) =>
+        MaterialJsonAsync(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}", CorpoMaterial(design, qtt, epv, refPeca, localPeca), ct);
 
     public async Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default)
     {

@@ -12,6 +12,9 @@
     <p class="alerta" role="status"><Icone Nome="wifi-off" /><span>@Aviso</span></p>
 }
 
+@* Fora do "if (Detalhe)" e das ações: depois de validar ou cancelar a ficha já não oferece essas ações e o aviso tem de continuar à vista. *@
+<AvisoConferencia Aviso="_avisoConf" Titulo="@(_confAcao == "cancelar" ? "Ficha cancelada" : "Ficha validada")" Ocupado="_ocupado" OnRepetir="RepetirConferenciaAsync" />
+
 @if (Detalhe is { } d)
 {
     var editar = d.PodeEditar;
@@ -537,7 +540,7 @@
         await Executar(async () =>
         {
             if (devolver) await Intervencoes.DevolverAsync(d.Id, _motivo.Trim());
-            else await Intervencoes.CancelarAsync(d.Id, _motivo.Trim());
+            else GuardarAvisoConferencia(await Intervencoes.CancelarAsync(d.Id, _motivo.Trim()), "cancelar", _motivo.Trim());
             _motivoAcao = null;
             await OnMudou.InvokeAsync();
         }, m => _erroAcao = m);
@@ -547,7 +550,30 @@
     {
         if (Detalhe is not { } d) return;
         _erroAcao = "";
-        await Executar(async () => { await Intervencoes.ValidarAsync(d.Id); await OnMudou.InvokeAsync(); }, m => _erroAcao = m);
+        await Executar(async () => { GuardarAvisoConferencia(await Intervencoes.ValidarAsync(d.Id), "validar", null); await OnMudou.InvokeAsync(); }, m => _erroAcao = m);
+    }
+
+    // "Conferência por confirmar" / "por cancelar": a ficha mudou mas as peças ficaram a meio. Mostra-se até a confirmação passar.
+    private string? _avisoConf, _confAcao, _confMotivo;
+
+    private void GuardarAvisoConferencia(Intervencao ficha, string acao, string? motivo)
+    {
+        _avisoConf = string.IsNullOrWhiteSpace(ficha.AvisoStock) ? null : ficha.AvisoStock;
+        _confAcao = acao;
+        _confMotivo = motivo;
+    }
+
+    // Validar e cancelar são repetíveis: a API só volta a tentar a conferência.
+    private async Task RepetirConferenciaAsync()
+    {
+        if (Detalhe is not { } d) return;
+        _erroAcao = "";
+        await Executar(async () =>
+        {
+            var ficha = _confAcao == "cancelar" ? await Intervencoes.CancelarAsync(d.Id, _confMotivo ?? "") : await Intervencoes.ValidarAsync(d.Id);
+            GuardarAvisoConferencia(ficha, _confAcao ?? "validar", _confMotivo);
+            await OnMudou.InvokeAsync();
+        }, m => _erroAcao = m);
     }
 
     private async Task FecharAntigaAsync()

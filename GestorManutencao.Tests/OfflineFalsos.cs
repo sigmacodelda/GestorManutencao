@@ -183,17 +183,28 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     // Pecas recebidas em cada AdicionarMaterial (por ordem), para os testes verem o que a fila enviou.
     public List<string> RefsMaterial { get; } = [];
 
-    public Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default) => throw new NotSupportedException();
+    // Lugar recebido em cada AdicionarMaterial (por ordem).
+    public List<string> LocaisMaterial { get; } = [];
+    // Peças em vários lugares: sem local o servidor responde 409 escolha_o_lugar com estes lugares.
+    public Dictionary<string, List<Lugar>> LugaresPorPeca { get; } = [];
+    // Avisos devolvidos por AdicionarMaterial, ValidarAsync e ApagarMaterial.
+    public string? AvisoMaterial { get; set; }
+    public string? AvisoValidar { get; set; }
+    public string? AvisoApagar { get; set; }
 
-    public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default)
+    public Task<Material> RepetirSaidaAsync(string id, string materialId, string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
+
+    public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default)
     {
         Entrar("AdicionarMaterial", id);
         Material m;
         lock (_trinco)
         {
             if (Fichas.GetValueOrDefault(id) is not { Estado: EstadoIntervencao.EmCurso }) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            if (localPeca == "" && LugaresPorPeca.GetValueOrDefault(refPeca) is { } lugares) throw new EscolhaLugarException(lugares);
             RefsMaterial.Add(refPeca);
-            m = new Material("M" + ++_seq, design.Trim(), qtt, epv, qtt * epv, refPeca, refPeca != "");
+            LocaisMaterial.Add(localPeca);
+            m = new Material("M" + ++_seq, design.Trim(), qtt, epv, qtt * epv, refPeca, refPeca != "", localPeca == "" ? null : localPeca, AvisoMaterial);
             if (!Materiais.TryGetValue(id, out var lista)) Materiais[id] = lista = [];
             lista.Add(m);
         }
@@ -201,11 +212,11 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
         return Task.FromResult(m);
     }
 
-    public Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
+    public Task<string?> ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
     {
         Entrar("ApagarMaterial", id);
         lock (_trinco) Materiais.GetValueOrDefault(id)?.RemoveAll(m => m.Id == materialId);
-        return Task.CompletedTask;
+        return Task.FromResult(AvisoApagar);
     }
 
     public Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default)
@@ -295,7 +306,8 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
         lock (_trinco)
         {
             var f = Fichas.GetValueOrDefault(id) ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
-            return Task.FromResult(Fichas[id] = f with { Estado = EstadoIntervencao.Validada });
+            Fichas[id] = f with { Estado = EstadoIntervencao.Validada };
+            return Task.FromResult(Fichas[id] with { AvisoStock = AvisoValidar });
         }
     }
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default)
@@ -356,7 +368,7 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     }
 
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) { Entrar("ListarMaoDeObra", id); return Task.FromResult<IReadOnlyList<TempoMaoDeObra>>([]); }
     public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default)
     {

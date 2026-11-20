@@ -30,7 +30,7 @@ public sealed record Intervencao(
     IReadOnlyList<TecnicoFicha>? Adicionais = null,
     int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false,
     bool EmPausa = false, bool PodePausar = false,
-    bool Externa = false, bool TemAssinaturaExterna = false)
+    bool Externa = false, bool TemAssinaturaExterna = false, string? AvisoStock = null)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
@@ -104,7 +104,10 @@ public static class RegrasPesquisa
     public static bool TextoValido(string? texto) => (texto ?? "").Trim() is { Length: 0 } or { Length: >= 2 and <= MaxTexto };
 }
 
-public sealed record Material(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo, string Ref = "", bool SaidaDada = false);
+// Local = lugar de onde saiu a peça (A-02-1-01). AvisoStock só vem na resposta de gravar. FaltaLugar: material na fila que o
+// servidor não aceitou sem lugar (a peça está em vários); só se calcula no telemóvel, nunca vem da API.
+public sealed record Material(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo, string Ref = "", bool SaidaDada = false,
+    string? Local = null, string? AvisoStock = null, bool FaltaLugar = false);
 
 public sealed record Foto(string Id, string Nome, int Bytes);
 

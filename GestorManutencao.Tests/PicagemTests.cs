@@ -81,6 +81,84 @@ public class PicagemTests
         Assert.Equal("3", LogicaPicagem.TextoQuantidade(3m));
     }
 
+    private static LocalizacoesPeca Lugares(params (string Texto, decimal Qtt)[] lugares) =>
+        new("P001", 10, lugares.Sum(l => l.Qtt), 0, lugares.Select(l =>
+        {
+            var p = l.Texto.Split('-');
+            return new Lugar(p[0], p[0] + "-" + p[1], int.Parse(p[2]), int.Parse(p[3]), l.Qtt, l.Texto);
+        }).ToList());
+
+    [Fact]
+    public void Ficha_peca_com_um_so_lugar_com_stock_escolhe_o_lugar_sozinha()
+    {
+        var e = LogicaFichaPeca.AplicarLugarUnico(Vazio.Aplicar("P001"), Lugares(("A-01-1-01", 4), ("A-01-2-03", 0)));
+
+        Assert.Equal("LOC-A-01-1-01", e.Local);
+        Assert.True(e.Completo);
+        Assert.False(LogicaFichaPeca.PrecisaEscolherLugar(e, Lugares(("A-01-1-01", 4))));
+    }
+
+    [Fact]
+    public void Ficha_peca_com_varios_lugares_obriga_a_escolher_e_nao_escolhe_sozinha()
+    {
+        var lug = Lugares(("A-01-1-01", 4), ("B-02-1-03", 2));
+        var e = LogicaFichaPeca.AplicarLugarUnico(Vazio.Aplicar("P001"), lug);
+
+        Assert.Null(e.Local);
+        Assert.True(LogicaFichaPeca.PrecisaEscolherLugar(e, lug));
+        Assert.False(LogicaFichaPeca.PodeIrParaQuantidade(e, lug));
+        // Escolher à mão (lista) ou picar a etiqueta do lugar resolve.
+        var daLista = e.Aplicar(LogicaFichaPeca.EtiquetaDe(lug.Lugares[1]));
+        Assert.Equal("LOC-B-02-1-03", daLista.Local);
+        Assert.True(LogicaFichaPeca.PodeIrParaQuantidade(daLista, lug));
+        Assert.True(LogicaFichaPeca.PodeIrParaQuantidade(e.Aplicar("LOC-A-01-1-01"), lug));
+    }
+
+    [Fact]
+    public void Ficha_peca_sem_lugar_com_stock_segue_para_a_quantidade()
+    {
+        var lug = Lugares(("A-01-1-01", 0));
+        var e = LogicaFichaPeca.AplicarLugarUnico(Vazio.Aplicar("P001"), lug);
+
+        Assert.Null(e.Local);
+        Assert.True(LogicaFichaPeca.PodeIrParaQuantidade(e, lug));
+        Assert.True(LogicaFichaPeca.PodeIrParaQuantidade(e, null));
+    }
+
+    [Fact]
+    public void Ficha_local_picado_primeiro_nao_e_trocado_pelo_lugar_unico()
+    {
+        var e = LogicaFichaPeca.AplicarLugarUnico(Vazio.Aplicar("LOC-B-02-1-03").Aplicar("P001"), Lugares(("A-01-1-01", 4)));
+
+        Assert.Equal("LOC-B-02-1-03", e.Local);
+        Assert.Equal("P001", e.Peca);
+    }
+
+    [Fact]
+    public void Ficha_sem_peca_nao_avanca_para_a_quantidade()
+    {
+        Assert.False(LogicaFichaPeca.PodeIrParaQuantidade(Vazio.Aplicar("LOC-A-01-1-01"), null));
+    }
+
+    [Theory]
+    [InlineData("LOC-A-02-1-01", "A-02-1-01")]
+    [InlineData("A-02-1-01", "A-02-1-01")]
+    [InlineData("LOC'A'02'1'01", "A-02-1-01")]
+    [InlineData(null, "")]
+    public void Ficha_texto_do_lugar_sem_o_prefixo(string? local, string esperado) =>
+        Assert.Equal(esperado, LogicaFichaPeca.TextoLugar(local));
+
+    [Fact]
+    public void Ficha_aviso_usa_o_disponivel_e_nunca_o_stock_real()
+    {
+        var peca = new Peca("P001", "Parafuso", "560001", "A-01-1-01", Stock: 10, StMin: 0, Preco: 1, Disponivel: 2);
+
+        Assert.Equal("Stock insuficiente: há 2 e pede 3.", LogicaFichaPeca.AvisoDisponivel(peca, 3));
+        Assert.Null(LogicaFichaPeca.AvisoDisponivel(peca, 2));
+        // Servidor sem o campo (ou ficha antiga na cache): cai no stock.
+        Assert.Equal(10, (peca with { Disponivel = null }).QuantidadeDisponivel);
+    }
+
     [Fact]
     public void Leitura_vazia_e_ignorada()
     {

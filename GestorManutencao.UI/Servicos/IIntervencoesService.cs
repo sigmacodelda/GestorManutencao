@@ -33,10 +33,14 @@ public interface IIntervencoesService
     Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default);
     // Material usado na ficha (só se lança com a ficha em curso).
     Task<IReadOnlyList<Material>> ListarMateriaisAsync(string id, CancellationToken ct = default);
-    Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default);
-    Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default);
+    // localPeca = lugar de onde saiu a peça (etiqueta LOC-... ou A-02-1-01); vazio = a API decide ou pede para escolher (EscolhaLugarException).
+    Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default);
+    // Devolve o aviso da API quando a peça saiu sem repor o lugar (ou null).
+    Task<string?> ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default);
     // Repete a saída de stock que falhou ao gravar o material (só online).
-    Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default);
+    Task<Material> RepetirSaidaAsync(string id, string materialId, string localPeca = "", CancellationToken ct = default);
+    // Escolhe o lugar de um material da fila que ficou "a falta de lugar" (só offline); outros serviços não o têm.
+    Task DefinirLugarMaterialAsync(string id, string materialId, string localPeca, CancellationToken ct = default) => throw new NotSupportedException();
     // Fotos da intervenção (JPEG): o técnico junta e apaga com a ficha em curso; o supervisor só vê.
     Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default);
     Task<byte[]?> ObterFotoAsync(string id, string fotoId, CancellationToken ct = default);
@@ -59,7 +63,7 @@ public interface IIntervencoesService
     Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default);
     // Só supervisor, só fichas antigas (sem estado).
     Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default);
-    Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default);
+    Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default);
     // Mão de obra interna: custo = horas x custo por hora; o custo por hora sugerido é o do último registo do técnico.
     Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default);
     Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default);
@@ -76,6 +80,13 @@ public interface IIntervencoesService
 // O utilizador ainda não tem o número de técnico do PHC: o supervisor tem de o indicar na Equipa.
 public sealed class SemNumeroTecnicoException : Exception;
 
+// A peça está em vários lugares e o pedido não disse de qual (409 escolha_o_lugar): não é uma recusa definitiva,
+// o utilizador escolhe um dos lugares e repete. Lugares = os que têm stock, com a quantidade de cada.
+public sealed class EscolhaLugarException(IReadOnlyList<Lugar> lugares) : InvalidOperationException(MensagensIntervencao.EscolhaLugar)
+{
+    public IReadOnlyList<Lugar> Lugares { get; } = lugares;
+}
+
 // A mensagem de uma InvalidOperationException vem pronta para mostrar ao utilizador.
 public static class MensagensIntervencao
 {
@@ -84,6 +95,7 @@ public static class MensagensIntervencao
     public const string SemRedeAMeio = "Sem ligação. Pode ter ficado gravado; confirme antes de repetir.";
     public const string NaoPausa = "Não é possível pausar esta intervenção.";
     public const string NaoRetoma = "Não é possível retomar esta intervenção.";
+    public const string EscolhaLugar = "Esta peça está em vários lugares. Escolha de onde a tirou.";
     public const string ComPendentes = "Esta intervenção tem alterações por enviar. Tente outra vez depois de serem enviadas.";
 
     public static string Para(string? codigo) => codigo switch
@@ -270,20 +282,20 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         lock (_trinco) return Task.FromResult<IReadOnlyList<Material>>(_materiais.GetValueOrDefault(id)?.ToList() ?? []);
     }
 
-    public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default)
+    public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default)
     {
         if (RegrasMaterial.Validar(design, qtt, epv) is not null) throw new InvalidOperationException(MensagensIntervencao.Mudou);
         lock (_trinco)
         {
             if (_lista.FirstOrDefault(i => i.Id == id) is not { Estado: EstadoIntervencao.EmCurso }) throw new InvalidOperationException(MensagensIntervencao.Mudou);
-            var m = new Material(Guid.NewGuid().ToString("N"), design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), refPeca.Trim(), refPeca.Trim() != "");
+            var m = new Material(Guid.NewGuid().ToString("N"), design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), refPeca.Trim(), refPeca.Trim() != "", localPeca.Trim() == "" ? null : localPeca.Trim());
             if (!_materiais.TryGetValue(id, out var lista)) _materiais[id] = lista = [];
             lista.Add(m);
             return Task.FromResult(m);
         }
     }
 
-    public Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default)
+    public Task<Material> RepetirSaidaAsync(string id, string materialId, string localPeca = "", CancellationToken ct = default)
     {
         lock (_trinco)
         {
@@ -294,10 +306,10 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         }
     }
 
-    public Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
+    public Task<string?> ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default)
     {
         lock (_trinco) _materiais.GetValueOrDefault(id)?.RemoveAll(m => m.Id == materialId);
-        return Task.CompletedTask;
+        return Task.FromResult<string?>(null);
     }
 
     private readonly Dictionary<string, List<(Foto Foto, byte[] Dados)>> _fotos = [];
@@ -481,7 +493,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
         throw new InvalidOperationException(MensagensIntervencao.Mudou);
 
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default)
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default)
     {
         if (RegrasMaterial.Validar(design, qtt, epv) is not null) throw new InvalidOperationException(MensagensIntervencao.Mudou);
         lock (_trinco)
@@ -490,7 +502,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
             var pos = lista?.FindIndex(m => m.Id == materialId) ?? -1;
             if (lista is null || pos < 0 || _lista.FirstOrDefault(i => i.Id == id)?.Estado is null or EstadoIntervencao.Validada or EstadoIntervencao.Cancelada)
                 throw new InvalidOperationException(MensagensIntervencao.Mudou);
-            return Task.FromResult(lista[pos] = new Material(materialId, design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), refPeca.Trim(), refPeca.Trim() != ""));
+            return Task.FromResult(lista[pos] = new Material(materialId, design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), refPeca.Trim(), refPeca.Trim() != "", localPeca.Trim() == "" ? null : localPeca.Trim()));
         }
     }
 
@@ -577,9 +589,9 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<RelatorioGeracao> GerarPlaneadasAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Material>> ListarMateriaisAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
-    public Task ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Material> RepetirSaidaAsync(string id, string materialId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> AdicionarMaterialAsync(string id, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<string?> ApagarMaterialAsync(string id, string materialId, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> RepetirSaidaAsync(string id, string materialId, string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Foto>> ListarFotosAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<byte[]?> ObterFotoAsync(string id, string fotoId, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Foto> AdicionarFotoAsync(string id, string nome, byte[] jpeg, CancellationToken ct = default) => throw new NotSupportedException();
@@ -595,7 +607,7 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<TempoMaoDeObra> EditarMaoDeObraAsync(string id, string tempoId, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) => throw new NotSupportedException();

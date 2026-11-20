@@ -1,7 +1,10 @@
 namespace GestorManutencao.UI.Modelos;
 
-public sealed record Peca(string Ref, string Design, string Codigo, string Local, decimal Stock, decimal StMin, decimal Preco)
+public sealed record Peca(string Ref, string Design, string Codigo, string Local, decimal Stock, decimal StMin, decimal Preco, decimal? Disponivel = null)
 {
+    // Stock menos o que está em conferência noutras fichas; fichas antigas na cache e servidores sem o campo caem no stock.
+    public decimal QuantidadeDisponivel => Disponivel ?? Stock;
+
     public bool AbaixoDoMinimo => StMin > 0 && Stock <= StMin;
 }
 

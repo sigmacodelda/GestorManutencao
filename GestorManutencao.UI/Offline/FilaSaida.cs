@@ -4,7 +4,8 @@ public enum TipoOperacao { RegistarAvaria, Iniciar, Concluir, AdicionarMaterial,
 
 // Pendente: por enviar. Incerta: pode já ter chegado ao servidor (material e foto); verifica-se antes de reenviar.
 // Conflito: o servidor recusou; já não se envia e fica a aguardar que o técnico veja o aviso.
-public enum EstadoOperacao { Pendente, Incerta, Conflito }
+// PorEscolherLugar: material cuja peça está em vários lugares; não se envia nem se descarta até o técnico escolher o lugar (conta como pendente).
+public enum EstadoOperacao { Pendente, Incerta, Conflito, PorEscolherLugar }
 
 // FichaId pode ser um id local ("L-..."), até a avaria ser criada no servidor. Payload é JSON. Nunca leva segredos.
 public sealed record OperacaoSaida(

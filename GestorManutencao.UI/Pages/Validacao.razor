@@ -42,6 +42,11 @@
         {
             <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>@_erro</span></p>
         }
+        @foreach (var c in _porConfirmar)
+        {
+            @* A ficha já ficou validada (sai da lista), mas as peças não saíram de conferência: repete-se a confirmação. *@
+            <AvisoConferencia Aviso="@c.Aviso" Titulo="@($"Validada: {c.Equipamento}")" Ocupado="_ocupado" OnRepetir="() => RepetirConfirmacaoAsync(c)" />
+        }
         @if (_fichas.Count == 0)
         {
             <p class="estado-lista" role="status">Não há fichas por validar. Está tudo em dia!</p>
@@ -148,7 +153,35 @@
         finally { _a_carregar = false; }
     }
 
-    private Task ValidarAsync(Intervencao f) => AgirAsync(f, () => Intervencoes.ValidarAsync(f.Id), $"Validada: {f.Equipamento}. Segue para a Qualidade.");
+    private sealed record PorConfirmar(string Id, string Equipamento, string Aviso);
+    private readonly List<PorConfirmar> _porConfirmar = [];
+
+    private Task ValidarAsync(Intervencao f) => AgirAsync(f, async () =>
+    {
+        var validada = await Intervencoes.ValidarAsync(f.Id);
+        if (!string.IsNullOrWhiteSpace(validada.AvisoStock)) _porConfirmar.Add(new(f.Id, f.Equipamento, validada.AvisoStock));
+        return validada;
+    }, $"Validada: {f.Equipamento}. Segue para a Qualidade.");
+
+    // Repetir é seguro: a API só volta a tentar a confirmação das peças.
+    private async Task RepetirConfirmacaoAsync(PorConfirmar c)
+    {
+        _ocupado = true; _aviso = _erro = null;
+        try
+        {
+            var r = await Intervencoes.ValidarAsync(c.Id);
+            var pos = _porConfirmar.IndexOf(c);
+            if (string.IsNullOrWhiteSpace(r.AvisoStock))
+            {
+                _porConfirmar.Remove(c);
+                Toast.Sucesso($"Conferência confirmada: {c.Equipamento}");
+            }
+            else if (pos >= 0) _porConfirmar[pos] = c with { Aviso = r.AvisoStock };
+        }
+        catch (InvalidOperationException ex) { _erro = ex.Message; }
+        catch (Exception) { _erro = "Não foi possível confirmar. Tente outra vez."; }
+        finally { _ocupado = false; }
+    }
 
     private Task DevolverAsync(Intervencao f) => AgirAsync(f, () => Intervencoes.DevolverAsync(f.Id, _motivo.Trim()), $"Devolvida ao técnico: {f.Equipamento}.");
 
