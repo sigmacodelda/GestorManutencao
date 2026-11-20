@@ -69,7 +69,8 @@ else if (_resultado is not null)
     public async Task FocarAsync()
     {
         if (LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial) == ModoLeitura.Leitor) return;
-        await _campo.FocusAsync();
+        try { await _campo.FocusAsync(); }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException) { }
     }
 
     // Ponto de ligação do leitor (câmara/PDA): quem ler uma etiqueta chama isto com o código lido.

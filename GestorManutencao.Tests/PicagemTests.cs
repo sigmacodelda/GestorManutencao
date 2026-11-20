@@ -48,6 +48,39 @@ public class PicagemTests
         Assert.Equal(TipoLeitura.Peca, LogicaPicagem.Classificar("5600012345"));
     }
 
+    [Theory]
+    [InlineData("2", "2")]
+    [InlineData(" 2,5 ", "2.5")]
+    [InlineData("2.5", "2.5")]
+    [InlineData("0,125", "0.125")]
+    [InlineData("12,", "12")]
+    public void Quantidade_aceita_virgula_ou_ponto(string texto, string esperado)
+    {
+        Assert.True(LogicaPicagem.LerQuantidade(texto, out var q));
+        Assert.Equal(decimal.Parse(esperado, System.Globalization.CultureInfo.InvariantCulture), q);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("1.000")]
+    [InlineData("1,000")]
+    [InlineData("1.000,5")]
+    [InlineData("1,2,3")]
+    [InlineData("1,2345")]
+    [InlineData("1e3")]
+    public void Quantidade_recusa_texto_ambiguo_ou_invalido(string texto) =>
+        Assert.False(LogicaPicagem.LerQuantidade(texto, out _));
+
+    [Fact]
+    public void Quantidade_proposta_usa_virgula()
+    {
+        Assert.Equal("2,5", LogicaPicagem.TextoQuantidade(2.5m));
+        Assert.Equal("3", LogicaPicagem.TextoQuantidade(3m));
+    }
+
     [Fact]
     public void Leitura_vazia_e_ignorada()
     {
