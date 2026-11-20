@@ -110,7 +110,12 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     }
 
     // bi.lobs = "<stamp do material, 25>" ou "<stamp>|<lugar>": o material lê-se pelos primeiros 25 caracteres, o lugar depois do 26.º.
-    private static string MaterialDeLobs(string coluna = "lobs") => $"LEFT(LTRIM(RTRIM({coluna})), {RegrasPecas.TamanhoStamp})";
+    // bi.lobs = "<stamp>" ou "<stamp>|<lugar>"; os stamps do PHC podem ter menos de 25 caracteres, por isso parte-se no '|'.
+    private static string MaterialDeLobs(string coluna = "lobs") =>
+        $"LTRIM(RTRIM(CASE WHEN CHARINDEX('|', {coluna}) > 0 THEN LEFT({coluna}, CHARINDEX('|', {coluna}) - 1) ELSE {coluna} END))";
+
+    private static string LugarDeLobs(string coluna = "lobs") =>
+        $"CASE WHEN CHARINDEX('|', {coluna}) > 0 THEN LTRIM(RTRIM(SUBSTRING({coluna}, CHARINDEX('|', {coluna}) + 1, {RegrasPecas.TamanhoLugarMax}))) ELSE '' END";
 
     private static string Colunas(bool emconf) => $"""
         LTRIM(RTRIM(s.ref)) AS Ref, LTRIM(RTRIM(s.design)) AS Design, LTRIM(RTRIM(s.codigo)) AS Codigo,
@@ -400,7 +405,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         await using var cmd = Cmd(conn, null, $"""
             SELECT LTRIM(RTRIM(mi.u_matintervstamp)), LTRIM(RTRIM(ISNULL(mi.ref, ''))),
                    CASE WHEN EXISTS (SELECT 1 FROM bi i WITH (NOLOCK) WHERE i.ndos = @ndos AND {MaterialDeLobs("i.lobs")} = LTRIM(RTRIM(mi.u_matintervstamp))) THEN 1 ELSE 0 END,
-                   ISNULL((SELECT TOP 1 LTRIM(RTRIM(SUBSTRING(LTRIM(RTRIM(i.lobs)), {RegrasPecas.TamanhoStamp + 2}, {RegrasPecas.TamanhoLugarMax}))) FROM bi i WITH (NOLOCK)
+                   ISNULL((SELECT TOP 1 {LugarDeLobs("i.lobs")} FROM bi i WITH (NOLOCK)
                            WHERE i.ndos = @ndos AND {MaterialDeLobs("i.lobs")} = LTRIM(RTRIM(mi.u_matintervstamp))), '')
             FROM u_matinterv mi WITH (NOLOCK) WHERE mi.u_matintervstamp IN ({nomes})
             """, ("@ndos", RegrasPecas.NdosSaida));
@@ -417,7 +422,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     {
         await using (var t = Cmd(conn, tx, "SELECT ISNULL(COL_LENGTH('bo', 'obranome'), 20)"))
         {
-            var tamanho = (int)(await t.ExecuteScalarAsync(ct))!;
+            var tamanho = Convert.ToInt32(await t.ExecuteScalarAsync(ct)); // COL_LENGTH devolve smallint
             if (tamanho > 0 && obranome.Length > tamanho) obranome = obranome[..tamanho].TrimEnd();
         }
         await using var bo = Cmd(conn, tx, $"""

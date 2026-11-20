@@ -86,9 +86,10 @@ public sealed class SqlRepositorioLocalizacoes(IConfiguration configuracao, IRep
             var l = new List<LugarDto>();
             if (await VerificarAsync(conn, ct) != "") return l;
             await using var cmd = Cmd(conn, null, @"
-SELECT ISNULL(LTRIM(RTRIM(corredor)), ''), ISNULL(LTRIM(RTRIM(estante)), ''), CAST(ISNULL(nivel, 0) AS int), CAST(ISNULL(posicao, 0) AS int), ISNULL(qtt, 0)
+SELECT ISNULL(LTRIM(RTRIM(corredor)), ''), ISNULL(LTRIM(RTRIM(estante)), ''), CAST(ISNULL(NULLIF(LTRIM(RTRIM(nivel)), ''), '0') AS int), CAST(ISNULL(NULLIF(LTRIM(RTRIM(posicao)), ''), '0') AS int),
+       CAST(ISNULL(NULLIF(LTRIM(RTRIM(qtt)), ''), '0') AS decimal(13, 3)) AS q  -- qtt, nivel e posicao são varchar no PHC
 FROM u_pecaloc WITH (NOLOCK) WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a
-ORDER BY ISNULL(qtt, 0) DESC, corredor, estante, nivel, posicao",
+ORDER BY q DESC, corredor, estante, nivel, posicao",
                 ("@r", refPeca.Trim()), ("@a", RegrasPecas.Armazem));
             await using var rd = await cmd.ExecuteReaderAsync(ct);
             while (await rd.ReadAsync(ct)) l.Add(new LugarDto(rd.GetString(0), rd.GetString(1), rd.GetInt32(2), rd.GetInt32(3), rd.GetDecimal(4)));
