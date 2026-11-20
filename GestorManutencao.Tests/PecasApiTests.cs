@@ -23,7 +23,8 @@ public class PecasApiTests : IDisposable
         {
             s.Replace(ServiceDescriptor.Singleton<IRepositorioUtilizadores>(new RepositorioUtilizadoresMemoria(
             [
-                (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), Hasher.Hash("482913"))
+                (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), Hasher.Hash("482913")),
+                (new UtilizadorApp("qual", "Marta Qualidade", Perfil.Qualidade, true, false), Hasher.Hash("715329"))
             ])));
             s.Replace(ServiceDescriptor.Singleton<IRepositorioPecas>(new RepositorioPecasMemoria(
             [
@@ -34,10 +35,10 @@ public class PecasApiTests : IDisposable
 
     public void Dispose() => _fabrica.Dispose();
 
-    private async Task<HttpClient> ComoAnaAsync()
+    private async Task<HttpClient> ComoAnaAsync(string pin = "482913")
     {
         var c = _fabrica.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var login = await (await c.PostAsJsonAsync("/auth/login", new PedidoLogin("482913"))).Content.ReadFromJsonAsync<RespostaLogin>();
+        var login = await (await c.PostAsJsonAsync("/auth/login", new PedidoLogin(pin))).Content.ReadFromJsonAsync<RespostaLogin>();
         c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
         return c;
     }
@@ -84,5 +85,48 @@ public class PecasApiTests : IDisposable
     {
         var c = await ComoAnaAsync();
         Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada(refPeca, qtt))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Entrada_e_anulacao_sem_sessao_recusam()
+    {
+        var c = _fabrica.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        Assert.Equal(HttpStatusCode.Unauthorized, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 1))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await c.DeleteAsync("/pecas/entradas/abc")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Anular_entrada_inexistente_da_404()
+    {
+        var c = await ComoAnaAsync();
+        Assert.Equal(HttpStatusCode.NotFound, (await c.DeleteAsync("/pecas/entradas/naoexiste")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Quantidade_nula_ou_acima_do_limite_recusa()
+    {
+        var c = await ComoAnaAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", null))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 1000000))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada(new string('X', 19), 1))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Perfil_sem_acesso_e_recusado_em_todas_as_rotas()
+    {
+        var c = await ComoAnaAsync("715329");
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/pecas")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/pecas/codigo/560001")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.GetAsync("/pecas/entradas/hoje")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 1))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.DeleteAsync("/pecas/entradas/abc")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Sem_texto_devolve_as_pecas()
+    {
+        var c = await ComoAnaAsync();
+        var r = await c.GetFromJsonAsync<ResultadoPecasDto>("/pecas");
+        Assert.Equal(2, r!.Pecas.Count);
     }
 }

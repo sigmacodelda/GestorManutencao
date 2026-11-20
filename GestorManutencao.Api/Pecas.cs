@@ -34,7 +34,12 @@ public static class RegrasPecas
         return pedida > stock ? $"Stock insuficiente: há {stock:0.###} e pede {pedida:0.###}." : null;
     }
 
-    public static bool QuantidadeValida(decimal? q) => q is > 0 and < QuantidadeMaxima + 1;
+    // st.ref tem 18 caracteres no PHC; o movimento grava a quantidade com 3 casas.
+    public const int TamanhoRef = 18;
+
+    public static bool ReferenciaValida(string? r) => !string.IsNullOrWhiteSpace(r) && r.Trim().Length <= TamanhoRef;
+
+    public static bool QuantidadeValida(decimal? q) => q is > 0 and < QuantidadeMaxima + 1 && decimal.Round(q.Value, 3) == q.Value;
 }
 
 public sealed record ResultadoMovimento(bool Ok, string? Id, string? Erro)
@@ -63,28 +68,38 @@ public static class EndpointsPecas
     public static void MapPecas(this WebApplication app)
     {
         var g = app.MapGroup("/pecas").RequireAuthorization();
+        g.AddEndpointFilter(async (ctx, next) =>
+        {
+            try { return await next(ctx); }
+            catch (RepositorioIndisponivelException) { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+        });
 
-        g.MapGet("", async (string? texto, IRepositorioPecas repo, CancellationToken ct) =>
-            Results.Ok(await repo.ListarAsync(texto, 60, ct)));
+        g.MapGet("", (string? texto, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas repo, CancellationToken ct) =>
+            EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (_, _) =>
+                Results.Ok(await repo.ListarAsync(texto, 60, ct))));
 
-        g.MapGet("/codigo/{codigo}", async (string codigo, IRepositorioPecas repo, CancellationToken ct) =>
-            await repo.ObterPorCodigoAsync(codigo, ct) is { } p ? Results.Ok(p) : Results.NotFound());
+        g.MapGet("/codigo/{codigo}", (string codigo, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas repo, CancellationToken ct) =>
+            EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (_, _) =>
+                await repo.ObterPorCodigoAsync(codigo, ct) is { } p ? Results.Ok(p) : Results.NotFound()));
 
-        g.MapGet("/entradas/hoje", async (IRepositorioPecas repo, CancellationToken ct) =>
-            Results.Ok(await repo.EntradasDeHojeAsync(ct)));
+        g.MapGet("/entradas/hoje", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas repo, CancellationToken ct) =>
+            EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (_, _) =>
+                Results.Ok(await repo.EntradasDeHojeAsync(ct))));
 
         g.MapPost("/entradas", (PedidoEntrada p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas repo, CancellationToken ct) =>
-            string.IsNullOrWhiteSpace(p.Ref) || !RegrasPecas.QuantidadeValida(p.Qtt)
-                ? Task.FromResult(Results.BadRequest())
+            !RegrasPecas.ReferenciaValida(p.Ref) || !RegrasPecas.QuantidadeValida(p.Qtt)
+                ? Task.FromResult(EndpointsIntervencoes.PedidoInvalido("Indique uma referência (até 18 caracteres) e uma quantidade positiva, com no máximo 3 casas decimais."))
                 : EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, _) =>
                 {
-                    var r = await repo.DarEntradaAsync(p.Ref.Trim(), p.Qtt!.Value, t.Codigo, ct);
-                    if (!r.Ok) return Results.BadRequest(new { erro = r.Erro });
-                    var linha = (await repo.EntradasDeHojeAsync(ct)).First(e => e.Id == r.Id);
+                    var r = await repo.DarEntradaAsync(p.Ref!.Trim(), p.Qtt!.Value, t.Codigo, ct);
+                    if (!r.Ok) return EndpointsIntervencoes.PedidoInvalido(r.Erro ?? "Não foi possível gravar o movimento.");
+                    var linha = (await repo.EntradasDeHojeAsync(ct)).FirstOrDefault(e => e.Id == r.Id)
+                        ?? new EntradaPecaDto(r.Id!, p.Ref.Trim(), "", p.Qtt.Value, t.Codigo, DateTime.Now.ToString("HH:mm:ss"));
                     return Results.Ok(linha);
                 }));
 
-        g.MapDelete("/entradas/{id}", async (string id, IRepositorioPecas repo, CancellationToken ct) =>
-            (await repo.AnularEntradaAsync(id, ct)).Ok ? Results.NoContent() : Results.NotFound());
+        g.MapDelete("/entradas/{id}", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas repo, CancellationToken ct) =>
+            EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (_, _) =>
+                (await repo.AnularEntradaAsync(id, ct)).Ok ? Results.NoContent() : Results.NotFound()));
     }
 }

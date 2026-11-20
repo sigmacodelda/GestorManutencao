@@ -33,6 +33,17 @@ public class PecasRegrasTests
     [InlineData(-1.0, false)]
     [InlineData(0.5, true)]
     [InlineData(1000000.0, false)]
+    [InlineData(1.234, true)]
+    [InlineData(0.0005, false)]
     public void QuantidadeValida_positiva_e_abaixo_do_limite(double? q, bool esperado)
         => Assert.Equal(esperado, RegrasPecas.QuantidadeValida(q is null ? null : (decimal)q));
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("  ", false)]
+    [InlineData("P001", true)]
+    [InlineData("123456789012345678", true)]
+    [InlineData("1234567890123456789", false)]
+    public void ReferenciaValida_nao_vazia_e_ate_18_caracteres(string? r, bool esperado)
+        => Assert.Equal(esperado, RegrasPecas.ReferenciaValida(r));
 }

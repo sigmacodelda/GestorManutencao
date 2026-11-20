@@ -1,3 +1,5 @@
+using System.Data;
+using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace GestorManutencao.Api;
@@ -30,14 +32,67 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     private static SqlCommand Cmd(SqlConnection conn, SqlTransaction? tx, string sql, params (string Nome, object? Valor)[] ps)
     {
         var cmd = new SqlCommand(sql, conn, tx);
-        foreach (var (nome, valor) in ps) cmd.Parameters.AddWithValue(nome, valor ?? DBNull.Value);
+        foreach (var (nome, valor) in ps) Parametro(cmd, nome, valor);
         return cmd;
     }
 
-    private static async Task<bool> CampoExisteAsync(SqlConnection conn, CancellationToken ct)
+    // Texto como varchar com tamanho (escalões, para o plano de execução não variar) e quantidade como decimal(16,3).
+    private static void Parametro(SqlCommand cmd, string nome, object? valor)
+    {
+        switch (valor)
+        {
+            case string t:
+                cmd.Parameters.Add(nome, SqlDbType.VarChar, t.Length <= 25 ? 25 : t.Length <= 60 ? 60 : t.Length <= 200 ? 200 : 8000).Value = t;
+                break;
+            case decimal d:
+                var p = cmd.Parameters.Add(nome, SqlDbType.Decimal);
+                p.Precision = 16; p.Scale = 3; p.Value = d;
+                break;
+            default:
+                cmd.Parameters.AddWithValue(nome, valor ?? DBNull.Value);
+                break;
+        }
+    }
+
+    private static async Task RollbackSeguroAsync(SqlTransaction tx)
+    {
+        // Um trigger do PHC pode já ter feito ROLLBACK: o segundo falha e não interessa.
+        try { await tx.RollbackAsync(CancellationToken.None); }
+        catch (Exception) { }
+    }
+
+    // Só o texto de RAISERROR/THROW (50000) vai ao cliente; o resto fica no log, sem mensagem.
+    private ResultadoMovimento Falhou(Exception ex)
+    {
+        if (ex is SqlException { Number: 50000 } negocio) return ResultadoMovimento.Falha(negocio.Message);
+        if (ex is SqlException sql) log.LogError("Falha SQL no movimento de peças (erro {Numero}).", sql.Number);
+        else log.LogError("Falha no movimento de peças: {Mensagem}", ex.Message);
+        return ResultadoMovimento.Falha("Não foi possível gravar o movimento.");
+    }
+
+    private static bool ErroDeNegocio(Exception ex) => ex is InvalidOperationException or SqlException { Number: 50000 } or SqlException { Class: 16 };
+
+    // Serializa a criação do dossier do dia/da ficha; liberta-se no commit/rollback.
+    private static async Task<bool> BloquearAsync(SqlConnection conn, SqlTransaction tx, int ndos, CancellationToken ct)
+    {
+        await using var cmd = Cmd(conn, tx, "DECLARE @r int; EXEC @r = sp_getapplock @Resource = @res, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000; SELECT @r;",
+            ("@res", $"pecas-dossier-{ndos}"));
+        return (int)(await cmd.ExecuteScalarAsync(ct))! >= 0;
+    }
+
+    // Mesmo critério da listagem: marcada em stobs.u_manut e não inativa.
+    private static async Task<bool> EPecaAsync(SqlConnection conn, SqlTransaction tx, string refPeca, CancellationToken ct)
+    {
+        if (!await CampoExisteAsync(conn, ct, tx)) return false;
+        await using var cmd = Cmd(conn, tx, $"SELECT COUNT(*) FROM st s WITH (NOLOCK) JOIN stobs o WITH (NOLOCK) ON o.ref = s.ref WHERE s.ref = @ref AND o.[{RegrasPecas.CampoStobs}] = 1 AND s.inactivo = 0",
+            ("@ref", refPeca));
+        return (int)(await cmd.ExecuteScalarAsync(ct))! > 0;
+    }
+
+    private static async Task<bool> CampoExisteAsync(SqlConnection conn, CancellationToken ct, SqlTransaction? tx = null)
     {
         if (_campoExiste) return true;
-        await using var cmd = Cmd(conn, null, $"SELECT COL_LENGTH('stobs', '{RegrasPecas.CampoStobs}')");
+        await using var cmd = Cmd(conn, tx, $"SELECT COL_LENGTH('stobs', '{RegrasPecas.CampoStobs}')");
         _campoExiste = await cmd.ExecuteScalarAsync(ct) is not (null or DBNull);
         return _campoExiste;
     }
@@ -72,7 +127,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         await using var cmd = Cmd(conn, null,
             $"SELECT TOP (@max) {Colunas} {De} WHERE o.[{RegrasPecas.CampoStobs}] = 1 AND s.inactivo = 0{onde} ORDER BY s.ref",
             ("@max", maximo + 1), ("@arm", RegrasPecas.Armazem));
-        for (var i = 0; i < palavras.Length; i++) cmd.Parameters.AddWithValue($"@t{i}", "%" + RegrasPecas.EscaparLike(palavras[i]) + "%");
+        for (var i = 0; i < palavras.Length; i++) Parametro(cmd, $"@t{i}", "%" + RegrasPecas.EscaparLike(palavras[i]) + "%");
         var lista = new List<PecaDto>();
         await using var r = await cmd.ExecuteReaderAsync(ct);
         while (await r.ReadAsync(ct)) lista.Add(Ler(r));
@@ -100,18 +155,20 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
         try
         {
+            if (!await BloquearAsync(conn, tx, RegrasPecas.NdosEntrada, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Outro movimento em curso, tente outra vez."); }
+            if (!await EPecaAsync(conn, tx, refPeca, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Referência não é uma peça de manutenção."); }
             await using var proc = Cmd(conn, tx, "SELECT TOP 1 bostamp FROM bo WITH (NOLOCK) WHERE ndos = @ndos AND CAST(dataopen AS date) = CAST(GETDATE() AS date) ORDER BY obrano",
                 ("@ndos", RegrasPecas.NdosEntrada));
             var bostamp = await proc.ExecuteScalarAsync(ct) as string
-                ?? await CriarDossierAsync(conn, tx, RegrasPecas.NdosEntrada, $"Entradas {DateTime.Today:dd/MM/yyyy}", iniciais, ct);
+                ?? await CriarDossierAsync(conn, tx, RegrasPecas.NdosEntrada, $"Entradas {DateTime.Today.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}", iniciais, ct);
             var linha = await InserirLinhaAsync(conn, tx, bostamp, RegrasPecas.NdosEntrada, refPeca, qtt, "", iniciais, ct);
             await tx.CommitAsync(ct);
             return ResultadoMovimento.Sucesso(linha);
         }
-        catch (SqlException ex) when (ex.Number == 50000 || ex.Class == 16)
+        catch (Exception ex) when (ErroDeNegocio(ex))
         {
-            await tx.RollbackAsync(ct);
-            return ResultadoMovimento.Falha(ex.Message);
+            await RollbackSeguroAsync(tx);
+            return Falhou(ex);
         }
     });
 
@@ -139,8 +196,10 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
         try
         {
+            if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Outro movimento em curso, tente outra vez."); }
+            if (!await EPecaAsync(conn, tx, refPeca, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Referência não é uma peça de manutenção."); }
             await using (var ja = Cmd(conn, tx, "SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND LTRIM(RTRIM(lobs)) = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
-                if ((int)(await ja.ExecuteScalarAsync(ct))! > 0) { await tx.RollbackAsync(ct); return ResultadoMovimento.Falha("Já foi dada saída desta peça."); }
+                if ((int)(await ja.ExecuteScalarAsync(ct))! > 0) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Já foi dada saída desta peça."); }
 
             await using var lobs = Cmd(conn, tx, "SELECT ISNULL(COL_LENGTH('bi', 'lobs'), 0)");
             if ((int)(await lobs.ExecuteScalarAsync(ct))! < 25) throw new InvalidOperationException("A coluna bi.lobs não comporta o stamp do material (25 caracteres).");
@@ -155,7 +214,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
                 """, ("@m", materialId)))
             {
                 await using var r = await f.ExecuteReaderAsync(ct);
-                if (!await r.ReadAsync(ct)) { await tx.RollbackAsync(ct); return ResultadoMovimento.Falha("O material já não existe."); }
+                if (!await r.ReadAsync(ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("O material já não existe."); }
                 ficha = r.GetString(0); numero = r.GetDecimal(1); equip = r.GetString(2);
             }
 
@@ -174,10 +233,10 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
             await tx.CommitAsync(ct);
             return ResultadoMovimento.Sucesso(materialId);
         }
-        catch (SqlException ex) when (ex.Class == 16)
+        catch (Exception ex) when (ErroDeNegocio(ex))
         {
-            await tx.RollbackAsync(ct);
-            return ResultadoMovimento.Falha(ex.Message);
+            await RollbackSeguroAsync(tx);
+            return Falhou(ex);
         }
     });
 
@@ -258,15 +317,23 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     {
         bistamp = bistamp.Trim();
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
-        await using var proc = Cmd(conn, tx, "SELECT bostamp FROM bi WITH (NOLOCK) WHERE bistamp = @b AND ndos = @ndos", ("@b", bistamp), ("@ndos", ndos));
-        if (await proc.ExecuteScalarAsync(ct) is not string bostamp) { await tx.RollbackAsync(ct); return ResultadoMovimento.Falha("A linha já não existe."); }
-        await using (var del = Cmd(conn, tx, "DELETE FROM bi2 WHERE bi2stamp = @b; DELETE FROM bi WHERE bistamp = @b;", ("@b", bistamp)))
-            await del.ExecuteNonQueryAsync(ct);
-        await using var restam = Cmd(conn, tx, "SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE bostamp = @s", ("@s", bostamp));
-        if ((int)(await restam.ExecuteScalarAsync(ct))! == 0)
-            await using (var d = Cmd(conn, tx, "DELETE FROM bo3 WHERE bo3stamp = @s; DELETE FROM bo2 WHERE bo2stamp = @s; DELETE FROM bo WHERE bostamp = @s;", ("@s", bostamp)))
-                await d.ExecuteNonQueryAsync(ct);
-        await tx.CommitAsync(ct);
-        return ResultadoMovimento.Sucesso(bistamp);
+        try
+        {
+            await using var proc = Cmd(conn, tx, "SELECT bostamp FROM bi WITH (NOLOCK) WHERE bistamp = @b AND ndos = @ndos", ("@b", bistamp), ("@ndos", ndos));
+            if (await proc.ExecuteScalarAsync(ct) is not string bostamp) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("A linha já não existe."); }
+            await using (var del = Cmd(conn, tx, "DELETE FROM bi2 WHERE bi2stamp = @b; DELETE FROM bi WHERE bistamp = @b;", ("@b", bistamp)))
+                await del.ExecuteNonQueryAsync(ct);
+            await using var restam = Cmd(conn, tx, "SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE bostamp = @s", ("@s", bostamp));
+            if ((int)(await restam.ExecuteScalarAsync(ct))! == 0)
+                await using (var d = Cmd(conn, tx, "DELETE FROM bo3 WHERE bo3stamp = @s; DELETE FROM bo2 WHERE bo2stamp = @s; DELETE FROM bo WHERE bostamp = @s;", ("@s", bostamp)))
+                    await d.ExecuteNonQueryAsync(ct);
+            await tx.CommitAsync(ct);
+            return ResultadoMovimento.Sucesso(bistamp);
+        }
+        catch (Exception ex) when (ErroDeNegocio(ex))
+        {
+            await RollbackSeguroAsync(tx);
+            return Falhou(ex);
+        }
     });
 }
