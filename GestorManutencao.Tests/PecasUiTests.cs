@@ -133,4 +133,60 @@ public class PecasUiTests
     public void Sem_resultado_distingue_codigo_de_pesquisa_livre(string texto, string esperado)
         => Assert.Equal(esperado, LogicaEcraPecas.MensagemSemResultado(texto));
 
+
+    private const string CorpoLugares = "{\"ref\":\"P001\",\"stock\":10,\"localizado\":4,\"porArrumar\":6,\"lugares\":[{\"corredor\":\"A\",\"estante\":\"A-01\",\"nivel\":1,\"posicao\":1,\"qtt\":4,\"texto\":\"A-01-1-01\"}]}";
+
+    [Fact]
+    public async Task Api_arrumar_envia_o_corpo_e_le_os_lugares()
+    {
+        var h = new Fixo(System.Net.HttpStatusCode.OK, CorpoLugares);
+
+        var r = await Api(h).ArrumarAsync("P001", "LOC-A-01-1-01", 2.5m);
+
+        Assert.Equal(HttpMethod.Post, h.Ultimo!.Method);
+        Assert.Equal("/pecas/localizacoes", h.Ultimo.RequestUri!.AbsolutePath);
+        using var doc = System.Text.Json.JsonDocument.Parse(h.Corpo!);
+        Assert.Equal("P001", doc.RootElement.GetProperty("ref").GetString());
+        Assert.Equal("LOC-A-01-1-01", doc.RootElement.GetProperty("local").GetString());
+        Assert.Equal(2.5m, doc.RootElement.GetProperty("qtt").GetDecimal());
+        Assert.Equal(6m, r.PorArrumar);
+        Assert.Equal("A-01-1-01", Assert.Single(r.Lugares).Texto);
+    }
+
+    [Fact]
+    public async Task Api_lugares_404_da_null_e_200_le_os_lugares()
+    {
+        Assert.Null(await Api(new Fixo(System.Net.HttpStatusCode.NotFound)).LugaresAsync("X"));
+        var r = await Api(new Fixo(System.Net.HttpStatusCode.OK, CorpoLugares)).LugaresAsync("P001");
+        Assert.Equal(10m, r!.Stock);
+    }
+
+    [Fact]
+    public async Task Api_arrumar_400_404_409_dao_mensagens_pt()
+    {
+        var b = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.BadRequest,
+            "{\"erro\":\"pedido_invalido\",\"mensagem\":\"Indique o local completo.\"}")).ArrumarAsync("P001", "x", 1));
+        Assert.Equal("Indique o local completo.", b.Message);
+
+        var n = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.NotFound)).ArrumarAsync("P001", "x", 1));
+        Assert.Equal("Peça não encontrada.", n.Message);
+
+        var c = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.Conflict,
+            "{\"erro\":\"Falta criar a tabela u_pecaloc.\"}")).ArrumarAsync("P001", "x", 1));
+        Assert.Equal("Falta criar a tabela u_pecaloc.", c.Message);
+    }
+
+    [Fact]
+    public async Task Dev_arrumar_soma_ao_lugar_e_baixa_o_por_arrumar()
+    {
+        var s = new PecasDevService();
+        var antes = await s.LugaresAsync("P001");
+
+        var r = await s.ArrumarAsync("P001", "LOC-A-01-1-01", 2);
+
+        Assert.Equal(antes!.PorArrumar - 2, r.PorArrumar);
+        Assert.Equal(antes.Localizado + 2, r.Localizado);
+        Assert.Null(await s.LugaresAsync("NAOEXISTE"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => s.ArrumarAsync("P001", "lixo", 1));
+    }
 }

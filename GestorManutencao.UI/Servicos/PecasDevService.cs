@@ -12,6 +12,39 @@ public sealed class PecasDevService : IPecasService
         new("P002", "Rolamento 6204", "560002", "A-01-2-03", 0, 2, 5.5m)
     ];
 
+    private readonly List<(string Ref, Lugar Lugar)> _lugares = [("P001", new Lugar("A", "A-01", 1, 1, 4, "A-01-1-01"))];
+
+    public Task<LocalizacoesPeca?> LugaresAsync(string refPeca, CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult(Montar(refPeca));
+    }
+
+    // Aceita LOC-A-01-1-01 ou A-01-1-01 (quatro partes).
+    public Task<LocalizacoesPeca> ArrumarAsync(string refPeca, string local, decimal qtt, CancellationToken ct = default)
+    {
+        var p = System.Text.RegularExpressions.Regex.Split((local ?? "").Trim().ToUpperInvariant(), @"[^\p{L}\p{N}]+").Where(x => x.Length > 0).ToList();
+        if (p.Count > 0 && p[0] == "LOC") p.RemoveAt(0);
+        if (p.Count != 4 || !int.TryParse(p[1], out var estante) || !int.TryParse(p[2], out var nivel) || !int.TryParse(p[3], out var pos) || qtt <= 0)
+            throw new InvalidOperationException("Indique a peça, o local completo (corredor, estante, nível e posição) e uma quantidade positiva.");
+        lock (_trinco)
+        {
+            if (!_pecas.Any(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException("Peça não encontrada.");
+            var texto = $"{p[0]}-{estante:00}-{nivel}-{pos:00}";
+            var i = _lugares.FindIndex(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase) && x.Lugar.Texto == texto);
+            if (i >= 0) _lugares[i] = (_lugares[i].Ref, _lugares[i].Lugar with { Qtt = _lugares[i].Lugar.Qtt + qtt });
+            else _lugares.Add((refPeca, new Lugar(p[0], $"{p[0]}-{estante:00}", nivel, pos, qtt, texto)));
+            return Task.FromResult(Montar(refPeca)!);
+        }
+    }
+
+    private LocalizacoesPeca? Montar(string refPeca)
+    {
+        if (_pecas.FirstOrDefault(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase)) is not { } peca) return null;
+        var lugares = _lugares.Where(x => x.Ref == peca.Ref).Select(x => x.Lugar).OrderByDescending(l => l.Qtt).ToList();
+        var localizado = lugares.Sum(l => l.Qtt);
+        return new LocalizacoesPeca(peca.Ref, peca.Stock, localizado, Math.Max(0, peca.Stock - localizado), lugares);
+    }
+
     public Task<ResultadoPecas> PesquisarAsync(string texto, CancellationToken ct = default)
     {
         var palavras = (texto ?? "").Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);

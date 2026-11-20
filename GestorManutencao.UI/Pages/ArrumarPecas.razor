@@ -1,0 +1,192 @@
+@page "/pecas/arrumar"
+@inject IPecasService Pecas
+@inject SessaoService Sessao
+@inject ToastService Toast
+
+<PageTitle>Arrumação · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href=""><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Arrumação</h1>
+    </div>
+
+    @if (Sessao.EQualidade)
+    {
+        <p class="estado-lista" role="status">Esta área é para operadores e supervisores.</p>
+    }
+    else
+    {
+        <p class="ficha-texto">Pique a peça e a etiqueta do local, por qualquer ordem.</p>
+        <LeitorEtiquetas @ref="_leitor" OnLido="LerAsync" TextoCamara="Picar com a câmara" />
+        <p class="campo-erro" role="alert">@_erro</p>
+
+        <h2 class="ficha-texto">Peça</h2>
+        @if (_peca is null)
+        {
+            <PecaPesquisa @ref="_pesquisa" SemLeitor="true" IdCampo="arrumar-peca" OnEscolher="EscolherAsync" />
+        }
+        else
+        {
+            <div class="intervencao">
+                <span class="intervencao-titulo">@_peca.Ref @_peca.Design</span>
+                <span class="intervencao-desc">Stock @_peca.Stock.ToString("0.###") · Por arrumar @(_lug?.PorArrumar.ToString("0.###") ?? "?")</span>
+                <button type="button" class="btn btn-secundario" @onclick="LimparPeca"><Icone Nome="x" /><span>Mudar de peça</span></button>
+            </div>
+        }
+
+        <h2 class="ficha-texto">Local</h2>
+        @if (_estado.Local is { } local)
+        {
+            <div class="intervencao">
+                <span class="intervencao-titulo">@local</span>
+                <button type="button" class="btn btn-secundario" @onclick="LimparLocal"><Icone Nome="x" /><span>Mudar de local</span></button>
+            </div>
+        }
+        else
+        {
+            <p class="estado-lista" role="status">Pique a etiqueta do local@(_lug is { Lugares.Count: > 0 } ? " ou escolha um lugar da peça" : "").</p>
+        }
+
+        @if (_lug is { Lugares.Count: > 0 } && _peca is not null)
+        {
+            <h2 class="ficha-texto">Lugares da peça</h2>
+            <ul class="lista-intervencoes">
+                @foreach (var l in _lug.Lugares)
+                {
+                    <li>
+                        <button type="button" class="intervencao" @onclick="() => EscolherLugar(l)">
+                            <span class="intervencao-titulo">@l.Texto</span>
+                            <span class="intervencao-desc">@l.Qtt.ToString("0.###") unidades</span>
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (_estado.Completo)
+        {
+            <form class="formulario" @onsubmit="ArrumarAsync" novalidate>
+                <div class="campo">
+                    <label for="arrumar-qtt">Quantidade a arrumar</label>
+                    <input id="arrumar-qtt" type="text" inputmode="decimal" autocomplete="off" maxlength="12" @bind="_qttTexto" @bind:event="oninput" />
+                </div>
+                <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_gravar"><Icone Nome="check" /><span>@(_a_gravar ? "A gravar…" : "Arrumar")</span></button>
+            </form>
+        }
+
+        @if (_ultimo is not null && _peca is null)
+        {
+            <h2 class="ficha-texto">Lugares atualizados · @_ultimo.Ref</h2>
+            <ul class="lista-intervencoes">
+                @foreach (var l in _ultimo.Lugares)
+                {
+                    <li class="intervencao">
+                        <span class="intervencao-titulo">@l.Texto</span>
+                        <span class="intervencao-desc">@l.Qtt.ToString("0.###") unidades</span>
+                    </li>
+                }
+            </ul>
+            <p class="estado-lista" role="status">Por arrumar: @_ultimo.PorArrumar.ToString("0.###")</p>
+        }
+    }
+</section>
+
+@code {
+    private EstadoPicagem _estado = new(null, null);
+    private Peca? _peca;
+    private LocalizacoesPeca? _lug, _ultimo;
+    private string _erro = "", _qttTexto = "";
+    private bool _a_gravar;
+    private LeitorEtiquetas? _leitor;
+    private PecaPesquisa? _pesquisa;
+    private readonly SemaphoreSlim _fila = new(1, 1);
+
+    // Leituras seguidas (PDA) esperam pela anterior.
+    private async Task LerAsync(string codigo)
+    {
+        await _fila.WaitAsync();
+        try
+        {
+            _erro = "";
+            if (LogicaPicagem.Classificar(codigo) == TipoLeitura.Local) { _estado = _estado.Aplicar(codigo); return; }
+            try
+            {
+                if (await Pecas.ObterPorCodigoAsync(codigo) is { } p) await CarregarPecaAsync(p);
+                else _erro = LogicaEcraPecas.MensagemSemResultado(codigo);
+            }
+            catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível ler a peça. Tente outra vez."); }
+        }
+        finally { _fila.Release(); StateHasChanged(); }
+    }
+
+    private async Task EscolherAsync(Peca p)
+    {
+        await _fila.WaitAsync();
+        try
+        {
+            _erro = "";
+            try { await CarregarPecaAsync(p); }
+            catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível ler a peça. Tente outra vez."); }
+        }
+        finally { _fila.Release(); }
+    }
+
+    private async Task CarregarPecaAsync(Peca p)
+    {
+        var lug = await Pecas.LugaresAsync(p.Ref);
+        if (lug is null) { _erro = "Peça não encontrada."; return; }
+        _peca = p;
+        _lug = lug;
+        _ultimo = null;
+        _estado = _estado with { Peca = p.Ref };
+        _qttTexto = lug.PorArrumar.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private void EscolherLugar(Lugar l) => _estado = _estado.Aplicar("LOC-" + l.Texto);
+
+    private async Task LimparPeca()
+    {
+        _peca = null;
+        _lug = null;
+        _estado = _estado with { Peca = null };
+        await DevolverFocoAsync();
+    }
+
+    private void LimparLocal() => _estado = _estado with { Local = null };
+
+    private async Task ArrumarAsync()
+    {
+        if (_a_gravar || !_estado.Completo || _peca is null) return;
+        _erro = "";
+        if (!decimal.TryParse(_qttTexto.Trim().Replace(',', '.'), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var qtt)
+            || qtt <= 0 || decimal.Round(qtt, 3) != qtt)
+        {
+            _erro = "Indique uma quantidade positiva, com no máximo 3 casas decimais.";
+            return;
+        }
+        _a_gravar = true;
+        try
+        {
+            var refPeca = _peca.Ref;
+            _ultimo = await Pecas.ArrumarAsync(refPeca, _estado.Local!, qtt);
+            Toast.Sucesso($"Arrumado: {qtt:0.###} de {refPeca}");
+            _peca = null;
+            _lug = null;
+            _estado = new(null, null);
+            _qttTexto = "";
+            await DevolverFocoAsync();
+        }
+        catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível arrumar. Tente outra vez."); }
+        finally { _a_gravar = false; }
+    }
+
+    // Em modo Leitor o foco volta ao campo escondido (sem teclado virtual); senão à pesquisa.
+    private async Task DevolverFocoAsync()
+    {
+        StateHasChanged();
+        await Task.Yield();
+        if (_leitor is not null) await _leitor.FocarAsync();
+        if (_pesquisa is not null) await _pesquisa.FocarAsync();
+    }
+}

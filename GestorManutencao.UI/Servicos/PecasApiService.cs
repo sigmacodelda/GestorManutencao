@@ -26,6 +26,21 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
         return await r.Content.ReadFromJsonAsync<Peca>(ct);
     }
 
+    public async Task<LocalizacoesPeca?> LugaresAsync(string refPeca, CancellationToken ct = default)
+    {
+        using var r = await EnviarAsync(HttpMethod.Get, $"pecas/{Uri.EscapeDataString(refPeca)}/localizacoes", null, ct);
+        if (r.StatusCode == HttpStatusCode.NotFound) return null;
+        await VerificarAsync(r, ct);
+        return await r.Content.ReadFromJsonAsync<LocalizacoesPeca>(ct);
+    }
+
+    public async Task<LocalizacoesPeca> ArrumarAsync(string refPeca, string local, decimal qtt, CancellationToken ct = default)
+    {
+        using var r = await EnviarAsync(HttpMethod.Post, "pecas/localizacoes", new { @ref = refPeca, local, qtt }, ct);
+        await VerificarAsync(r, ct);
+        return await r.Content.ReadFromJsonAsync<LocalizacoesPeca>(ct) ?? throw new HttpRequestException();
+    }
+
     // 400 traz {erro:"pedido_invalido", mensagem}; 409 traz {erro:"texto"} já escrito para o utilizador.
     private static async Task VerificarAsync(HttpResponseMessage r, CancellationToken ct)
     {
@@ -39,6 +54,7 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
                     ? c?.Mensagem ?? (c?.Erro is not (null or "pedido_invalido") ? c.Erro : null)
                     : c?.Erro;
                 throw new InvalidOperationException(texto ?? "Não foi possível gravar o movimento.");
+            case HttpStatusCode.NotFound: throw new InvalidOperationException("Peça não encontrada.");
             case HttpStatusCode.Unauthorized: throw new HttpRequestException("A sessão terminou.", null, HttpStatusCode.Unauthorized);
             case HttpStatusCode.Forbidden: throw new InvalidOperationException("Não tem permissão para as peças.");
             case HttpStatusCode.ServiceUnavailable: throw new InvalidOperationException("O PHC não está a responder. Tente outra vez daqui a pouco.");

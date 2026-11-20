@@ -12,7 +12,7 @@
 else
 {
     <button type="button" id="@Id" class="btn btn-secundario" disabled="@_a_ler" @onclick="LerComCameraAsync">
-        <Icone Nome="camera" /><span>Ler com a câmara</span>
+        <Icone Nome="camera" /><span>@TextoCamara</span>
     </button>
 }
 @if (_erro.Length > 0)
@@ -23,6 +23,7 @@ else
 @code {
     [Parameter] public EventCallback<string> OnLido { get; set; }
     [Parameter] public string? Id { get; set; }
+    [Parameter] public string TextoCamara { get; set; } = "Ler com a câmara";
 
     private ElementReference _campo;
     private IJSObjectReference? _modulo, _ligacao;
@@ -66,6 +67,14 @@ else
             else await PararAsync();
         }
         catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException or InvalidOperationException) { }
+    }
+
+    // Devolve o foco ao campo escondido (PDA); sem leitor ligado não faz nada.
+    public async Task FocarAsync()
+    {
+        if (_ligacao is null) return;
+        try { await _ligacao.InvokeVoidAsync("refocar"); }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException) { }
     }
 
     [JSInvokable]
