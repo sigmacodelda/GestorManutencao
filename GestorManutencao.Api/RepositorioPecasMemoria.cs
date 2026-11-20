@@ -5,7 +5,8 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
 {
     private readonly object _trinco = new();
     private readonly Dictionary<string, PecaDto> _pecas = (pecas ?? Amostra()).ToDictionary(p => p.Ref, StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, (string Ref, decimal Qtt)> _saidas = []; // materialId → saída
+    private readonly Dictionary<string, (string FichaId, string Ref, decimal Qtt)> _saidas = []; // materialId → linha do dossier
+    private readonly Dictionary<string, bool> _dossiers = []; // fichaId → em conferência
     private readonly Dictionary<string, string> _ligacoes = []; // materialId → peça por dar (sem saída)
 
     private static IEnumerable<PecaDto> Amostra() =>
@@ -20,6 +21,11 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
         _pecas[refPeca] = p with { Stock = p.Stock + delta };
     }
 
+    private decimal EmConf(string refPeca, string? excetoFichaId = null) => _saidas.Values
+        .Where(s => s.Ref == refPeca && s.FichaId != excetoFichaId && _dossiers[s.FichaId]).Sum(s => s.Qtt);
+
+    private PecaDto Com(PecaDto p) => p with { EmConferencia = EmConf(p.Ref) };
+
     public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct)
     {
         var palavras = RegrasPecas.Palavras(texto);
@@ -28,7 +34,7 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
             var todas = _pecas.Values
                 .Where(p => palavras.All(w => p.Ref.Contains(w, StringComparison.OrdinalIgnoreCase)
                     || p.Design.Contains(w, StringComparison.OrdinalIgnoreCase) || p.Codigo.Contains(w, StringComparison.OrdinalIgnoreCase)))
-                .OrderBy(p => p.Ref).ToList();
+                .OrderBy(p => p.Ref).Select(Com).ToList();
             return Task.FromResult(new ResultadoPecasDto(true, todas.Take(maximo).ToList(), todas.Count > maximo));
         }
     }
@@ -37,18 +43,31 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
     {
         codigo = codigo.Trim();
         lock (_trinco)
-            return Task.FromResult(_pecas.Values.FirstOrDefault(p => p.Codigo == codigo) ?? _pecas.GetValueOrDefault(codigo));
+        {
+            var p = _pecas.Values.FirstOrDefault(x => x.Codigo == codigo) ?? _pecas.GetValueOrDefault(codigo);
+            return Task.FromResult(p is null ? null : Com(p));
+        }
     }
 
-    public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
+    public Task<ResultadoMovimento> AbrirConferenciaAsync(string fichaId, string iniciais, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            _dossiers.TryAdd(fichaId, true);
+            return Task.FromResult(ResultadoMovimento.Sucesso(fichaId));
+        }
+    }
+
+    public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
     {
         lock (_trinco)
         {
             if (!_pecas.ContainsKey(refPeca.Trim())) return Task.FromResult(ResultadoMovimento.Falha("Referência inexistente."));
             if (_saidas.ContainsKey(materialId)) return Task.FromResult(ResultadoMovimento.Falha("Já foi dada saída desta peça."));
+            if (_dossiers.TryGetValue(fichaId, out var emConf) && !emConf) return Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroValidada));
+            _dossiers[fichaId] = true;
             _ligacoes.Remove(materialId);
-            _saidas[materialId] = (_pecas[refPeca.Trim()].Ref, qtt);
-            Mexer(_pecas[refPeca.Trim()].Ref, -qtt);
+            _saidas[materialId] = (fichaId, _pecas[refPeca.Trim()].Ref, qtt);
             return Task.FromResult(ResultadoMovimento.Sucesso(materialId));
         }
     }
@@ -75,10 +94,46 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
     {
         lock (_trinco)
         {
+            if (_saidas.TryGetValue(materialId, out var s))
+            {
+                if (!_dossiers[s.FichaId]) return Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroValidada));
+                _saidas.Remove(materialId);
+            }
             _ligacoes.Remove(materialId);
-            if (!_saidas.Remove(materialId, out var s)) return Task.FromResult(ResultadoMovimento.Sucesso(materialId));
-            Mexer(s.Ref, s.Qtt);
             return Task.FromResult(ResultadoMovimento.Sucesso(materialId));
         }
+    }
+
+    public Task<ResultadoMovimento> ConfirmarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (_dossiers.TryGetValue(fichaId, out var emConf) && emConf)
+            {
+                _dossiers[fichaId] = false;
+                foreach (var s in _saidas.Values.Where(x => x.FichaId == fichaId)) Mexer(s.Ref, -s.Qtt);
+            }
+            return Task.FromResult(ResultadoMovimento.Sucesso(fichaId));
+        }
+    }
+
+    public Task<ResultadoMovimento> CancelarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (!_dossiers.TryGetValue(fichaId, out var emConf)) return Task.FromResult(ResultadoMovimento.Sucesso(fichaId));
+            if (!emConf) return Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroValidada));
+            foreach (var m in _saidas.Where(x => x.Value.FichaId == fichaId).Select(x => x.Key).ToList()) { _saidas.Remove(m); _ligacoes.Remove(m); }
+            _dossiers.Remove(fichaId);
+            return Task.FromResult(ResultadoMovimento.Sucesso(fichaId));
+        }
+    }
+
+    public Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct)
+    {
+        lock (_trinco)
+            return Task.FromResult<IReadOnlyDictionary<string, decimal>>(refs
+                .Where(r => _pecas.ContainsKey(r.Trim())).Select(r => _pecas[r.Trim()].Ref).Distinct()
+                .ToDictionary(r => r, r => EmConf(r, excetoFichaId)));
     }
 }

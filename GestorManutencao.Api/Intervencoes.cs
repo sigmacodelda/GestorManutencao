@@ -429,7 +429,7 @@ public static partial class EndpointsIntervencoes
                     if (erro is not null) return erro;
                     var (res, mat) = await repo.AdicionarMaterialAsync(id, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, ct, sup);
                     if (res == ResultadoIntervencao.Ok && mat is not null && refPeca != "")
-                        mat = mat with { Ref = refPeca, SaidaDada = (await TentarSaidaAsync(pecas, mat.Id, refPeca, mat.Qtt, t.Codigo, log)).Ok };
+                        mat = mat with { Ref = refPeca, SaidaDada = (await TentarSaidaAsync(pecas, id, mat.Id, refPeca, mat.Qtt, t.Codigo, log)).Ok };
                     return Resposta((res, mat));
                 }));
 
@@ -459,19 +459,19 @@ public static partial class EndpointsIntervencoes
                     catch (Exception ex)
                     {
                         log.LogError(ex, "Falha ao editar o material {Material}.", materialId);
-                        if (anular) await ReporSaidaAsync(pecas, antigo, t.Codigo, log);
+                        if (anular) await ReporSaidaAsync(pecas, id, antigo, t.Codigo, log);
                         throw;
                     }
                     var (res, mat) = edicao;
                     if (res != ResultadoIntervencao.Ok || mat is null)
                     {
-                        if (anular) await ReporSaidaAsync(pecas, antigo, t.Codigo, log);
+                        if (anular) await ReporSaidaAsync(pecas, id, antigo, t.Codigo, log);
                         return Resposta((res, mat));
                     }
                     // O material já está gravado: uma falha ao mexer no stock nunca o desfaz (SaidaDada = false, a ligação fica e o ecrã oferece repetir).
                     if (refPeca == "") return Resposta((res, mat with { Ref = "", SaidaDada = false }));
                     if (antigo.SaidaDada && !anular) return Resposta((res, mat with { Ref = antigo.Ref, SaidaDada = true }));
-                    return Resposta((res, mat with { Ref = refPeca, SaidaDada = (await TentarSaidaAsync(pecas, materialId, refPeca, qtt, t.Codigo, log)).Ok }));
+                    return Resposta((res, mat with { Ref = refPeca, SaidaDada = (await TentarSaidaAsync(pecas, id, materialId, refPeca, qtt, t.Codigo, log)).Ok }));
                 }));
 
         // Repete a saída que falhou. Sem Ref no corpo vale a peça já ligada ao material; a do corpo, se vier, prevalece.
@@ -487,7 +487,7 @@ public static partial class EndpointsIntervencoes
                 var (refPeca, erro) = await ResolverPecaAsync(new PedidoMaterial(m.Design, m.Qtt, m.Epv, doCorpo != "" ? doCorpo : m.Ref), pecas, ct);
                 if (erro is not null) return erro;
                 if (refPeca == "") return PedidoInvalido("Indique a peça a que o material corresponde.");
-                var (ok, motivo) = await TentarSaidaAsync(pecas, materialId, refPeca, m.Qtt, t.Codigo, log);
+                var (ok, motivo) = await TentarSaidaAsync(pecas, id, materialId, refPeca, m.Qtt, t.Codigo, log);
                 return ok
                     ? Results.Ok(m with { Ref = refPeca, SaidaDada = true })
                     : Results.Json(new { erro = motivo }, statusCode: StatusCodes.Status409Conflict);
@@ -513,11 +513,11 @@ public static partial class EndpointsIntervencoes
                 catch (Exception ex)
                 {
                     log.LogError(ex, "Falha ao apagar o material {Material}.", materialId);
-                    if (!await ReporSaidaAsync(pecas, mat, t.Codigo, log)) return StockDesfasado();
+                    if (!await ReporSaidaAsync(pecas, id, mat, t.Codigo, log)) return StockDesfasado();
                     throw;
                 }
                 if (r == ResultadoIntervencao.Ok) return Results.NoContent();
-                return await ReporSaidaAsync(pecas, mat, t.Codigo, log) ? Resposta<object>((r, null)) : StockDesfasado();
+                return await ReporSaidaAsync(pecas, id, mat, t.Codigo, log) ? Resposta<object>((r, null)) : StockDesfasado();
             }));
 
         // Ficha manual (operador e supervisor com número de técnico), ficha completa, edição, cancelamento e fecho das fichas antigas.
@@ -801,12 +801,12 @@ public static partial class EndpointsIntervencoes
 
     // Dá a saída sem token do pedido (o material já está gravado). Qualquer falha devolve o motivo e liga a peça ao material
     // (u_matinterv.ref), para que Ref preenchida e SaidaDada = false signifique "peça por dar" depois de recarregar a lista.
-    private static async Task<(bool Ok, string? Erro)> TentarSaidaAsync(IRepositorioPecas pecas, string materialId, string refPeca, decimal qtt, string iniciais, ILogger log)
+    private static async Task<(bool Ok, string? Erro)> TentarSaidaAsync(IRepositorioPecas pecas, string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, ILogger log)
     {
         string erro;
         try
         {
-            var r = await pecas.DarSaidaAsync(materialId, refPeca, qtt, iniciais, CancellationToken.None);
+            var r = await pecas.DarSaidaAsync(fichaId, materialId, refPeca, qtt, iniciais, CancellationToken.None);
             if (r.Ok) return (true, null);
             erro = r.Erro ?? "Não foi possível dar saída da peça.";
         }
@@ -835,13 +835,13 @@ public static partial class EndpointsIntervencoes
     }
 
     // Repõe o que a anulação desfez (a saída, ou só a ligação quando estava por dar). Devolve false se não conseguiu.
-    private static async Task<bool> ReporSaidaAsync(IRepositorioPecas pecas, MaterialDto mat, string iniciais, ILogger log)
+    private static async Task<bool> ReporSaidaAsync(IRepositorioPecas pecas, string fichaId, MaterialDto mat, string iniciais, ILogger log)
     {
         try
         {
             if (mat.SaidaDada)
             {
-                var r = await pecas.DarSaidaAsync(mat.Id, mat.Ref, mat.Qtt, iniciais, CancellationToken.None);
+                var r = await pecas.DarSaidaAsync(fichaId, mat.Id, mat.Ref, mat.Qtt, iniciais, CancellationToken.None);
                 if (r.Ok) return true;
                 log.LogError("Não foi possível repor a saída do material {Material}: {Erro}", mat.Id, r.Erro);
                 return false;

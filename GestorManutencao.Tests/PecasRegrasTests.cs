@@ -24,8 +24,8 @@ public class PecasRegrasTests
     [InlineData(2, 0, "Sem stock desta peça.")]
     [InlineData(3, 2, "Stock insuficiente: há 2 e pede 3.")]
     [InlineData(2, 2, null)]
-    public void AvisoStock_avisa_mas_nunca_bloqueia(double pedida, double stock, string? esperado)
-        => Assert.Equal(esperado, RegrasPecas.AvisoStock((decimal)pedida, (decimal)stock));
+    public void AvisoStock_avisa_mas_nunca_bloqueia(double pedida, double disponivel, string? esperado)
+        => Assert.Equal(esperado, RegrasPecas.AvisoStock((decimal)pedida, (decimal)disponivel));
 
     [Theory]
     [InlineData(null, false)]

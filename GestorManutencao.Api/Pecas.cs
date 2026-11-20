@@ -3,8 +3,10 @@ using System.Security.Claims;
 namespace GestorManutencao.Api;
 
 // Peça = artigo st marcado em stobs.u_manut. Stock e local são os do armazém de manutenção (sa).
-public sealed record PecaDto(string Ref, string Design, string Codigo, string Local, decimal Stock, decimal StMin, decimal Preco)
+// EmConferencia = quantidade já reservada em dossiers 63 por validar; Disponivel é o que sobra para novas saídas.
+public sealed record PecaDto(string Ref, string Design, string Codigo, string Local, decimal Stock, decimal StMin, decimal Preco, decimal EmConferencia = 0)
 {
+    public decimal Disponivel => Stock - EmConferencia;
     public bool AbaixoDoMinimo => StMin > 0 && Stock <= StMin;
 }
 
@@ -26,11 +28,11 @@ public static class RegrasPecas
     public static string EscaparLike(string palavra)
         => palavra.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[");
 
-    public static string? AvisoStock(decimal pedida, decimal stock)
+    public static string? AvisoStock(decimal pedida, decimal disponivel)
     {
         if (pedida <= 0) return null;
-        if (stock <= 0) return "Sem stock desta peça.";
-        return pedida > stock ? $"Stock insuficiente: há {stock:0.###} e pede {pedida:0.###}." : null;
+        if (disponivel <= 0) return "Sem stock desta peça.";
+        return pedida > disponivel ? $"Stock insuficiente: há {disponivel:0.###} e pede {pedida:0.###}." : null;
     }
 
     // st.ref tem 18 caracteres no PHC; o movimento grava a quantidade com 3 casas.
@@ -38,6 +40,7 @@ public static class RegrasPecas
 
     // Os repositórios devolvem estes textos e o endpoint decide o estado HTTP por eles.
     public const string ErroOcupado = "Outro movimento em curso, tente outra vez.";
+    public const string ErroValidada = "A conferência desta ficha já foi validada.";
 
     public static bool ReferenciaValida(string? r) => !string.IsNullOrWhiteSpace(r) && r.Trim().Length <= TamanhoRef;
 
@@ -55,10 +58,18 @@ public interface IRepositorioPecas
     Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct);
     Task<PecaDto?> ObterPorCodigoAsync(string codigo, CancellationToken ct);
 
-    // Saída: dossier 63 da ficha, linha por material (bi.lobs = materialId). Grava também u_matinterv.ref.
-    Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct);
-    // Anular desfaz a linha e limpa u_matinterv.ref na mesma transação.
+    // Dossier 63 da ficha em conferência: bo.emconf=1 (bo, bo2, bo3). Idempotente: se já existe devolve o id.
+    Task<ResultadoMovimento> AbrirConferenciaAsync(string fichaId, string iniciais, CancellationToken ct);
+    // Linha bi.emconf=1 do material (bi.lobs = materialId, armazém 104); cria o dossier se faltar. Grava também u_matinterv.ref.
+    Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct);
+    // Apaga a linha em conferência e limpa u_matinterv.ref na mesma transação; o dossier mantém-se até validar ou cancelar.
     Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct);
+    // Validar: bo.emconf=0 e bi.emconf=0 mais os "toques" que movem o stock. Idempotente.
+    Task<ResultadoMovimento> ConfirmarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct);
+    // Cancelar: apaga linhas, bi2 e o dossier da ficha, só se ainda em conferência.
+    Task<ResultadoMovimento> CancelarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct);
+    // Soma das quantidades em conferência (dossiers 63, armazém 104) por peça, sem contar a ficha indicada.
+    Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct);
 
     // Liga a peça ao material sem movimento (a saída falhou): Ref preenchida e SaidaDada = false = "por dar".
     Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct);

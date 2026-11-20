@@ -56,7 +56,7 @@ public class MaterialPecasApiTests : IDisposable
     }
 
     private static async Task<decimal> StockAsync(HttpClient c, string codigo = "P001") =>
-        (await c.GetFromJsonAsync<PecaDto>($"/pecas/codigo/{codigo}"))!.Stock;
+        (await c.GetFromJsonAsync<PecaDto>($"/pecas/codigo/{codigo}"))!.Disponivel;
 
     private static async Task<MaterialDto> JuntarAsync(HttpClient c, string design, decimal qtt, decimal epv, string? refPeca = null) =>
         (await (await c.PostAsJsonAsync("/intervencoes/F1/materiais", new PedidoMaterial(design, qtt, epv, refPeca))).Content.ReadFromJsonAsync<MaterialDto>())!;
@@ -216,11 +216,15 @@ public class MaterialPecasApiTests : IDisposable
 
         public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct) => memoria.ListarAsync(texto, maximo, ct);
         public Task<PecaDto?> ObterPorCodigoAsync(string codigo, CancellationToken ct) => memoria.ObterPorCodigoAsync(codigo, ct);
-        public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
+        public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
         {
             if (SaidaIndisponivel) throw new RepositorioIndisponivelException();
-            return SaidaFalha ? Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado)) : memoria.DarSaidaAsync(materialId, refPeca, qtt, iniciais, ct);
+            return SaidaFalha ? Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado)) : memoria.DarSaidaAsync(fichaId, materialId, refPeca, qtt, iniciais, ct);
         }
+        public Task<ResultadoMovimento> AbrirConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => memoria.AbrirConferenciaAsync(fichaId, iniciais, ct);
+        public Task<ResultadoMovimento> ConfirmarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => memoria.ConfirmarConferenciaAsync(fichaId, iniciais, ct);
+        public Task<ResultadoMovimento> CancelarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => memoria.CancelarConferenciaAsync(fichaId, iniciais, ct);
+        public Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct) => memoria.EmConferenciaPorPecaAsync(refs, excetoFichaId, ct);
         public async Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct)
         {
             if (AnularFalha) return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado);
