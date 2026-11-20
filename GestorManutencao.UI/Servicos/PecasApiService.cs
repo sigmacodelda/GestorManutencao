@@ -37,8 +37,11 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
     public async Task<EntradaPeca> DarEntradaAsync(string refPeca, decimal qtt, CancellationToken ct = default)
     {
         using var r = await EnviarAsync(HttpMethod.Post, "pecas/entradas", new PedidoEntrada(refPeca, qtt), ct);
+        // A entrada já está gravada quando a API devolve 503 (a leitura final falha): resultado incerto.
+        if (r.StatusCode == HttpStatusCode.ServiceUnavailable) throw new EntradaIncertaPecasException();
         await VerificarAsync(r, ct);
-        return await r.Content.ReadFromJsonAsync<EntradaPeca>(ct) ?? throw new HttpRequestException();
+        try { return await r.Content.ReadFromJsonAsync<EntradaPeca>(ct) ?? throw new EntradaIncertaPecasException(); }
+        catch (Exception e) when (e is System.Text.Json.JsonException or NotSupportedException) { throw new EntradaIncertaPecasException(); }
     }
 
     // 404 = a linha já não existe (alguém a anulou): para o ecrã o resultado é o desejado.
@@ -72,7 +75,7 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
     private static async Task<CorpoErro?> LerCorpoAsync(HttpResponseMessage r, CancellationToken ct)
     {
         try { return await r.Content.ReadFromJsonAsync<CorpoErro>(ct); }
-        catch (System.Text.Json.JsonException) { return null; }
+        catch (Exception e) when (e is System.Text.Json.JsonException or NotSupportedException) { return null; }
     }
 
     private async Task<HttpResponseMessage> EnviarAsync(HttpMethod metodo, string url, object? corpo, CancellationToken ct)
@@ -89,3 +92,6 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
 
 // Sem resposta do servidor: numa entrada não se sabe se chegou a gravar, por isso o ecrã confirma na lista antes de repetir.
 public sealed class FalhaDeRedePecasException() : InvalidOperationException(MensagensIntervencao.SemRede);
+
+// A API respondeu mas não confirma a entrada (503 no POST ou 200 ilegível): também incerto.
+public sealed class EntradaIncertaPecasException() : InvalidOperationException("O PHC não está a responder. Tente outra vez daqui a pouco.");

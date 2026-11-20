@@ -29,7 +29,7 @@
     }
     else
     {
-        <form class="pesquisa" @onsubmit="DarEntradaAsync" novalidate>
+        <form class="pesquisa" @onsubmit="() => DarEntradaAsync()" novalidate>
             <p class="intervencao-titulo">@_peca.Ref @_peca.Design</p>
             <p class="intervencao-desc">Stock @_peca.Stock.ToString("0.###") · @(_peca.Local.Length > 0 ? _peca.Local : "Sem local")</p>
             <div class="campo">
@@ -71,6 +71,12 @@
         </ul>
     }
 
+    @if (_pedirRepetir && _peca is not null)
+    {
+        <ConfirmaSaida Titulo="Repetir a entrada?" Texto="@($"A entrada anterior de {_peca.Ref} não foi confirmada. Veja a lista de hoje: se já lá estiver, repetir duplica o stock.")"
+                       TextoSair="Repetir entrada" TextoFicar="Voltar" Sair="RepetirAsync" Ficar="() => _pedirRepetir = false" />
+    }
+
     @if (_paraAnular is { } a)
     {
         <ConfirmaSaida Titulo="Anular entrada?" Texto="@($"Vai anular a entrada de {a.Qtt:0.###} de {a.Ref} {a.Design}. O stock volta ao valor anterior.")"
@@ -82,7 +88,7 @@
     private Peca? _peca;
     private decimal? _qtt = 1;
     private string _erro = "", _feito = "";
-    private bool _a_gravar, _focarQtt, _focarPesquisa;
+    private bool _a_gravar, _focarQtt, _focarPesquisa, _incerto, _pedirRepetir, _erroLista;
     private IReadOnlyList<EntradaPeca>? _entradas;
     private EntradaPeca? _paraAnular;
     private PecaPesquisa? _pesquisa;
@@ -108,43 +114,58 @@
         StateHasChanged();
     });
 
-    private void Escolher(Peca p) { _peca = p; _qtt = 1; _erro = ""; _feito = ""; _focarQtt = true; }
+    // Peça nova ou cancelar: a dúvida sobre a entrada anterior deixa de se aplicar à peça escolhida (o aviso fica na lista de hoje).
+    private void Escolher(Peca p) { _peca = p; _qtt = 1; _erro = ""; _erroLista = false; _feito = ""; _incerto = false; _focarQtt = true; }
 
-    private void Cancelar() { _peca = null; _erro = ""; _focarPesquisa = true; }
+    private void Cancelar() { _peca = null; _erro = ""; _erroLista = false; _incerto = false; _pedirRepetir = false; _focarPesquisa = true; }
 
-    private async Task CarregarEntradasAsync()
+    // Só limpa o erro que ela própria pôs, para não apagar outros avisos.
+    private async Task<bool> CarregarEntradasAsync()
     {
-        try { _entradas = await Pecas.EntradasDeHojeAsync(); }
-        catch (Exception e) { _entradas ??= []; _erro = MensagensGestao.Para(e, "Não foi possível carregar as entradas de hoje."); }
+        try
+        {
+            _entradas = await Pecas.EntradasDeHojeAsync();
+            if (_erroLista) { _erro = ""; _erroLista = false; }
+            return true;
+        }
+        catch (Exception e)
+        {
+            _entradas ??= [];
+            _erro = MensagensGestao.Para(e, "Não foi possível carregar as entradas de hoje.");
+            _erroLista = true;
+            return false;
+        }
     }
 
-    // Sem resposta (rede, timeout, 5xx) não se sabe se a entrada ficou gravada.
-    private static bool ResultadoIncerto(Exception e) =>
-        e is FalhaDeRedePecasException or TaskCanceledException
-        || e is HttpRequestException { StatusCode: not System.Net.HttpStatusCode.Unauthorized };
-
-    private async Task DarEntradaAsync()
+    private async Task DarEntradaAsync(bool confirmado = false)
     {
         if (_peca is null || _a_gravar) return;
-        _erro = "";
+        _pedirRepetir = false;
+        _erro = ""; _erroLista = false;
         if (LogicaEcraPecas.ValidarQuantidade(_qtt) is { } invalida) { _erro = invalida; return; }
+        if (_incerto && !confirmado) { _pedirRepetir = true; return; }
         _a_gravar = true;
         try
         {
             var e = await Pecas.DarEntradaAsync(_peca.Ref, _qtt!.Value);
             _feito = $"Entrada dada: {e.Qtt:0.###} de {e.Ref} {e.Design}.";
             _peca = null;
+            _incerto = false;
             _focarPesquisa = true;
             await CarregarEntradasAsync();
         }
-        catch (Exception e) when (ResultadoIncerto(e))
+        catch (Exception e) when (LogicaEcraPecas.ResultadoIncerto(e))
         {
-            await CarregarEntradasAsync();
-            _erro = "Confirme na lista de hoje antes de repetir a entrada.";
+            _incerto = true;
+            var recarregada = await CarregarEntradasAsync();
+            _erro = LogicaEcraPecas.AvisoResultadoIncerto(recarregada);
+            _erroLista = false;
         }
         catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível dar a entrada."); }
         finally { _a_gravar = false; }
     }
+
+    private async Task RepetirAsync() => await DarEntradaAsync(true);
 
     private async Task AnularAsync()
     {

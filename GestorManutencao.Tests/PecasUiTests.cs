@@ -124,8 +124,64 @@ public class PecasUiTests
         var f = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.Forbidden)).EntradasDeHojeAsync());
         Assert.Equal("Não tem permissão para as peças.", f.Message);
 
-        var p = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.ServiceUnavailable)).DarEntradaAsync("P001", 1));
+        var p = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.ServiceUnavailable)).EntradasDeHojeAsync());
         Assert.Equal("O PHC não está a responder. Tente outra vez daqui a pouco.", p.Message);
+    }
+
+    private sealed class Falha(Exception e) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage pedido, CancellationToken ct) => Task.FromException<HttpResponseMessage>(e);
+    }
+
+    private static PecasApiService Api(HttpMessageHandler h) =>
+        new(new HttpClient(h) { BaseAddress = new Uri("https://exemplo.invalid/") }, new SessaoService(new DevAutenticacaoService(), new ArmazemSessaoMemoria()));
+
+    [Fact]
+    public async Task Api_sem_resposta_e_timeout_dao_falha_de_rede_e_contam_como_incertos()
+    {
+        var rede = await Assert.ThrowsAsync<FalhaDeRedePecasException>(() => Api(new Falha(new HttpRequestException("sem rede"))).DarEntradaAsync("P001", 1));
+        var tempo = await Assert.ThrowsAsync<FalhaDeRedePecasException>(() => Api(new Falha(new TaskCanceledException())).DarEntradaAsync("P001", 1));
+
+        Assert.True(LogicaEcraPecas.ResultadoIncerto(rede));
+        Assert.True(LogicaEcraPecas.ResultadoIncerto(tempo));
+    }
+
+    [Fact]
+    public async Task Api_503_no_post_da_entrada_e_incerto_mas_nas_outras_chamadas_nao()
+    {
+        var post = await Assert.ThrowsAsync<EntradaIncertaPecasException>(() => Api(new Fixo(System.Net.HttpStatusCode.ServiceUnavailable)).DarEntradaAsync("P001", 1));
+        var lista = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.ServiceUnavailable)).EntradasDeHojeAsync());
+        var pesq = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.ServiceUnavailable)).PesquisarAsync("x"));
+
+        Assert.True(LogicaEcraPecas.ResultadoIncerto(post));
+        Assert.False(LogicaEcraPecas.ResultadoIncerto(lista));
+        Assert.False(LogicaEcraPecas.ResultadoIncerto(pesq));
+    }
+
+    [Fact]
+    public async Task Api_200_com_corpo_ilegivel_no_post_e_incerto()
+    {
+        var e = await Assert.ThrowsAsync<EntradaIncertaPecasException>(() => Api(new Fixo(System.Net.HttpStatusCode.OK, "<html>proxy</html>")).DarEntradaAsync("P001", 1));
+
+        Assert.True(LogicaEcraPecas.ResultadoIncerto(e));
+    }
+
+    [Fact]
+    public async Task Api_400_com_corpo_nao_json_usa_a_mensagem_geral()
+    {
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => Api(new Fixo(System.Net.HttpStatusCode.BadRequest, "<html>")).DarEntradaAsync("P001", 1));
+
+        Assert.Equal("Não foi possível gravar o movimento.", e.Message);
+    }
+
+    [Fact]
+    public void Resultado_incerto_exclui_validacao_e_sessao_terminada_e_o_aviso_depende_da_recarga()
+    {
+        Assert.False(LogicaEcraPecas.ResultadoIncerto(new InvalidOperationException("Peça inexistente.")));
+        Assert.False(LogicaEcraPecas.ResultadoIncerto(new HttpRequestException("x", null, System.Net.HttpStatusCode.Unauthorized)));
+        Assert.True(LogicaEcraPecas.ResultadoIncerto(new HttpRequestException("x", null, System.Net.HttpStatusCode.InternalServerError)));
+        Assert.Equal("Confirme na lista de hoje antes de repetir a entrada.", LogicaEcraPecas.AvisoResultadoIncerto(true));
+        Assert.Equal("Não foi possível confirmar; verifique a lista antes de repetir.", LogicaEcraPecas.AvisoResultadoIncerto(false));
     }
 
     [Fact]
@@ -145,6 +201,7 @@ public class PecasUiTests
     [InlineData(1.0, null)]
     [InlineData(0.001, null)]
     [InlineData(999999.0, null)]
+    [InlineData(999999.999, null)]
     [InlineData(1000000.0, "A quantidade máxima é 999999.")]
     [InlineData(0.0001, "A quantidade tem no máximo 3 casas decimais.")]
     [InlineData(0.0, "Indique uma quantidade positiva.")]

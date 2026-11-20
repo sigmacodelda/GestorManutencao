@@ -52,6 +52,7 @@ else if (_resultado is not null)
     [Parameter] public EventCallback<Peca> OnEscolher { get; set; }
 
     private string _texto = "", _erro = "";
+    private string? _pendente;
     private bool _a_pesquisar;
     private ResultadoPecas? _resultado;
     private ElementReference _campo;
@@ -59,15 +60,28 @@ else if (_resultado is not null)
     public async Task FocarAsync() => await _campo.FocusAsync();
 
     // Ponto de ligação do leitor (câmara/PDA): quem ler uma etiqueta chama isto com o código lido.
+    // Durante uma pesquisa em curso guarda-se o último código lido e corre-se quando ela acabar.
     public async Task LerCodigoAsync(string codigo)
     {
+        if (_a_pesquisar) { _pendente = codigo; return; }
         _texto = codigo;
         await PesquisarAsync();
         StateHasChanged();
     }
 
-    // Enter com só dígitos (leitor tipo teclado) vai direto à peça; se não existir, cai na pesquisa por texto.
     private async Task PesquisarAsync()
+    {
+        await PesquisarUmaVezAsync();
+        while (_pendente is { } codigo)
+        {
+            _pendente = null;
+            _texto = codigo;
+            await PesquisarUmaVezAsync();
+        }
+    }
+
+    // Enter com só dígitos (leitor tipo teclado) vai direto à peça; se não existir, cai na pesquisa por texto.
+    private async Task PesquisarUmaVezAsync()
     {
         if (_a_pesquisar) return;
         _erro = "";
