@@ -801,3 +801,7 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 
 /* No cartão do Início o sinal vê-se sobre o fundo escuro: sem caixa branca. */
 .hero-ligacao .ligacao { background: transparent; box-shadow: none; }
+
+/* Campo do leitor (PDA): fora do ecrã mas focável (com display:none não receberia as teclas). */
+.leitor-escondido { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; }
+.leitor-teste { font-size: 1.25rem; font-weight: 700; word-break: break-all; }

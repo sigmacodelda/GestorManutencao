@@ -103,6 +103,9 @@ public static class ServicosExtensions
         services.TryAddSingleton<IArmazemAvisos, ArmazemAvisosMemoria>();
         services.TryAddSingleton<IDitado, DitadoNenhum>();
         services.TryAddSingleton<ICamara, CamaraNenhuma>();
+        services.TryAddSingleton<IDetetorLeitor, DetetorLeitorNenhum>();
+        services.TryAddSingleton<ILeitorCamara, LeitorCamaraNenhum>();
+        services.TryAddSingleton<IPreferenciasLeitura, PreferenciasLeituraMemoria>();
         services.TryAddScoped<Offline.IGestorOffline, Offline.GestorOfflineNenhum>();
         services.TryAddSingleton<Offline.IAreaTransferencia, Offline.AreaTransferenciaNenhuma>();
         return services;

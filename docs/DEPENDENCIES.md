@@ -11,6 +11,7 @@
 | sqlite-net-pcl | 1.11.285 | GestorManutencao.Armazenamento (usado pela App) | Base SQLite local (cache e fila de envio) para o modo offline. Traz SQLitePCLRaw 3.0.3 e SourceGear.sqlite3 3.53.3 (SQLite atual); a 1.9.172 foi posta de parte porque o SQLitePCLRaw.lib.e_sqlite3 2.1.x traz um SQLite com a vulnerabilidade CVE-2025-6965 (GHSA-2m69-gcr7-jv3q) | Microsoft.Data.Sqlite (mais pesada em MAUI); ficheiros JSON (sem consultas nem transações) | MIT (SQLitePCLRaw: Apache-2.0; SQLite: domínio público) |
 | FirebaseAdmin | 3.7.1 | GestorManutencao.Api | Enviar o push "acordar a app" (FCM) só com sinal, sem texto nem dados pessoais | Chamar a API HTTP v1 do FCM à mão (obriga a tratar OAuth e erros) | Apache-2.0 |
 | Xamarin.Firebase.Messaging | 125.0.0 | GestorManutencao.App (só Android) | Receber o push FCM de dados que acorda a app (mesmo fechada) para verificar as fichas e mostrar os avisos | Só o canal SignalR e o serviço em primeiro plano (o Android pode matá-los com a app fechada) | Apache-2.0 |
+| ZXing.Net.Maui.Controls | 0.10.4 | GestorManutencao.App (só Android) | Ler QR, EAN, Code 128/39 e DataMatrix com a câmara do telemóvel (CameraBarcodeReaderView). Traz ZXing.Net.Maui e ZXing.Net 0.16.11; alvo net10.0-android36.0, Microsoft.Maui.Controls >= 10.0.0 | ZXing em JavaScript no WebView (a câmara no WebView do Android é pouco fiável); só o leitor tipo teclado do PDA | MIT |
 
 Fontes (OFL): Exo 2 e Open Sans, em `GestorManutencao.UI/wwwroot/fonts`, para funcionarem sem internet.
 

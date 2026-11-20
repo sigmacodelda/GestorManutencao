@@ -10,6 +10,7 @@
         <button type="submit" class="btn btn-secundario" disabled="@_a_pesquisar" aria-label="Pesquisar peça"><Icone Nome="search" /></button>
     </div>
 </form>
+<LeitorEtiquetas OnLido="LerCodigoAsync" />
 <p id="peca-erro" class="campo-erro" role="alert">@_erro</p>
 
 @if (_resultado is { CampoExiste: false })
@@ -53,7 +54,7 @@ else if (_resultado is not null)
 
     private string _texto = "", _erro = "";
     private string? _pendente;
-    private bool _a_pesquisar;
+    private bool _a_pesquisar, _lido;
     private ResultadoPecas? _resultado;
     private ElementReference _campo;
 
@@ -63,8 +64,10 @@ else if (_resultado is not null)
     // Durante uma pesquisa em curso guarda-se o último código lido e corre-se quando ela acabar.
     public async Task LerCodigoAsync(string codigo)
     {
+        if (LogicaLeitura.EEtiquetaLocal(codigo)) { _erro = "Isto é uma etiqueta de local; pique uma peça."; return; }
         if (_a_pesquisar) { _pendente = codigo; return; }
         _texto = codigo;
+        _lido = true;
         await PesquisarAsync();
         StateHasChanged();
     }
@@ -76,6 +79,7 @@ else if (_resultado is not null)
         {
             _pendente = null;
             _texto = codigo;
+            _lido = true;
             await PesquisarUmaVezAsync();
         }
     }
@@ -86,6 +90,8 @@ else if (_resultado is not null)
         if (_a_pesquisar) return;
         _erro = "";
         var texto = _texto.Trim();
+        var lido = _lido;
+        _lido = false;
         if (texto.Length == 0) { _resultado = null; return; }
         _a_pesquisar = true;
         try
@@ -96,6 +102,12 @@ else if (_resultado is not null)
                 return;
             }
             _resultado = await Pecas.PesquisarAsync(texto);
+            // Código lido sem nenhuma peça: diz-se e o texto fica no campo para corrigir.
+            if (lido && _resultado is { CampoExiste: true, Pecas.Count: 0 })
+            {
+                _erro = $"Código não encontrado: {texto}";
+                _resultado = null;
+            }
         }
         catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível pesquisar. Tente outra vez."); }
         finally { _a_pesquisar = false; }

@@ -1,6 +1,9 @@
 using GestorManutencao.Armazenamento;
 using GestorManutencao.UI.Offline;
 using GestorManutencao.UI.Servicos;
+#if ANDROID
+using ZXing.Net.Maui.Controls;
+#endif
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -26,6 +29,9 @@ public static class MauiProgram
 	{
 		var builder = MauiApp.CreateBuilder();
 		builder.UseMauiApp<App>();
+#if ANDROID
+		builder.UseBarcodeReader();
+#endif
 
 		// Endereço (https, ou http numa rede interna) da GestorManutencao.Api deste cliente, em Resources/Raw/appsettings.json ("ApiUrl"). Vazio só serve em Debug (utilizadores fictícios).
 		using (var ficheiro = FileSystem.OpenAppPackageFileAsync("appsettings.json").GetAwaiter().GetResult())
@@ -34,6 +40,7 @@ public static class MauiProgram
 		builder.Services.AddMauiBlazorWebView();
 		builder.Services.AddManutencaoUI(TemaCliente);
 		builder.Services.AddSingleton<IArmazemSessao, ArmazemSessaoSeguro>();
+		builder.Services.AddSingleton<IPreferenciasLeitura, PreferenciasLeituraMaui>();
 		builder.Services.AddSingleton<IArmazemAvisos, ArmazemAvisosFicheiro>();
 #if ANDROID
 		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaAndroid>();
@@ -42,6 +49,8 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IPushToken, PushTokenAndroid>();
 		builder.Services.AddSingleton<IDitado, DitadoAndroid>();
 		builder.Services.AddSingleton<ICamara, CamaraAndroid>();
+		builder.Services.AddSingleton<IDetetorLeitor, DetetorLeitorAndroid>();
+		builder.Services.AddSingleton<ILeitorCamara, LeitorCamaraMaui>();
 #elif WINDOWS
 		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaWindows>();
 		builder.Services.AddSingleton<IDitado, DitadoWindows>();
