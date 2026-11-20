@@ -85,11 +85,13 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn
         (new UtilizadorApp("qualidade", "Qualidade", Perfil.Qualidade, true, false), sp.GetRequiredService<PinHasher>().Hash("3197"))
     ]));
     builder.Services.AddSingleton<IRepositorioIntervencoes, RepositorioIntervencoesMemoria>();
+    builder.Services.AddSingleton<IRepositorioPecas, RepositorioPecasMemoria>();
 }
 else
 {
     builder.Services.AddSingleton<IRepositorioUtilizadores, SqlRepositorioUtilizadores>();
     builder.Services.AddSingleton<IRepositorioIntervencoes, SqlRepositorioIntervencoes>();
+    builder.Services.AddSingleton<IRepositorioPecas, SqlRepositorioPecas>();
 }
 // O mesmo repositório (SQL ou memória) serve a gestão: cancelar planeadas e gerar a seguinte usam a mesma numeração e as mesmas regras.
 builder.Services.AddSingleton<IRepositorioGestao>(sp => (IRepositorioGestao)sp.GetRequiredService<IRepositorioIntervencoes>());
@@ -236,6 +238,7 @@ static IResult RegistarPinEmUso(ILogger log, HttpContext http)
 app.MapHub<AvisosHub>(AvisosHub.Rota).RequireAuthorization();
 app.MapDispositivos();
 app.MapIntervencoes();
+app.MapPecas();
 app.MapGestao();
 
 app.MapGet("/saude", () => Results.Ok(new { estado = "ok" }));

@@ -646,7 +646,7 @@ public static partial class EndpointsIntervencoes
     private static (ResultadoIntervencao, TempoDto?) Esconder((ResultadoIntervencao Resultado, TempoDto? Tempo) r, bool supervisor, int tecno) =>
         (r.Resultado, r.Tempo is { } t ? RegrasFicha.OcultarCusto(t, supervisor, tecno) : null);
 
-    private static IResult PedidoInvalido(string mensagem) =>
+    internal static IResult PedidoInvalido(string mensagem) =>
         Results.Json(new { erro = "pedido_invalido", mensagem }, statusCode: StatusCodes.Status400BadRequest);
 
     private static async Task<UtilizadorApp?> Ativo(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct)
@@ -664,7 +664,7 @@ public static partial class EndpointsIntervencoes
     }
 
     // Supervisor (mesmo sem número de técnico) ou técnico com número; o supervisor lê qualquer ficha.
-    private static async Task<IResult> ComoTecnicoOuSupervisor(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, bool, Task<IResult>> acao)
+    internal static async Task<IResult> ComoTecnicoOuSupervisor(ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, CancellationToken ct, Func<TecnicoAtual, bool, Task<IResult>> acao)
     {
         if (await Ativo(eu, utilizadores, ct) is not { } u || u.Perfil == Perfil.Qualidade) return Results.Forbid();
         var supervisor = u.Perfil == Perfil.Supervisor;

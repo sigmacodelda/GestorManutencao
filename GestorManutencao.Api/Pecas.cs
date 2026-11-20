@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 namespace GestorManutencao.Api;
 
 // Peça = artigo st marcado em stobs.u_manut. Stock e local são os do armazém de manutenção (sa).
@@ -54,4 +56,35 @@ public interface IRepositorioPecas
     // Saída: dossier 63 da ficha, linha por material (bi.lobs = materialId). Grava também u_matinterv.ref.
     Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct);
     Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct);
+}
+
+public static class EndpointsPecas
+{
+    public static void MapPecas(this WebApplication app)
+    {
+        var g = app.MapGroup("/pecas").RequireAuthorization();
+
+        g.MapGet("", async (string? texto, IRepositorioPecas repo, CancellationToken ct) =>
+            Results.Ok(await repo.ListarAsync(texto, 60, ct)));
+
+        g.MapGet("/codigo/{codigo}", async (string codigo, IRepositorioPecas repo, CancellationToken ct) =>
+            await repo.ObterPorCodigoAsync(codigo, ct) is { } p ? Results.Ok(p) : Results.NotFound());
+
+        g.MapGet("/entradas/hoje", async (IRepositorioPecas repo, CancellationToken ct) =>
+            Results.Ok(await repo.EntradasDeHojeAsync(ct)));
+
+        g.MapPost("/entradas", (PedidoEntrada p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas repo, CancellationToken ct) =>
+            string.IsNullOrWhiteSpace(p.Ref) || !RegrasPecas.QuantidadeValida(p.Qtt)
+                ? Task.FromResult(Results.BadRequest())
+                : EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, _) =>
+                {
+                    var r = await repo.DarEntradaAsync(p.Ref.Trim(), p.Qtt!.Value, t.Codigo, ct);
+                    if (!r.Ok) return Results.BadRequest(new { erro = r.Erro });
+                    var linha = (await repo.EntradasDeHojeAsync(ct)).First(e => e.Id == r.Id);
+                    return Results.Ok(linha);
+                }));
+
+        g.MapDelete("/entradas/{id}", async (string id, IRepositorioPecas repo, CancellationToken ct) =>
+            (await repo.AnularEntradaAsync(id, ct)).Ok ? Results.NoContent() : Results.NotFound());
+    }
 }
