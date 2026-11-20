@@ -41,6 +41,8 @@ public static class RegrasPecas
     // Os repositórios devolvem estes textos e o endpoint decide o estado HTTP por eles.
     public const string ErroOcupado = "Outro movimento em curso, tente outra vez.";
     public const string ErroValidada = "A conferência desta ficha já foi validada.";
+    public const string ErroSemFicha = "A ficha já não existe.";
+    public const string ErroSemEmconf = "O PHC não tem o campo emconf nas linhas do dossier; não é possível usar a conferência.";
 
     public static bool ReferenciaValida(string? r) => !string.IsNullOrWhiteSpace(r) && r.Trim().Length <= TamanhoRef;
 

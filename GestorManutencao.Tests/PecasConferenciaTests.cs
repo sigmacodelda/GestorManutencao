@@ -71,7 +71,7 @@ public class PecasConferenciaTests
         await r.DarSaidaAsync("F1", "M1", "P001", 4, "AA", default);
         await r.ConfirmarConferenciaAsync("F1", "AA", default);
         Assert.Equal(RegrasPecas.ErroValidada, (await r.DarSaidaAsync("F1", "M2", "P001", 1, "AA", default)).Erro);
-        Assert.False((await r.AnularSaidaAsync("M1", "AA", default)).Ok);
+        Assert.Equal(RegrasPecas.ErroValidada, (await r.AnularSaidaAsync("M1", "AA", default)).Erro);
         Assert.False((await r.CancelarConferenciaAsync("F1", "AA", default)).Ok);
         Assert.Equal(6, (await PecaAsync(r)).Stock);
     }
@@ -101,6 +101,48 @@ public class PecasConferenciaTests
         var semF1 = await r.EmConferenciaPorPecaAsync(["P001"], "F1", default);
         Assert.Equal(7, todas["P001"]);
         Assert.Equal(3, semF1["P001"]);
+    }
+
+    [Fact]
+    public async Task Confirmar_uma_ficha_nao_toca_na_outra()
+    {
+        var r = Repo();
+        await r.DarSaidaAsync("F1", "M1", "P001", 4, "AA", default);
+        await r.DarSaidaAsync("F2", "M2", "P001", 3, "AA", default);
+        await r.ConfirmarConferenciaAsync("F1", "AA", default);
+        var p = await PecaAsync(r);
+        Assert.Equal(6, p.Stock);
+        Assert.Equal(3, p.EmConferencia);
+        Assert.True((await r.DarSaidaAsync("F2", "M3", "P001", 1, "AA", default)).Ok);
+        Assert.True((await r.CancelarConferenciaAsync("F2", "AA", default)).Ok);
+    }
+
+    [Fact]
+    public async Task Em_conferencia_por_peca_depois_de_confirmar_e_de_cancelar()
+    {
+        var r = Repo();
+        await r.DarSaidaAsync("F1", "M1", "P001", 4, "AA", default);
+        await r.DarSaidaAsync("F2", "M2", "P001", 3, "AA", default);
+        await r.ConfirmarConferenciaAsync("F1", "AA", default);
+        Assert.Equal(3, (await r.EmConferenciaPorPecaAsync(["P001"], null, default))["P001"]);
+        await r.CancelarConferenciaAsync("F2", "AA", default);
+        Assert.Equal(0, (await r.EmConferenciaPorPecaAsync(["P001"], null, default))["P001"]);
+    }
+
+    [Fact]
+    public async Task Cancelar_sem_dossier_e_sucesso()
+    {
+        var r = Repo();
+        Assert.True((await r.CancelarConferenciaAsync("F9", "AA", default)).Ok);
+    }
+
+    [Fact]
+    public async Task Dar_saida_do_mesmo_material_duas_vezes_nao_duplica_a_linha()
+    {
+        var r = Repo();
+        Assert.True((await r.DarSaidaAsync("F1", "M1", "P001", 4, "AA", default)).Ok);
+        Assert.False((await r.DarSaidaAsync("F1", "M1", "P001", 4, "AA", default)).Ok);
+        Assert.Equal(4, (await PecaAsync(r)).EmConferencia);
     }
 
     [Fact]

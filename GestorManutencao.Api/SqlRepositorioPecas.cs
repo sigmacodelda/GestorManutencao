@@ -13,6 +13,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     private const string Hoje = "CAST(CONVERT(date, GETDATE()) AS datetime)";
     private const string Hora = "CONVERT(varchar(8), GETDATE(), 108)";
     private static bool _campoExiste;
+    private static bool _emconfExiste;
 
     private async Task<T> Executar<T>(Func<SqlConnection, Task<T>> trabalho)
     {
@@ -99,12 +100,21 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return _campoExiste;
     }
 
-    private const string Colunas = """
+    // Sem bi.emconf a pesquisa continua a funcionar, com EmConferencia = 0.
+    private static async Task<bool> EmconfExisteAsync(SqlConnection conn, CancellationToken ct, SqlTransaction? tx = null)
+    {
+        if (_emconfExiste) return true;
+        await using var cmd = Cmd(conn, tx, "SELECT COL_LENGTH('bi', 'emconf')");
+        _emconfExiste = await cmd.ExecuteScalarAsync(ct) is not (null or DBNull);
+        return _emconfExiste;
+    }
+
+    private static string Colunas(bool emconf) => $"""
         LTRIM(RTRIM(s.ref)) AS Ref, LTRIM(RTRIM(s.design)) AS Design, LTRIM(RTRIM(s.codigo)) AS Codigo,
         LTRIM(RTRIM(s.local)) AS LocalArtigo,
         CAST(COALESCE(NULLIF(s.epcpond, 0), NULLIF(s.epcult, 0), NULLIF(s.epcusto, 0), 0) AS decimal(19, 6)) AS Preco,
         ISNULL(a.stock, 0) AS Stock, ISNULL(a.stmin, 0) AS StMin, LTRIM(RTRIM(ISNULL(a.local, ''))) AS LocalArm,
-        ISNULL((SELECT SUM(i.qtt) FROM bi i WITH (NOLOCK) WHERE i.ndos = @ndos AND i.armazem = @arm AND i.emconf = 1 AND i.ref = s.ref), 0) AS EmConf
+        {(emconf ? "ISNULL((SELECT SUM(i.qtt) FROM bi i WITH (NOLOCK) WHERE i.ndos = @ndos AND i.armazem = @arm AND i.emconf = 1 AND i.ref = s.ref), 0)" : "CAST(0 AS decimal(19, 6))")} AS EmConf
         """;
 
     private const string De = $"""
@@ -124,11 +134,12 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct) => Executar(async conn =>
     {
         if (!await CampoExisteAsync(conn, ct)) return new ResultadoPecasDto(false, [], false);
+        var colunas = Colunas(await EmconfExisteAsync(conn, ct));
         var palavras = RegrasPecas.Palavras(texto);
         var filtros = palavras.Select((_, i) => $"(s.ref LIKE @t{i} ESCAPE '\\' OR s.design LIKE @t{i} ESCAPE '\\' OR s.codigo LIKE @t{i} ESCAPE '\\')");
         var onde = palavras.Length == 0 ? "" : " AND " + string.Join(" AND ", filtros);
         await using var cmd = Cmd(conn, null,
-            $"SELECT TOP (@max) {Colunas} {De} WHERE o.[{RegrasPecas.CampoStobs}] = 1 AND s.inactivo = 0{onde} ORDER BY s.ref",
+            $"SELECT TOP (@max) {colunas} {De} WHERE o.[{RegrasPecas.CampoStobs}] = 1 AND s.inactivo = 0{onde} ORDER BY s.ref",
             ("@max", maximo + 1), ("@arm", RegrasPecas.Armazem), ("@ndos", RegrasPecas.NdosSaida));
         for (var i = 0; i < palavras.Length; i++) Parametro(cmd, $"@t{i}", "%" + RegrasPecas.EscaparLike(palavras[i]) + "%");
         var lista = new List<PecaDto>();
@@ -141,8 +152,9 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     {
         codigo = codigo.Trim();
         if (codigo.Length == 0 || !await CampoExisteAsync(conn, ct)) return null;
+        var colunas = Colunas(await EmconfExisteAsync(conn, ct));
         await using var cmd = Cmd(conn, null, $"""
-            SELECT TOP 1 {Colunas} {De}
+            SELECT TOP 1 {colunas} {De}
             WHERE o.[{RegrasPecas.CampoStobs}] = 1 AND s.inactivo = 0 AND (LTRIM(RTRIM(s.codigo)) = @c OR LTRIM(RTRIM(s.ref)) = @c)
             ORDER BY CASE WHEN LTRIM(RTRIM(s.codigo)) = @c THEN 0 ELSE 1 END
             """, ("@c", codigo), ("@arm", RegrasPecas.Armazem), ("@ndos", RegrasPecas.NdosSaida));
@@ -163,8 +175,8 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return await cmd.ExecuteScalarAsync(ct) is { } v and not DBNull ? Convert.ToBoolean(v) : null;
     }
 
-    // Cria o dossier da ficha em conferência se faltar; devolve se está em conferência.
-    private static async Task<bool> GarantirDossierAsync(SqlConnection conn, SqlTransaction tx, string fichaId, string iniciais, CancellationToken ct)
+    // Cria o dossier da ficha em conferência se faltar; devolve se está em conferência (null = a ficha já não existe).
+    private static async Task<bool?> GarantirDossierAsync(SqlConnection conn, SqlTransaction tx, string fichaId, string iniciais, CancellationToken ct)
     {
         var bostamp = StampFicha(fichaId);
         if (await EstadoDossierAsync(conn, tx, bostamp, ct) is { } emConf) return emConf;
@@ -177,7 +189,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
             """, ("@ficha", bostamp)))
         {
             await using var r = await f.ExecuteReaderAsync(ct);
-            if (!await r.ReadAsync(ct)) throw new InvalidOperationException("A ficha já não existe.");
+            if (!await r.ReadAsync(ct)) return null;
             numero = r.GetDecimal(0); equip = r.GetString(1);
         }
         await CriarDossierAsync(conn, tx, bostamp, RegrasPecas.NdosSaida, $"Ficha {numero:0} {equip}", iniciais, ct);
@@ -191,7 +203,8 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         try
         {
             if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
-            await GarantirDossierAsync(conn, tx, fichaId, iniciais, ct);
+            if (!await EmconfExisteAsync(conn, ct, tx)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemEmconf); }
+            if (await GarantirDossierAsync(conn, tx, fichaId, iniciais, ct) is null) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemFicha); }
             await tx.CommitAsync(ct);
             return ResultadoMovimento.Sucesso(StampFicha(fichaId));
         }
@@ -211,6 +224,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         try
         {
             if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
+            if (!await EmconfExisteAsync(conn, ct, tx)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemEmconf); }
             if (!await EPecaAsync(conn, tx, refPeca, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Referência não é uma peça de manutenção."); }
             await using (var ja = Cmd(conn, tx, "SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND LTRIM(RTRIM(lobs)) = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
                 if ((int)(await ja.ExecuteScalarAsync(ct))! > 0) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Já foi dada saída desta peça."); }
@@ -221,7 +235,9 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
             await using (var m = Cmd(conn, tx, "SELECT COUNT(*) FROM u_matinterv WITH (NOLOCK) WHERE u_matintervstamp = @m AND u_fichaintstamp = @ficha", ("@m", materialId), ("@ficha", StampFicha(fichaId))))
                 if ((int)(await m.ExecuteScalarAsync(ct))! == 0) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("O material já não existe."); }
 
-            if (!await GarantirDossierAsync(conn, tx, fichaId, iniciais, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroValidada); }
+            var dossier = await GarantirDossierAsync(conn, tx, fichaId, iniciais, ct);
+            if (dossier is null) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemFicha); }
+            if (dossier is false) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroValidada); }
             await InserirLinhaAsync(conn, tx, StampFicha(fichaId), RegrasPecas.NdosSaida, refPeca, qtt, materialId, iniciais, ct);
 
             await using var liga = Cmd(conn, tx, $"UPDATE u_matinterv SET ref = @ref, usrinis = @iniciais, usrdata = {Hoje}, usrhora = {Hora} WHERE u_matintervstamp = @m",
@@ -245,13 +261,14 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         try
         {
             if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
+            if (!await EmconfExisteAsync(conn, ct, tx)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemEmconf); }
             string? bistamp = null; var emConf = false;
             await using (var proc = Cmd(conn, tx, "SELECT bistamp, emconf FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND LTRIM(RTRIM(lobs)) = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
             await using (var r = await proc.ExecuteReaderAsync(ct))
-                if (await r.ReadAsync(ct)) { bistamp = r.GetString(0); emConf = r.GetBoolean(1); }
+                if (await r.ReadAsync(ct)) { bistamp = r.GetString(0); emConf = Convert.ToBoolean(r.GetValue(1)); }
             if (bistamp is not null)
             {
-                if (!emConf) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("A saída já foi validada e não se pode anular."); }
+                if (!emConf) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroValidada); }
                 await using var del = Cmd(conn, tx, "DELETE FROM bi2 WHERE bi2stamp = @b; DELETE FROM bi WHERE bistamp = @b;", ("@b", bistamp.Trim()));
                 await del.ExecuteNonQueryAsync(ct);
             }
@@ -278,6 +295,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         try
         {
             if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
+            if (!await EmconfExisteAsync(conn, ct, tx)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemEmconf); }
             if (await EstadoDossierAsync(conn, tx, bostamp, ct) is not true) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Sucesso(bostamp); }
             await using var cmd = Cmd(conn, tx, $"""
                 UPDATE bo SET emconf = 0, usrinis = @iniciais, usrdata = {Hoje}, usrhora = {Hora} WHERE bostamp = @b;
@@ -305,6 +323,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         try
         {
             if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
+            if (!await EmconfExisteAsync(conn, ct, tx)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemEmconf); }
             var estado = await EstadoDossierAsync(conn, tx, bostamp, ct);
             if (estado is not true)
             {
@@ -336,10 +355,15 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         var lista = refs.Select(r => r.Trim()).Where(RegrasPecas.ReferenciaValida).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var total = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
         if (lista.Count == 0) return total;
+        if (!await EmconfExisteAsync(conn, ct))
+        {
+            foreach (var x in lista) total[x] = 0;
+            return total;
+        }
         var nomes = string.Join(",", lista.Select((_, i) => $"@r{i}"));
         await using var cmd = Cmd(conn, null, $"""
             SELECT LTRIM(RTRIM(i.ref)), SUM(i.qtt) FROM bi i WITH (NOLOCK)
-            WHERE i.ndos = @ndos AND i.armazem = @arm AND i.emconf = 1 AND LTRIM(RTRIM(i.ref)) IN ({nomes}) AND (@exceto = '' OR i.bostamp <> @exceto)
+            WHERE i.ndos = @ndos AND i.armazem = @arm AND i.emconf = 1 AND i.ref IN ({nomes}) AND (@exceto = '' OR i.bostamp <> @exceto)
             GROUP BY LTRIM(RTRIM(i.ref))
             """, ("@ndos", RegrasPecas.NdosSaida), ("@arm", RegrasPecas.Armazem), ("@exceto", excetoFichaId is null ? "" : StampFicha(excetoFichaId)));
         for (var i = 0; i < lista.Count; i++) Parametro(cmd, $"@r{i}", lista[i]);
