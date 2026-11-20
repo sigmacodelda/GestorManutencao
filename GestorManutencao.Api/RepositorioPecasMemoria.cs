@@ -62,7 +62,7 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
         lock (_trinco)
         {
             var e = _entradas.FirstOrDefault(x => x.Id == id);
-            if (e is null) return Task.FromResult(ResultadoMovimento.Falha("A linha já não existe."));
+            if (e is null) return Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroLinhaInexistente));
             _entradas.Remove(e);
             Mexer(e.Ref, -e.Qtt);
             return Task.FromResult(ResultadoMovimento.Sucesso(id));

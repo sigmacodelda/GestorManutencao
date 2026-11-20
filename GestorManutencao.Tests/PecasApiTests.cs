@@ -15,17 +15,21 @@ public class PecasApiTests : IDisposable
     private const string Pepper = "pepper-de-teste-com-mais-de-32-caracteres!";
     private static readonly PinHasher Hasher = new(Options.Create(new PinOpcoes { Pepper = Pepper }));
 
-    private readonly WebApplicationFactory<Program> _fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
+    private readonly RepositorioUtilizadoresMemoria _utilizadores = new(
+    [
+        (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), Hasher.Hash("482913")),
+        (new UtilizadorApp("qual", "Marta Qualidade", Perfil.Qualidade, true, false), Hasher.Hash("715329"))
+    ]);
+
+    private readonly WebApplicationFactory<Program> _fabrica;
+
+    public PecasApiTests() => _fabrica = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b
         .UseEnvironment("Development")
         .UseSetting("Pin:Pepper", Pepper)
         .UseSetting("Limites:LoginPorMinuto", "1000")
         .ConfigureServices(s =>
         {
-            s.Replace(ServiceDescriptor.Singleton<IRepositorioUtilizadores>(new RepositorioUtilizadoresMemoria(
-            [
-                (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), Hasher.Hash("482913")),
-                (new UtilizadorApp("qual", "Marta Qualidade", Perfil.Qualidade, true, false), Hasher.Hash("715329"))
-            ])));
+            s.Replace(ServiceDescriptor.Singleton<IRepositorioUtilizadores>(_utilizadores));
             s.Replace(ServiceDescriptor.Singleton<IRepositorioPecas>(new RepositorioPecasMemoria(
             [
                 new PecaDto("P001", "Parafuso M8", "560001", "A-01-1-01", 10, 4, 0.12m),
@@ -128,5 +132,69 @@ public class PecasApiTests : IDisposable
         var c = await ComoAnaAsync();
         var r = await c.GetFromJsonAsync<ResultadoPecasDto>("/pecas");
         Assert.Equal(2, r!.Pecas.Count);
+    }
+
+    private sealed class RepositorioFalso(Func<ResultadoMovimento>? anular = null, bool indisponivel = false) : IRepositorioPecas
+    {
+        private static Exception Indisp() => new RepositorioIndisponivelException();
+        public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult(new ResultadoPecasDto(true, [], false));
+        public Task<PecaDto?> ObterPorCodigoAsync(string codigo, CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult<PecaDto?>(null);
+        public Task<ResultadoMovimento> DarEntradaAsync(string refPeca, decimal qtt, string iniciais, CancellationToken ct) => Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado));
+        public Task<IReadOnlyList<EntradaPecaDto>> EntradasDeHojeAsync(CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult<IReadOnlyList<EntradaPecaDto>>([]);
+        public Task<ResultadoMovimento> AnularEntradaAsync(string id, CancellationToken ct) => Task.FromResult(anular!());
+        public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) => throw new NotSupportedException();
+        public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    private async Task<HttpClient> ComoAnaComAsync(IRepositorioPecas repo)
+    {
+        var f = _fabrica.WithWebHostBuilder(b => b.ConfigureServices(s => s.Replace(ServiceDescriptor.Singleton(repo))));
+        var c = f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var login = await (await c.PostAsJsonAsync("/auth/login", new PedidoLogin("482913"))).Content.ReadFromJsonAsync<RespostaLogin>();
+        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
+        return c;
+    }
+
+    [Fact]
+    public async Task Anular_com_recusa_do_repositorio_da_409_com_a_mensagem()
+    {
+        var c = await ComoAnaComAsync(new RepositorioFalso(() => ResultadoMovimento.Falha("recusado")));
+        var r = await c.DeleteAsync("/pecas/entradas/abc");
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("recusado", await r.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Entrada_com_bloqueio_ocupado_da_409()
+    {
+        var c = await ComoAnaComAsync(new RepositorioFalso());
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 1))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Repositorio_indisponivel_da_503()
+    {
+        var c = await ComoAnaComAsync(new RepositorioFalso(indisponivel: true));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await c.GetAsync("/pecas")).StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await c.GetAsync("/pecas/entradas/hoje")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Utilizador_inativado_e_recusado()
+    {
+        var c = await ComoAnaAsync();
+        Assert.Equal(ResultadoPin.Ok, await _utilizadores.DefinirAtivoAsync("ana", false, "chefe", CancellationToken.None));
+        var r = await c.GetAsync("/pecas");
+        Assert.Contains(r.StatusCode, new[] { HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized });
+        Assert.Contains((await c.DeleteAsync("/pecas/entradas/abc")).StatusCode, new[] { HttpStatusCode.Forbidden, HttpStatusCode.Unauthorized });
+    }
+
+    [Fact]
+    public async Task Corpo_do_400_tem_o_formato_pedido_invalido()
+    {
+        var c = await ComoAnaAsync();
+        var r = await c.PostAsJsonAsync("/pecas/entradas", new PedidoEntrada("P001", 0));
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Contains("pedido_invalido", await r.Content.ReadAsStringAsync());
     }
 }

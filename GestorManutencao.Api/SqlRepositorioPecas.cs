@@ -155,7 +155,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
         try
         {
-            if (!await BloquearAsync(conn, tx, RegrasPecas.NdosEntrada, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Outro movimento em curso, tente outra vez."); }
+            if (!await BloquearAsync(conn, tx, RegrasPecas.NdosEntrada, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
             if (!await EPecaAsync(conn, tx, refPeca, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Referência não é uma peça de manutenção."); }
             await using var proc = Cmd(conn, tx, "SELECT TOP 1 bostamp FROM bo WITH (NOLOCK) WHERE ndos = @ndos AND CAST(dataopen AS date) = CAST(GETDATE() AS date) ORDER BY obrano",
                 ("@ndos", RegrasPecas.NdosEntrada));
@@ -196,7 +196,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
         try
         {
-            if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Outro movimento em curso, tente outra vez."); }
+            if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
             if (!await EPecaAsync(conn, tx, refPeca, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Referência não é uma peça de manutenção."); }
             await using (var ja = Cmd(conn, tx, "SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND LTRIM(RTRIM(lobs)) = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
                 if ((int)(await ja.ExecuteScalarAsync(ct))! > 0) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Já foi dada saída desta peça."); }
@@ -319,8 +319,9 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
         try
         {
+            if (!await BloquearAsync(conn, tx, ndos, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
             await using var proc = Cmd(conn, tx, "SELECT bostamp FROM bi WITH (NOLOCK) WHERE bistamp = @b AND ndos = @ndos", ("@b", bistamp), ("@ndos", ndos));
-            if (await proc.ExecuteScalarAsync(ct) is not string bostamp) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("A linha já não existe."); }
+            if (await proc.ExecuteScalarAsync(ct) is not string bostamp) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroLinhaInexistente); }
             await using (var del = Cmd(conn, tx, "DELETE FROM bi2 WHERE bi2stamp = @b; DELETE FROM bi WHERE bistamp = @b;", ("@b", bistamp)))
                 await del.ExecuteNonQueryAsync(ct);
             await using var restam = Cmd(conn, tx, "SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE bostamp = @s", ("@s", bostamp));

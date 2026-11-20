@@ -37,6 +37,10 @@ public static class RegrasPecas
     // st.ref tem 18 caracteres no PHC; o movimento grava a quantidade com 3 casas.
     public const int TamanhoRef = 18;
 
+    // Os repositórios devolvem estes textos e o endpoint decide o estado HTTP por eles.
+    public const string ErroLinhaInexistente = "A linha já não existe.";
+    public const string ErroOcupado = "Outro movimento em curso, tente outra vez.";
+
     public static bool ReferenciaValida(string? r) => !string.IsNullOrWhiteSpace(r) && r.Trim().Length <= TamanhoRef;
 
     public static bool QuantidadeValida(decimal? q) => q is > 0 and < QuantidadeMaxima + 1 && decimal.Round(q.Value, 3) == q.Value;
@@ -92,7 +96,9 @@ public static class EndpointsPecas
                 : EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, _) =>
                 {
                     var r = await repo.DarEntradaAsync(p.Ref!.Trim(), p.Qtt!.Value, t.Codigo, ct);
-                    if (!r.Ok) return EndpointsIntervencoes.PedidoInvalido(r.Erro ?? "Não foi possível gravar o movimento.");
+                    if (!r.Ok) return r.Erro == RegrasPecas.ErroOcupado
+                        ? Results.Json(new { erro = r.Erro }, statusCode: StatusCodes.Status409Conflict)
+                        : EndpointsIntervencoes.PedidoInvalido(r.Erro ?? "Não foi possível gravar o movimento.");
                     var linha = (await repo.EntradasDeHojeAsync(ct)).FirstOrDefault(e => e.Id == r.Id)
                         ?? new EntradaPecaDto(r.Id!, p.Ref.Trim(), "", p.Qtt.Value, t.Codigo, DateTime.Now.ToString("HH:mm:ss"));
                     return Results.Ok(linha);
@@ -100,6 +106,12 @@ public static class EndpointsPecas
 
         g.MapDelete("/entradas/{id}", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas repo, CancellationToken ct) =>
             EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (_, _) =>
-                (await repo.AnularEntradaAsync(id, ct)).Ok ? Results.NoContent() : Results.NotFound()));
+            {
+                var r = await repo.AnularEntradaAsync(id, ct);
+                if (r.Ok) return Results.NoContent();
+                return r.Erro == RegrasPecas.ErroLinhaInexistente
+                    ? Results.NotFound()
+                    : Results.Json(new { erro = r.Erro }, statusCode: StatusCodes.Status409Conflict);
+            }));
     }
 }
