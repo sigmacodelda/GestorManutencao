@@ -130,6 +130,9 @@ public sealed class OfflineIntervencoesService(
                 && CargasFila.Ler<CargaMaterial>(o.Payload).MaterialId == materialId) ?? throw FichaMudou();
             var carga = CargasFila.Ler<CargaMaterial>(operacao.Payload) with { Local = localPeca };
             await fila.AtualizarAsync(operacao with { Payload = CargasFila.Escrever(carga), Estado = EstadoOperacao.Pendente, Tentativas = 0, UltimoErro = null });
+            // O lugar escolhido fica visível já, sem esperar pelo envio.
+            if (await Cache.LerMateriaisAsync(id) is { } lista)
+                await Cache.GuardarMateriaisAsync(id, lista.Select(m => m.Id == materialId ? m with { Local = localPeca } : m).ToList());
         });
         await sinc.AtualizarContagensAsync();
         AvisarEscrita();
@@ -641,13 +644,25 @@ public sealed class OfflineIntervencoesService(
     {
         if (!rede.Disponivel) throw new InvalidOperationException(MensagensIntervencao.SemRede);
         var id = fichaId is null ? "" : await mc.ResolverIdAsync(fichaId);
-        if (escrita && id.Length > 0 && (IdLocal(id) || (await mc.GarantirDonoAsync() is { } dono && await TemOperacoesAsync(dono, id))))
-            throw new InvalidOperationException(MensagensIntervencao.ComPendentes);
+        if (escrita && id.Length > 0)
+        {
+            if (IdLocal(id)) throw new InvalidOperationException(MensagensIntervencao.ComPendentes);
+            if (await mc.GarantirDonoAsync() is { } dono && await TemOperacoesAsync(dono, id)) throw new InvalidOperationException(await MensagemComPendentesAsync(dono, id));
+        }
         T resultado;
         try { resultado = await acao(id); }
         catch (Exception e) when (FalhaDeRede(e, ct)) { throw new InvalidOperationException(criacao ? MensagensIntervencao.SemRedeAMeio : MensagensIntervencao.SemRede); }
         if (escrita) { AvisarEscrita(); _contadores = null; }
         return resultado;
+    }
+
+    // Material à espera de lugar é o que trava a ficha: a mensagem diz o que fazer, em vez de "depois de serem enviadas".
+    private async Task<string> MensagemComPendentesAsync(string dono, string fichaId)
+    {
+        foreach (var o in (await fila.ListarAsync(dono)).Where(o => o.FichaId == fichaId && o.Tipo == TipoOperacao.AdicionarMaterial && o.Estado == EstadoOperacao.PorEscolherLugar))
+            try { return LogicaFichaPeca.MensagemEscolherLugar(CargasFila.Ler<CargaMaterial>(o.Payload).Design); }
+            catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException) { }
+        return MensagensIntervencao.ComPendentes;
     }
 
     private Task<bool> SoOnlineSemResultadoAsync(string fichaId, Func<string, Task> acao, CancellationToken ct) =>

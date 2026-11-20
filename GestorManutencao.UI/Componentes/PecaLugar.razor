@@ -53,7 +53,9 @@
     [Parameter] public EventCallback<EscolhaPecaLugar> OnMudou { get; set; }
     [Parameter] public string IdCampo { get; set; } = "ficha-peca";
 
-    private EstadoPicagem _estado = new(null, null);
+    // Peça e lugar com a origem do lugar (picado à mão ou derivado da peça): ao mudar de peça só sai o derivado.
+    private SelecaoPecaLugar _sel = SelecaoPecaLugar.Vazia;
+    private EstadoPicagem _estado => _sel.Estado;
     private Peca? _peca;
     private LocalizacoesPeca? _lug;
     // Lugares com stock para escolher: os da peça, ou os que a API devolveu em 409 escolha_o_lugar.
@@ -86,8 +88,13 @@
     // 409 escolha_o_lugar: mostra os lugares que a API devolveu.
     public async Task ProporLugaresAsync(IReadOnlyList<Lugar> lugares)
     {
-        _lugares = lugares;
-        _estado = _estado with { Local = null };
+        await _fila.WaitAsync();
+        try
+        {
+            _lugares = lugares;
+            _sel = _sel.LimparLocal();
+        }
+        finally { _fila.Release(); }
         StateHasChanged();
         await NotificarAsync();
     }
@@ -102,7 +109,7 @@
 
     private void LimparInterno()
     {
-        _estado = new(null, null);
+        _sel = SelecaoPecaLugar.Vazia;
         _peca = null;
         _lug = null;
         _lugares = [];
@@ -115,7 +122,7 @@
         try
         {
             _erro = "";
-            if (LogicaPicagem.Classificar(codigo) == TipoLeitura.Local) _estado = _estado.Aplicar(codigo);
+            if (LogicaPicagem.Classificar(codigo) == TipoLeitura.Local) _sel = _sel.PicarLocal(codigo);
             else
             {
                 try
@@ -151,7 +158,7 @@
         catch (Exception) { _erro = "Não foi possível ver os lugares da peça. Pode juntar na mesma: pede-se o lugar se for preciso."; }
         _peca = p;
         _lug = lug;
-        _estado = LogicaFichaPeca.AplicarLugarUnico(_estado with { Peca = p.Ref }, lug);
+        _sel = _sel.EscolherPeca(p.Ref, lug);
         _lugares = LogicaFichaPeca.ComStock(lug);
         // Um único lugar já ficou escolhido: não há lista para mostrar.
         if (_lugares.Count <= 1) _lugares = [];
@@ -159,24 +166,36 @@
 
     private async Task EscolherLugarAsync(Lugar l)
     {
-        _estado = _estado.Aplicar(LogicaFichaPeca.EtiquetaDe(l));
+        await _fila.WaitAsync();
+        try { _sel = _sel.EscolherLugar(l); }
+        finally { _fila.Release(); }
         await NotificarAsync(refocar: true);
     }
 
     private async Task LimparPeca()
     {
-        _peca = null;
-        _lug = null;
-        _estado = _estado with { Peca = null };
-        _lugares = [];
+        await _fila.WaitAsync();
+        try
+        {
+            _peca = null;
+            _lug = null;
+            _sel = _sel.LimparPeca();
+            _lugares = [];
+        }
+        finally { _fila.Release(); }
         await NotificarAsync(refocar: true);
     }
 
     private async Task LimparLocal()
     {
-        _estado = _estado with { Local = null };
-        // Voltar a escolher: se a peça tem vários lugares a lista reaparece.
-        if (_lug is not null && LogicaFichaPeca.ComStock(_lug).Count > 1) _lugares = LogicaFichaPeca.ComStock(_lug);
+        await _fila.WaitAsync();
+        try
+        {
+            _sel = _sel.LimparLocal();
+            // Voltar a escolher: se a peça tem vários lugares a lista reaparece.
+            if (_lug is not null && LogicaFichaPeca.ComStock(_lug).Count > 1) _lugares = LogicaFichaPeca.ComStock(_lug);
+        }
+        finally { _fila.Release(); }
         await NotificarAsync(refocar: true);
     }
 

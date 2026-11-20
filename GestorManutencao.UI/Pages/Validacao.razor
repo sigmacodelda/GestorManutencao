@@ -171,12 +171,18 @@
         {
             var r = await Intervencoes.ValidarAsync(c.Id);
             var pos = _porConfirmar.IndexOf(c);
-            if (string.IsNullOrWhiteSpace(r.AvisoStock))
+            // Sem rede o pedido só ficou na fila (Pendente): nada foi confirmado, o aviso fica.
+            var res = LogicaConferencia.AposRepetir(c.Aviso, r);
+            if (res.Confirmada)
             {
                 _porConfirmar.Remove(c);
                 Toast.Sucesso($"Conferência confirmada: {c.Equipamento}");
             }
-            else if (pos >= 0) _porConfirmar[pos] = c with { Aviso = r.AvisoStock };
+            else
+            {
+                if (pos >= 0 && res.Aviso is not null) _porConfirmar[pos] = c with { Aviso = res.Aviso };
+                _erro = res.Mensagem;
+            }
         }
         catch (InvalidOperationException ex) { _erro = ex.Message; }
         catch (Exception) { _erro = "Não foi possível confirmar. Tente outra vez."; }

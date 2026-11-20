@@ -571,7 +571,10 @@
         await Executar(async () =>
         {
             var ficha = _confAcao == "cancelar" ? await Intervencoes.CancelarAsync(d.Id, _confMotivo ?? "") : await Intervencoes.ValidarAsync(d.Id);
-            GuardarAvisoConferencia(ficha, _confAcao ?? "validar", _confMotivo);
+            // Pendente = o pedido só ficou na fila (sem rede): nada foi confirmado, o aviso fica.
+            var res = LogicaConferencia.AposRepetir(_avisoConf, ficha);
+            if (res.Mensagem is not null) _erroAcao = res.Mensagem;
+            else GuardarAvisoConferencia(ficha, _confAcao ?? "validar", _confMotivo);
             await OnMudou.InvokeAsync();
         }, m => _erroAcao = m);
     }

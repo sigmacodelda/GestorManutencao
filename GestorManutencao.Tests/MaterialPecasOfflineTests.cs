@@ -422,4 +422,146 @@ public class MaterialPecasOfflineTests
         var e2 = await Assert.ThrowsAsync<InvalidOperationException>(() => comCodigo.ApagarMaterialAsync("T1", "M1"));
         Assert.Equal(MensagensIntervencao.Para("sem_permissao"), e2.Message);
     }
+
+    // ---- Correções da revisão da Task 6 ----
+
+    private static async Task<(Cenario C, Material Local)> ComMaterialPorEscolherLugarAsync()
+    {
+        var c = await ComPecaEmVariosLugaresAsync();
+        c.Rede.Definir(false);
+        var local = await c.Svc.AdicionarMaterialAsync("T1", "Rolamento", 2, 3, "P001");
+        c.Rede.Definir(true);
+        await c.Sinc.SincronizarAsync();
+        return (c, local);
+    }
+
+    [Fact]
+    public async Task Definir_o_lugar_do_material_atualiza_logo_o_local_na_cache()
+    {
+        var (c, local) = await ComMaterialPorEscolherLugarAsync();
+        Assert.Null((await c.Cache.LerMateriaisAsync("T1"))!.Single().Local);
+
+        await c.Svc.DefinirLugarMaterialAsync("T1", local.Id, "LOC-B-02-1-03");
+
+        Assert.Equal("LOC-B-02-1-03", (await c.Cache.LerMateriaisAsync("T1"))!.Single().Local);
+        Assert.Equal("LOC-B-02-1-03", (await c.Svc.ListarMateriaisAsync("T1")).Single().Local);
+    }
+
+    [Fact]
+    public async Task Editar_e_repetir_saida_com_material_por_escolher_lugar_dizem_para_escolher_o_lugar()
+    {
+        var (c, _) = await ComMaterialPorEscolherLugarAsync();
+        var esperada = "Escolha primeiro o lugar do material Rolamento.";
+
+        var e1 = await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.EditarMaterialAsync("T1", "M-1", "Rolamento", 1, 1));
+        var e2 = await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.RepetirSaidaAsync("T1", "M-1"));
+
+        Assert.Equal(esperada, e1.Message);
+        Assert.Equal(esperada, e2.Message);
+        Assert.NotEqual(MensagensIntervencao.ComPendentes, e1.Message);
+    }
+
+    [Fact]
+    public async Task Editar_com_outras_operacoes_por_enviar_continua_a_dizer_depois_de_serem_enviadas()
+    {
+        var c = await CenarioEmCursoAsync();
+        c.Rede.Definir(false);
+        await c.Svc.AdicionarMaterialAsync("T1", "Massa", 1, 1);
+        c.Rede.Definir(true);
+
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.EditarMaterialAsync("T1", "M-1", "Massa", 1, 1));
+
+        Assert.Equal(MensagensIntervencao.ComPendentes, e.Message);
+    }
+
+    [Fact]
+    public async Task Aviso_de_conferencia_nao_se_duplica_se_a_operacao_for_reenviada()
+    {
+        var c = new Cenario();
+        c.Remoto.Fichas["F1"] = RemotoFalso.NovaFicha("F1", "Compressor de ar 02", EstadoIntervencao.Concluida, Cenario.Hoje);
+        await c.Svc.ListarPorValidarAsync();
+        c.Remoto.Rede = false; c.Rede.Definir(false);
+        await c.Svc.ValidarAsync("F1");
+        c.Remoto.AvisoValidar = "Conferência por confirmar";
+        c.Remoto.Rede = true; c.Rede.Definir(true);
+        var operacao = Assert.Single(await c.Fila.ListarAsync("ana"));
+
+        await c.Sinc.SincronizarAsync();
+        // Como se a remoção da operação tivesse falhado: a mesma operação volta a ser enviada.
+        await c.Fila.AdicionarAsync(operacao);
+        await c.Sinc.SincronizarAsync();
+
+        Assert.Single(await c.Sinc.ListarAvisosAsync());
+        Assert.Empty(await c.Fila.ListarAsync("ana"));
+    }
+
+    private static async Task<(Cenario C, AvisoConflito Aviso)> ComAvisoDeConferenciaAsync()
+    {
+        var c = new Cenario();
+        c.Remoto.Fichas["F1"] = RemotoFalso.NovaFicha("F1", "Compressor de ar 02", EstadoIntervencao.Concluida, Cenario.Hoje);
+        await c.Svc.ListarPorValidarAsync();
+        c.Remoto.Rede = false; c.Rede.Definir(false);
+        await c.Svc.ValidarAsync("F1");
+        c.Remoto.AvisoValidar = "Conferência por confirmar";
+        c.Remoto.Rede = true; c.Rede.Definir(true);
+        await c.Sinc.SincronizarAsync();
+        return (c, Assert.Single(await c.Sinc.ListarAvisosAsync()));
+    }
+
+    [Fact]
+    public async Task Repetir_confirmacao_do_aviso_remove_o_aviso_quando_a_api_confirma()
+    {
+        var (c, aviso) = await ComAvisoDeConferenciaAsync();
+        Assert.Equal(AvisoConflito.RepetirValidar, aviso.Acao);
+        c.Remoto.AvisoValidar = null;
+
+        var ainda = await c.Sinc.RepetirConfirmacaoAsync(aviso.Id);
+
+        Assert.Null(ainda);
+        Assert.Empty(await c.Sinc.ListarAvisosAsync());
+        Assert.Equal(EstadoSincronizacao.Sincronizado, c.Sinc.Estado);
+    }
+
+    [Fact]
+    public async Task Repetir_confirmacao_que_a_api_ainda_nao_confirma_mantem_o_aviso()
+    {
+        var (c, aviso) = await ComAvisoDeConferenciaAsync();
+
+        var ainda = await c.Sinc.RepetirConfirmacaoAsync(aviso.Id);
+
+        Assert.Equal("Conferência por confirmar", ainda);
+        Assert.Single(await c.Sinc.ListarAvisosAsync());
+    }
+
+    [Fact]
+    public async Task Repetir_confirmacao_sem_rede_mantem_o_aviso_e_diz_sem_ligacao()
+    {
+        var (c, aviso) = await ComAvisoDeConferenciaAsync();
+        c.Remoto.Rede = false;
+
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => c.Sinc.RepetirConfirmacaoAsync(aviso.Id));
+
+        Assert.Equal(MensagensIntervencao.SemRede, e.Message);
+        Assert.Single(await c.Sinc.ListarAvisosAsync());
+    }
+
+    [Fact]
+    public async Task Repetir_confirmacao_de_aviso_de_conflito_ou_inexistente_recusa()
+    {
+        var (c, _) = await ComAvisoDeConferenciaAsync();
+        await c.Fila.AdicionarAvisoAsync(new AvisoConflito("x1", "ana", "F1", "Eq", "texto", [], DateTimeOffset.UtcNow));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => c.Sinc.RepetirConfirmacaoAsync("x1"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => c.Sinc.RepetirConfirmacaoAsync("nao-existe"));
+    }
+
+    [Fact]
+    public void Aviso_de_conclusao_retida_nomeia_o_material_a_espera_do_lugar()
+    {
+        var m = new Material("L-1", "Rolamento", 1, 1, 1, "P001", FaltaLugar: true);
+        var ok = new Material("M-2", "Massa", 1, 1, 1);
+
+        Assert.Equal("A conclusão só segue quando escolher o lugar de: Rolamento.", LogicaFichaPeca.AvisoConclusaoRetida([m, ok]));
+        Assert.Null(LogicaFichaPeca.AvisoConclusaoRetida([ok]));
+    }
 }

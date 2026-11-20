@@ -18,6 +18,8 @@ public interface IGestorOffline : IDisposable
     Task<int> ContarPendentesAsync();
     Task<IReadOnlyList<AvisoConflito>> ListarAvisosAsync();
     Task DescartarConflitoAsync(string avisoId);
+    // Repete a confirmação das peças de um aviso de conferência: null = confirmada (o aviso sai); texto = ainda por confirmar.
+    Task<string?> RepetirConfirmacaoAsync(string avisoId);
     // Uma rota pode ainda ter o id local de uma avaria entretanto criada no servidor.
     Task<string> ResolverIdAsync(string id);
 }
@@ -34,6 +36,7 @@ public sealed class GestorOfflineNenhum : IGestorOffline
     public Task<int> ContarPendentesAsync() => Task.FromResult(0);
     public Task<IReadOnlyList<AvisoConflito>> ListarAvisosAsync() => Task.FromResult<IReadOnlyList<AvisoConflito>>([]);
     public Task DescartarConflitoAsync(string avisoId) => Task.CompletedTask;
+    public Task<string?> RepetirConfirmacaoAsync(string avisoId) => Task.FromResult<string?>(null);
     public Task<string> ResolverIdAsync(string id) => Task.FromResult(id);
     public void Dispose() { }
 }
@@ -78,6 +81,7 @@ public sealed class GestorOffline : IGestorOffline
     public async Task<int> ContarPendentesAsync() => _dono.Dono is { } dono ? await _fila.ContarPendentesAsync(dono) : 0;
     public Task<IReadOnlyList<AvisoConflito>> ListarAvisosAsync() => _sinc.ListarAvisosAsync();
     public Task DescartarConflitoAsync(string avisoId) => _sinc.DescartarConflitoAsync(avisoId);
+    public Task<string?> RepetirConfirmacaoAsync(string avisoId) => _sinc.RepetirConfirmacaoAsync(avisoId, TokenAtual());
     public Task<string> ResolverIdAsync(string id) => _mc.ResolverIdAsync(id);
 
     public void Iniciar()

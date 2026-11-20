@@ -173,6 +173,10 @@
                 {
                     <p class="estado-lista" role="status">Ainda sem material.</p>
                 }
+                @if (_i is { Pendente: true } && LogicaFichaPeca.AvisoConclusaoRetida(_materiais) is { } retida)
+                {
+                    <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>@retida</span></p>
+                }
                 <ul class="lista-intervencoes">
                     @foreach (var m in _materiais)
                     {
@@ -486,6 +490,9 @@
         }
         catch (Exception) { /* sem rede o guardar também falha, com a sua mensagem */ }
         _matEditId = m.Id; _eDesign = m.Design; _eQtt = m.Qtt; _eEpv = m.Epv; _erroMaterial = "";
+        // A escolha de juntar sai do ecrã enquanto se edita (só um leitor de cada vez): limpa-se tudo para não ficar um material
+        // com o nome da peça mas sem peça nem lugar.
+        _esc = null; _avisoStock = null; _material = ""; _qtt = _epv = null;
         _eRef = m.Ref ?? ""; _escEdit = null; _eAvisoStock = null; _escolhaItem = null; _avisoMaterial = null;
     }
 
@@ -567,6 +574,7 @@
 
     private async Task GuardarMaterialEditadoAsync()
     {
+        if (_a_gravar) return;
         _erroMaterial = RegrasMaterial.Validar(_eDesign, _eQtt, _eEpv) ?? "";
         if (_erroMaterial.Length > 0 || _matEditId is null) return;
         if (_escEdit is { Local: not null, Peca: null } && _eRef == "") { _erroMaterial = "Escolha também a peça do lugar."; return; }
@@ -699,6 +707,8 @@
 
     private async Task AdicionarMaterialAsync()
     {
+        if (_a_gravar) return;
+        if (_matEditId is not null) { _erroMaterial = "Termine primeiro a edição do material."; return; }
         _erroMaterial = RegrasMaterial.Validar(_material, _qtt, _epv) ?? "";
         if (_erroMaterial.Length > 0) return;
         if (_esc is { Local: not null, Peca: null }) { _erroMaterial = "Pique também a peça do lugar escolhido."; return; }
@@ -784,6 +794,8 @@
         // Feito: volta à lista (a que o utilizador usa no terreno) e confirma com um aviso de 2 s, sem ecrã de sucesso a pedir mais um toque.
         if (_erro.Length == 0 && _i is { Estado: EstadoIntervencao.Concluida })
         {
+            // Concluída sem rede com material à espera de lugar: a conclusão fica retida e o técnico tem de o ver antes de sair.
+            if (LogicaFichaPeca.AvisoConclusaoRetida(_materiais) is { } retida) { _avisoMaterial = retida; return; }
             Toast.Sucesso("Intervenção concluída");
             Nav.NavigateTo(Sessao.Modo == ModoTrabalho.Supervisor ? "planeadas" : "intervencoes");
         }

@@ -166,4 +166,116 @@ public class PicagemTests
         Assert.Equal(e, e.Aplicar("  "));
         Assert.Equal(e, e.Aplicar(""));
     }
+
+    // ---- Troca de peça: o lugar derivado da peça anterior não passa para a nova ----
+
+    [Fact]
+    public void Troca_de_peca_limpa_o_lugar_unico_da_anterior_e_recalcula_o_da_nova()
+    {
+        var a = SelecaoPecaLugar.Vazia.EscolherPeca("PA", Lugares(("A-01-1-01", 4)));
+        Assert.Equal("LOC-A-01-1-01", a.Estado.Local);
+        Assert.Equal(OrigemLugar.DaPeca, a.Origem);
+
+        var b = a.EscolherPeca("PB", Lugares(("B-02-1-03", 2)));
+
+        Assert.Equal("PB", b.Estado.Peca);
+        Assert.Equal("LOC-B-02-1-03", b.Estado.Local);
+    }
+
+    [Fact]
+    public void Troca_para_peca_em_varios_lugares_deixa_o_lugar_por_escolher()
+    {
+        var a = SelecaoPecaLugar.Vazia.EscolherPeca("PA", Lugares(("A-01-1-01", 4)));
+
+        var b = a.EscolherPeca("PB", Lugares(("B-02-1-03", 2), ("B-02-1-04", 1)));
+
+        Assert.Null(b.Estado.Local);
+        Assert.Equal(OrigemLugar.Nenhuma, b.Origem);
+    }
+
+    [Fact]
+    public void Lugar_escolhido_da_lista_tambem_sai_ao_trocar_de_peca()
+    {
+        var lugares = Lugares(("A-01-1-01", 4), ("A-01-2-03", 2));
+        var a = SelecaoPecaLugar.Vazia.EscolherPeca("PA", lugares).EscolherLugar(lugares.Lugares[1]);
+        Assert.Equal("LOC-A-01-2-03", a.Estado.Local);
+
+        var b = a.EscolherPeca("PB", Lugares(("B-02-1-03", 2), ("B-02-1-04", 1)));
+
+        Assert.Null(b.Estado.Local);
+    }
+
+    [Fact]
+    public void Mudar_de_peca_limpa_o_lugar_derivado_mas_nao_o_picado()
+    {
+        var derivado = SelecaoPecaLugar.Vazia.EscolherPeca("PA", Lugares(("A-01-1-01", 4))).LimparPeca();
+        Assert.Null(derivado.Estado.Peca);
+        Assert.Null(derivado.Estado.Local);
+
+        var picado = SelecaoPecaLugar.Vazia.EscolherPeca("PA", Lugares(("A-01-1-01", 4), ("A-01-2-03", 2))).PicarLocal("LOC-C-03-1-01").LimparPeca();
+        Assert.Null(picado.Estado.Peca);
+        Assert.Equal("LOC-C-03-1-01", picado.Estado.Local);
+    }
+
+    [Fact]
+    public void Local_picado_primeiro_mantem_se_ao_escolher_e_ao_trocar_de_peca()
+    {
+        var s = SelecaoPecaLugar.Vazia.PicarLocal("LOC-B-02-1-03");
+        Assert.Equal(OrigemLugar.Picado, s.Origem);
+
+        var a = s.EscolherPeca("PA", Lugares(("A-01-1-01", 4)));
+        Assert.Equal("LOC-B-02-1-03", a.Estado.Local);
+        Assert.Equal(OrigemLugar.Picado, a.Origem);
+
+        var b = a.EscolherPeca("PB", Lugares(("C-01-1-01", 4)));
+        Assert.Equal("LOC-B-02-1-03", b.Estado.Local);
+    }
+
+    [Fact]
+    public void Mudar_de_lugar_deixa_de_haver_lugar_e_a_origem_limpa()
+    {
+        var s = SelecaoPecaLugar.Vazia.EscolherPeca("PA", Lugares(("A-01-1-01", 4))).LimparLocal();
+        Assert.Null(s.Estado.Local);
+        Assert.Equal(OrigemLugar.Nenhuma, s.Origem);
+        Assert.Equal("PA", s.Estado.Peca);
+    }
+
+    [Fact]
+    public void Leitura_vazia_de_local_nao_muda_a_selecao()
+    {
+        var s = SelecaoPecaLugar.Vazia.EscolherPeca("PA", Lugares(("A-01-1-01", 4)));
+        Assert.Equal(s, s.PicarLocal("  "));
+    }
+
+    // ---- Conferência repetida: Pendente nunca confirma ----
+
+    private static Intervencao Ficha(bool pendente, string? aviso) =>
+        new("F1", "Compressor", "Produção", TipoIntervencao.Curativa, new DateOnly(2026, 11, 9), EstadoIntervencao.Validada, Pendente: pendente, AvisoStock: aviso);
+
+    [Fact]
+    public void Conferencia_pendente_nao_limpa_o_aviso_nem_diz_confirmada()
+    {
+        var r = LogicaConferencia.AposRepetir("Conferência por confirmar", Ficha(true, null));
+
+        Assert.False(r.Confirmada);
+        Assert.Equal("Conferência por confirmar", r.Aviso);
+        Assert.Equal(LogicaConferencia.PorEnviar, r.Mensagem);
+    }
+
+    [Fact]
+    public void Conferencia_sem_aviso_da_api_e_confirmada()
+    {
+        var r = LogicaConferencia.AposRepetir("Conferência por confirmar", Ficha(false, null));
+        Assert.True(r.Confirmada);
+        Assert.Null(r.Aviso);
+    }
+
+    [Fact]
+    public void Conferencia_com_aviso_da_api_continua_por_confirmar_com_o_texto_novo()
+    {
+        var r = LogicaConferencia.AposRepetir("antigo", Ficha(false, "novo"));
+        Assert.False(r.Confirmada);
+        Assert.Equal("novo", r.Aviso);
+        Assert.Null(r.Mensagem);
+    }
 }

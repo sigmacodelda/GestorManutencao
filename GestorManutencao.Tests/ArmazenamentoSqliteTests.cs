@@ -238,4 +238,53 @@ public sealed class ArmazenamentoSqliteTests : IAsyncLifetime
         Assert.Equal(EstadoSincronizacao.Sincronizado, c.Sinc.Estado);
         Assert.Empty(await c.Fila.ListarAsync("ana"));
     }
+
+    [Fact]
+    public async Task Material_por_escolher_lugar_faz_ida_e_volta_na_fila_SQLite_e_depois_envia_com_o_lugar()
+    {
+        var c = new Cenario(new CacheLocalSqlite(_bd), new FilaSaidaSqlite(_bd), new ArmazemFotosPendentesFicheiro(Path.Combine(_pasta, "fotos")));
+        await c.SemearEmCacheAsync("T1", "Câmara de frio 01", EstadoIntervencao.EmCurso);
+        c.Remoto.LugaresPorPeca["P001"] = [new("A", "A-01", 1, 1, 4, "A-01-1-01"), new("B", "B-02", 1, 3, 2, "B-02-1-03")];
+        c.Rede.Definir(false);
+        var local = await c.Svc.AdicionarMaterialAsync("T1", "Rolamento", 2, 3, "P001");
+        c.Rede.Definir(true);
+
+        await c.Sinc.SincronizarAsync();
+
+        // Lido por outra ligação à mesma base: o estado sobreviveu à gravação.
+        var lida = Assert.Single(await new FilaSaidaSqlite(_bd).ListarAsync("ana"));
+        Assert.Equal(EstadoOperacao.PorEscolherLugar, lida.Estado);
+        Assert.True(Assert.Single(await c.Svc.ListarMateriaisAsync("T1")).FaltaLugar);
+
+        await c.Svc.DefinirLugarMaterialAsync("T1", local.Id, "LOC-B-02-1-03");
+        var pendente = Assert.Single(await new FilaSaidaSqlite(_bd).ListarAsync("ana"));
+        Assert.Equal(EstadoOperacao.Pendente, pendente.Estado);
+        Assert.Contains("\"Local\":\"LOC-B-02-1-03\"", pendente.Payload);
+        Assert.Equal("LOC-B-02-1-03", Assert.Single((await c.Cache.LerMateriaisAsync("T1"))!).Local);
+
+        await c.Sinc.SincronizarAsync();
+
+        Assert.Equal(["LOC-B-02-1-03"], c.Remoto.LocaisMaterial);
+        Assert.Empty(await c.Fila.ListarAsync("ana"));
+    }
+
+    [Fact]
+    public async Task Aviso_de_conferencia_guarda_a_acao_na_base_e_repetir_confirmacao_remove_o_aviso()
+    {
+        var c = new Cenario(new CacheLocalSqlite(_bd), new FilaSaidaSqlite(_bd), new ArmazemFotosPendentesFicheiro(Path.Combine(_pasta, "fotos")));
+        c.Remoto.Fichas["F1"] = RemotoFalso.NovaFicha("F1", "Compressor de ar 02", EstadoIntervencao.Concluida, Cenario.Hoje);
+        await c.Svc.ListarPorValidarAsync();
+        c.Remoto.Rede = false; c.Rede.Definir(false);
+        await c.Svc.ValidarAsync("F1");
+        c.Remoto.AvisoValidar = "Conferência por confirmar";
+        c.Remoto.Rede = true; c.Rede.Definir(true);
+        await c.Sinc.SincronizarAsync();
+
+        var lido = Assert.Single(await new FilaSaidaSqlite(_bd).ListarAvisosAsync("ana"));
+        Assert.Equal(AvisoConflito.RepetirValidar, lido.Acao);
+
+        c.Remoto.AvisoValidar = null;
+        Assert.Null(await c.Sinc.RepetirConfirmacaoAsync(lido.Id));
+        Assert.Empty(await new FilaSaidaSqlite(_bd).ListarAvisosAsync("ana"));
+    }
 }

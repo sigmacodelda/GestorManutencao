@@ -144,10 +144,30 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
         await fila.AtualizarAsync(atual with { Estado = EstadoOperacao.PorEscolherLugar, UltimoErro = motivo });
     });
 
-    // A validação ficou feita mas a conferência não confirmou: o supervisor não estava a olhar, por isso fica um aviso (e a ficha repete a confirmação).
-    private async Task AvisarConferenciaAsync(OperacaoSaida operacao, string dono, string aviso) =>
-        await fila.AdicionarAvisoAsync(new AvisoConflito(Guid.NewGuid().ToString("N"), dono, operacao.FichaId, EquipamentoDaDecisao(operacao),
-            $"Validada, mas: {aviso}. Abra a ficha e escolha Repetir confirmação.", [], tempo.GetUtcNow()));
+    // A validação ficou feita mas a conferência não confirmou: o supervisor não estava a olhar, por isso fica um aviso com a ação
+    // "Repetir confirmação" (ecrã Por rever). O id deriva da operação: repetir o envio não duplica o aviso.
+    private async Task AvisarConferenciaAsync(OperacaoSaida operacao, string dono, string aviso)
+    {
+        var id = "conf-" + operacao.Id;
+        if ((await fila.ListarAvisosAsync(dono)).Any(a => a.Id == id)) return;
+        await fila.AdicionarAvisoAsync(new AvisoConflito(id, dono, operacao.FichaId, EquipamentoDaDecisao(operacao),
+            $"Validada, mas: {aviso}. Escolha Repetir confirmação.", [], tempo.GetUtcNow(), AvisoConflito.RepetirValidar));
+    }
+
+    // Repete a validação de um aviso de conferência: a API só volta a tentar a confirmação das peças. Devolve null se confirmou
+    // (o aviso desaparece) ou o texto que a API ainda mostra. Sem rede, nada muda e o aviso fica.
+    public async Task<string?> RepetirConfirmacaoAsync(string avisoId, CancellationToken ct = default)
+    {
+        if (donoDados.Dono is not { } dono) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+        var aviso = (await fila.ListarAvisosAsync(dono)).FirstOrDefault(a => a.Id == avisoId && a.Acao == AvisoConflito.RepetirValidar)
+            ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+        Intervencao r;
+        try { r = await remoto.ValidarAsync(aviso.FichaId, ct); }
+        catch (Exception e) when (FalhaDeRede(e, ct)) { throw new InvalidOperationException(MensagensIntervencao.SemRede); }
+        if (!string.IsNullOrWhiteSpace(r.AvisoStock)) return r.AvisoStock;
+        await DescartarConflitoAsync(avisoId);
+        return null;
+    }
 
     // Relê a operação: o envio pode tê-la marcado Incerta e essa marca não se perde. Só as falhas que não são de rede contam para as 5 tentativas.
     private async Task<OperacaoSaida> RegistarFalhaAsync(OperacaoSaida operacao, string dono, string erro, bool contar)
@@ -204,6 +224,8 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
                 break;
             case TipoOperacao.Validar:
                 var validada = await remoto.ValidarAsync(fichaId, ct);
+                // A operação sai da fila antes do aviso: se a remoção falhasse, o reenvio não criaria um segundo aviso (o id também é fixo).
+                await fila.RemoverAsync(operacao.Id);
                 if (!string.IsNullOrWhiteSpace(validada.AvisoStock)) await AvisarConferenciaAsync(operacao, dono, validada.AvisoStock);
                 break;
             case TipoOperacao.Devolver:

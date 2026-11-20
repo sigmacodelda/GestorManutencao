@@ -71,8 +71,66 @@ public static class LogicaFichaPeca
         return string.Join("-", partes);
     }
 
+    public static string MensagemEscolherLugar(string design) => $"Escolha primeiro o lugar do material {design}.";
+
+    // Material à espera de lugar retém a conclusão (e tudo o que vem depois na fila da ficha): o técnico tem de o saber.
+    public static string? AvisoConclusaoRetida(IEnumerable<Material> materiais)
+    {
+        var faltam = materiais.Where(m => m.FaltaLugar).Select(m => m.Design).ToList();
+        return faltam.Count == 0 ? null : $"A conclusão só segue quando escolher o lugar de: {string.Join(", ", faltam)}.";
+    }
+
     // O aviso nunca bloqueia: a pessoa pode já ter a peça na mão.
     public static string? AvisoDisponivel(Peca peca, decimal qtt) => LogicaEcraPecas.AvisoStock(qtt, peca.QuantidadeDisponivel);
+}
+
+// De onde veio o lugar escolhido: picado à mão pela pessoa, ou derivado da peça (lugar único ou escolhido da lista).
+public enum OrigemLugar { Nenhuma, Picado, DaPeca }
+
+// Peça e lugar com a origem do lugar. Ao trocar de peça só se limpa o lugar derivado da peça anterior;
+// o lugar picado à mão mantém-se (peça->local e local->peça funcionam por qualquer ordem).
+public sealed record SelecaoPecaLugar(EstadoPicagem Estado, OrigemLugar Origem)
+{
+    public static SelecaoPecaLugar Vazia => new(new(null, null), OrigemLugar.Nenhuma);
+
+    // Leitura de uma etiqueta de local picada pela pessoa.
+    public SelecaoPecaLugar PicarLocal(string leitura)
+    {
+        var novo = Estado.Aplicar(leitura);
+        return novo == Estado && LogicaLeitura.NormalizarCodigo(leitura).Length == 0 ? this : new(novo, OrigemLugar.Picado);
+    }
+
+    // Peça nova: o lugar derivado da anterior sai e, se a nova só está num lugar, fica esse; um lugar picado à mão mantém-se.
+    public SelecaoPecaLugar EscolherPeca(string pecaRef, LocalizacoesPeca? lugares)
+    {
+        var estado = Estado with { Peca = pecaRef };
+        var origem = Origem;
+        if (origem == OrigemLugar.DaPeca) { estado = estado with { Local = null }; origem = OrigemLugar.Nenhuma; }
+        var comLugar = LogicaFichaPeca.AplicarLugarUnico(estado, lugares);
+        if (comLugar.Local != estado.Local) origem = OrigemLugar.DaPeca;
+        return new(comLugar, origem);
+    }
+
+    public SelecaoPecaLugar EscolherLugar(Lugar lugar) => new(Estado.Aplicar(LogicaFichaPeca.EtiquetaDe(lugar)), OrigemLugar.DaPeca);
+
+    public SelecaoPecaLugar LimparPeca() => Origem == OrigemLugar.DaPeca
+        ? new(Estado with { Peca = null, Local = null }, OrigemLugar.Nenhuma)
+        : this with { Estado = Estado with { Peca = null } };
+
+    public SelecaoPecaLugar LimparLocal() => new(Estado with { Local = null }, OrigemLugar.Nenhuma);
+}
+
+// Conferência repetida pela pessoa: só se confirma quando a API a confirmou (Pendente = ficou na fila, nada foi confirmado).
+public sealed record ResultadoConferencia(string? Aviso, bool Confirmada, string? Mensagem);
+
+public static class LogicaConferencia
+{
+    public const string PorEnviar = "Sem ligação: a confirmação ficou por enviar. Repita quando houver rede.";
+
+    public static ResultadoConferencia AposRepetir(string? avisoAtual, Intervencao ficha) =>
+        ficha.Pendente ? new(avisoAtual, false, PorEnviar)
+        : string.IsNullOrWhiteSpace(ficha.AvisoStock) ? new(null, true, null)
+        : new(ficha.AvisoStock, false, null);
 }
 
 // O que o componente de escolha entrega ao ecrã: o estado da picagem (fonte única), a peça escolhida e os seus lugares.
