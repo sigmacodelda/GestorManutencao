@@ -14,7 +14,8 @@
     <div class="segmentos" role="group" aria-label="Modo de leitura">
         @foreach (var (modo, rotulo) in Opcoes)
         {
-            <button type="button" class="segmento" aria-pressed="@(Preferencias.Modo == modo ? "true" : "false")" @onclick="() => Escolher(modo)">
+            <button type="button" class="segmento" aria-pressed="@(Preferencias.Modo == modo ? "true" : "false")"
+                    disabled="@(modo == ModoLeitura.Camara && !Detetor.TemCamara)" @onclick="() => Escolher(modo)">
                 <span>@rotulo</span>
             </button>
         }
@@ -25,9 +26,14 @@
         Detetado: @Detetor.Descricao.
     </p>
 
+    @if (!Detetor.TemCamara)
+    {
+        <p class="estado-lista" role="status">Neste computador não há câmara; a opção Câmara só existe no telemóvel.</p>
+    }
+
     <div class="campo">
-        <label>Teste de leitura</label>
-        <LeitorEtiquetas OnLido="Lido" />
+        <label for="teste-leitura">Teste de leitura</label>
+        <LeitorEtiquetas Id="teste-leitura" OnLido="Lido" />
         <p class="leitor-teste" role="status">@(_ultimo.Length > 0 ? _ultimo : "Ainda nada lido.")</p>
     </div>
 </section>

@@ -11,6 +11,8 @@ public interface IDetetorLeitor
 {
     bool PareceLeitorIndustrial { get; }
 
+    bool TemCamara { get; }
+
     // O que foi visto (fabricante e modelo), para mostrar no ecrã do leitor.
     string Descricao { get; }
 }
@@ -25,6 +27,7 @@ public interface ILeitorCamara
 public sealed class DetetorLeitorNenhum : IDetetorLeitor
 {
     public bool PareceLeitorIndustrial => true;
+    public bool TemCamara => false;
     public string Descricao => "Computador: teclado ou leitor ligado";
 }
 
@@ -41,9 +44,10 @@ public sealed class PreferenciasLeituraMemoria : IPreferenciasLeitura
 
 public static class LogicaLeitura
 {
-    // Um leitor tipo teclado pode acrescentar CR/LF e espaços; os códigos de peça são arbitrários, por isso nada mais se mexe.
+    // Um leitor tipo teclado pode acrescentar CR/LF/Tab nas pontas e carateres invisíveis; os espaços internos são do código
+    // (uma referência com espaço nunca casaria sem eles) e os códigos de peça são arbitrários, por isso nada mais se mexe.
     public static string NormalizarCodigo(string? texto) =>
-        texto is null ? "" : string.Concat(texto.Where(c => !char.IsControl(c) && !char.IsWhiteSpace(c)));
+        texto is null ? "" : string.Concat(texto.Where(c => !char.IsControl(c) && c is not ('\u200B' or '\uFEFF'))).Trim();
 
     // "motorola" sozinho é o telemóvel de consumo; só a Motorola Solutions (e a Symbol) faz coletores.
     private static readonly string[] Fabricantes =

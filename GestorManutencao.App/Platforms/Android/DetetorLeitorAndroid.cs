@@ -6,8 +6,11 @@ namespace GestorManutencao.App;
 // Coletores (Zebra, Honeywell, Urovo...) trazem um serviço de leitura que escreve no campo focado.
 public sealed class DetetorLeitorAndroid : IDetetorLeitor
 {
+	private static readonly string[] Servicos = ["com.symbol.datawedge", "com.honeywell.decode.service"];
+
 	private readonly Lazy<(bool Parece, string Descricao)> _visto = new(Ver);
 
+	public bool TemCamara => true;
 	public bool PareceLeitorIndustrial => _visto.Value.Parece;
 	public string Descricao => _visto.Value.Descricao;
 
@@ -16,15 +19,17 @@ public sealed class DetetorLeitorAndroid : IDetetorLeitor
 		var fabricante = Android.OS.Build.Manufacturer ?? "";
 		var modelo = Android.OS.Build.Model ?? "";
 		var pacotes = new List<string>();
-		try
+		// Só os pacotes declarados em <queries> no manifesto são visíveis; um pacote invisível ou ausente dá NameNotFoundException.
+		var gestor = Android.App.Application.Context.PackageManager;
+		foreach (var nome in Servicos)
 		{
-			// Só os pacotes da lista são visíveis (<queries> no manifesto); com versões antigas do Android vê-se tudo.
-			var instalados = Android.App.Application.Context.PackageManager?.GetInstalledPackages((PackageInfoFlags)0);
-			foreach (var p in instalados ?? [])
-				if (p.PackageName is { } nome && (nome is "com.symbol.datawedge" or "com.honeywell.decode.service" || nome.StartsWith("com.urovo.", StringComparison.Ordinal)))
-					pacotes.Add(nome);
+			try
+			{
+				if (gestor?.GetPackageInfo(nome, (PackageInfoFlags)0) is not null) pacotes.Add(nome);
+			}
+			catch (PackageManager.NameNotFoundException) { }
+			catch (Exception) { /* sem acesso: fica só pelo fabricante e modelo */ }
 		}
-		catch (Exception) { /* sem acesso à lista: fica só pelo fabricante e modelo */ }
 
 		var descricao = $"{fabricante} {modelo}".Trim();
 		if (pacotes.Count > 0) descricao += $" (serviço de leitura: {string.Join(", ", pacotes)})";

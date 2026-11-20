@@ -12,6 +12,8 @@
 | FirebaseAdmin | 3.7.1 | GestorManutencao.Api | Enviar o push "acordar a app" (FCM) só com sinal, sem texto nem dados pessoais | Chamar a API HTTP v1 do FCM à mão (obriga a tratar OAuth e erros) | Apache-2.0 |
 | Xamarin.Firebase.Messaging | 125.0.0 | GestorManutencao.App (só Android) | Receber o push FCM de dados que acorda a app (mesmo fechada) para verificar as fichas e mostrar os avisos | Só o canal SignalR e o serviço em primeiro plano (o Android pode matá-los com a app fechada) | Apache-2.0 |
 | ZXing.Net.Maui.Controls | 0.10.4 | GestorManutencao.App (só Android) | Ler QR, EAN, Code 128/39 e DataMatrix com a câmara do telemóvel (CameraBarcodeReaderView). Traz ZXing.Net.Maui e ZXing.Net 0.16.11; alvo net10.0-android36.0, Microsoft.Maui.Controls >= 10.0.0 | ZXing em JavaScript no WebView (a câmara no WebView do Android é pouco fiável); só o leitor tipo teclado do PDA | MIT |
+| Xamarin.AndroidX.Camera.Core / Camera2 / Lifecycle / View / Video | 1.4.2.3 | GestorManutencao.App (só Android; transitivas do ZXing.Net.Maui.Controls) | Câmara (CameraX) usada pelo leitor de códigos | Nenhuma: vêm com o pacote do ZXing | Apache-2.0 |
+| ZXing.Net | 0.16.11 | GestorManutencao.App (só Android; transitiva) | Descodificar QR, EAN, Code 128/39 e DataMatrix | (ver ZXing.Net.Maui.Controls) | Apache-2.0 (confirmada no nuspec da 0.16.10 no cache NuGet; a 0.16.11 em uso não foi aberta) |
 
 Fontes (OFL): Exo 2 e Open Sans, em `GestorManutencao.UI/wwwroot/fonts`, para funcionarem sem internet.
 
@@ -20,3 +22,5 @@ Fontes (OFL): Exo 2 e Open Sans, em `GestorManutencao.UI/wwwroot/fonts`, para fu
 - `playwright-core` 1.65.0 (npm): liga-se ao WebView2 da app Windows por CDP para carregar nos botões. Só testes; não entra na app nem na API. Licença Apache-2.0.
 
 Nota (Xamarin.Firebase.Messaging): a versão 125.0.0 é a última cujas dependências (Play Services Base 118.7.2) ficam nas versões AndroidX que o MAUI já usa (Core 1.16, Fragment 1.8.8, Lifecycle 2.9). A 125.1.x exige Core 1.19 e Fragment 1.9, o que desalinhou a app e fez o APK 1.11 fechar ao abrir (`No view found for id … NavigationRootManager`). Ao subir a versão, confirmar com `dotnet list GestorManutencao.App package --include-transitive` que Fragment, Activity, Core e Lifecycle não sobem, e testar o APK num telemóvel.
+
+Nota (leitor de etiquetas): `dotnet list GestorManutencao.App package --include-transitive` depois de acrescentar o ZXing mostra Xamarin.AndroidX.Camera.* 1.4.2.3 e, nas bibliotecas que o Firebase obriga a manter, Core 1.16.0.3, Fragment 1.8.8.1, Activity 1.10.1.3 e Lifecycle 2.9.2.1: não subiram. Falta abrir o APK num telemóvel.

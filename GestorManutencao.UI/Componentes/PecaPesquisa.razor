@@ -1,4 +1,6 @@
 @inject IPecasService Pecas
+@inject IPreferenciasLeitura Preferencias
+@inject IDetetorLeitor Detetor
 
 <form class="pesquisa" role="search" @onsubmit="PesquisarAsync" novalidate>
     <div class="pesquisa-linha">
@@ -19,11 +21,7 @@
 }
 else if (_resultado is not null)
 {
-    @if (_resultado.Pecas.Count == 0)
-    {
-        <p class="estado-lista" role="status">Não há peças com este texto.</p>
-    }
-    else
+    @if (_resultado.Pecas.Count > 0)
     {
         <ul class="lista-intervencoes">
             @foreach (var p in _resultado.Pecas.Take(MaxVisiveis))
@@ -54,11 +52,16 @@ else if (_resultado is not null)
 
     private string _texto = "", _erro = "";
     private string? _pendente;
-    private bool _a_pesquisar, _lido;
+    private bool _a_pesquisar;
     private ResultadoPecas? _resultado;
     private ElementReference _campo;
 
-    public async Task FocarAsync() => await _campo.FocusAsync();
+    // Com leitor (PDA) o scan vai ao campo escondido; focar este abriria o teclado virtual.
+    public async Task FocarAsync()
+    {
+        if (LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial) == ModoLeitura.Leitor) return;
+        await _campo.FocusAsync();
+    }
 
     // Ponto de ligação do leitor (câmara/PDA): quem ler uma etiqueta chama isto com o código lido.
     // Durante uma pesquisa em curso guarda-se o último código lido e corre-se quando ela acabar.
@@ -67,7 +70,6 @@ else if (_resultado is not null)
         if (LogicaLeitura.EEtiquetaLocal(codigo)) { _erro = "Isto é uma etiqueta de local; pique uma peça."; return; }
         if (_a_pesquisar) { _pendente = codigo; return; }
         _texto = codigo;
-        _lido = true;
         await PesquisarAsync();
         StateHasChanged();
     }
@@ -79,7 +81,6 @@ else if (_resultado is not null)
         {
             _pendente = null;
             _texto = codigo;
-            _lido = true;
             await PesquisarUmaVezAsync();
         }
     }
@@ -90,9 +91,9 @@ else if (_resultado is not null)
         if (_a_pesquisar) return;
         _erro = "";
         var texto = _texto.Trim();
-        var lido = _lido;
-        _lido = false;
         if (texto.Length == 0) { _resultado = null; return; }
+        // Também o scan que cai no campo visível (PDA com o foco aqui).
+        if (LogicaLeitura.EEtiquetaLocal(texto)) { _erro = "Isto é uma etiqueta de local; pique uma peça."; _resultado = null; return; }
         _a_pesquisar = true;
         try
         {
@@ -102,10 +103,10 @@ else if (_resultado is not null)
                 return;
             }
             _resultado = await Pecas.PesquisarAsync(texto);
-            // Código lido sem nenhuma peça: diz-se e o texto fica no campo para corrigir.
-            if (lido && _resultado is { CampoExiste: true, Pecas.Count: 0 })
+            // Sem nenhuma peça: diz-se e o texto fica no campo para corrigir.
+            if (_resultado is { CampoExiste: true, Pecas.Count: 0 })
             {
-                _erro = $"Código não encontrado: {texto}";
+                _erro = LogicaEcraPecas.MensagemSemResultado(texto);
                 _resultado = null;
             }
         }

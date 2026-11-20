@@ -209,6 +209,13 @@ public class PecasUiTests
     public void Quantidade_valida_no_cliente_como_a_api(double? qtt, string? esperado)
         => Assert.Equal(esperado, LogicaEcraPecas.ValidarQuantidade(qtt is null ? null : (decimal)qtt));
 
+    [Theory]
+    [InlineData("5600123456", "Código não encontrado: 5600123456")]
+    [InlineData(" RL-6204 ", "Código não encontrado: RL-6204")]
+    [InlineData("rolamento 6204", "Nenhuma peça encontrada para rolamento 6204")]
+    public void Sem_resultado_distingue_codigo_de_pesquisa_livre(string texto, string esperado)
+        => Assert.Equal(esperado, LogicaEcraPecas.MensagemSemResultado(texto));
+
     [Fact]
     public async Task Api_anular_404_nao_falha_e_500_falha()
     {

@@ -6,12 +6,12 @@
 
 @if (Efetivo == ModoLeitura.Leitor)
 {
-    <input @ref="_campo" class="leitor-escondido" type="text" inputmode="none" autocomplete="off" autocapitalize="off"
+    <input @ref="_campo" id="@Id" class="leitor-escondido" type="text" inputmode="none" autocomplete="off" autocapitalize="off"
            spellcheck="false" tabindex="-1" aria-label="Leitor de etiquetas" />
 }
 else
 {
-    <button type="button" class="btn btn-secundario" disabled="@_a_ler" @onclick="LerComCameraAsync">
+    <button type="button" id="@Id" class="btn btn-secundario" disabled="@_a_ler" @onclick="LerComCameraAsync">
         <Icone Nome="camera" /><span>Ler com a câmara</span>
     </button>
 }
@@ -22,28 +22,46 @@ else
 
 @code {
     [Parameter] public EventCallback<string> OnLido { get; set; }
+    [Parameter] public string? Id { get; set; }
 
     private ElementReference _campo;
     private IJSObjectReference? _modulo, _ligacao;
     private DotNetObjectReference<LeitorEtiquetas>? _ref;
-    private bool _a_ler;
+    private bool _a_ler, _a_iniciar;
+    private ModoLeitura? _modoVisto;
     private string _erro = "";
 
     private ModoLeitura Efetivo => LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial);
 
     protected override async Task OnAfterRenderAsync(bool primeira)
     {
+        var modo = Efetivo;
+        var mudou = primeira || _modoVisto != modo;
+        _modoVisto = modo;
         try
         {
-            if (Efetivo == ModoLeitura.Leitor)
+            if (modo == ModoLeitura.Leitor)
             {
                 if (_ligacao is null)
                 {
-                    _modulo ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GestorManutencao.UI/js/leitor.js");
-                    _ref = DotNetObjectReference.Create(this);
-                    _ligacao = await _modulo.InvokeAsync<IJSObjectReference>("iniciar", _campo, _ref);
+                    // Duas renders seguidas não podem ligar duas vezes (a segunda perderia a ligação da primeira).
+                    if (_a_iniciar) return;
+                    _a_iniciar = true;
+                    try
+                    {
+                        _modulo ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GestorManutencao.UI/js/leitor.js");
+                        _ref = DotNetObjectReference.Create(this);
+                        _ligacao = await _modulo.InvokeAsync<IJSObjectReference>("iniciar", _campo, _ref);
+                    }
+                    catch
+                    {
+                        _ref?.Dispose();
+                        _ref = null;
+                        throw;
+                    }
+                    finally { _a_iniciar = false; }
                 }
-                else await _ligacao.InvokeVoidAsync("refocar");
+                else if (mudou) await _ligacao.InvokeVoidAsync("refocar");
             }
             else await PararAsync();
         }
@@ -64,13 +82,13 @@ else
         if (_a_ler) return;
         _a_ler = true;
         _erro = "";
-        try
-        {
-            if (await Camara.LerAsync() is { } lido) await AoLer(lido);
-        }
+        string? lido = null;
+        try { lido = await Camara.LerAsync(); }
         catch (InvalidOperationException e) { _erro = e.Message; }
         catch (Exception) { _erro = "Não foi possível ler com a câmara. Tente outra vez."; }
         finally { _a_ler = false; }
+        // Fora do try: um erro de quem recebe o código não é um erro da câmara.
+        if (lido is not null) await AoLer(lido);
     }
 
     private async Task PararAsync()

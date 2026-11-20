@@ -5,10 +5,11 @@ namespace GestorManutencao.Tests;
 public class LeituraTests
 {
     [Fact]
-    public void NormalizarCodigo_tira_CR_LF_e_espacos()
+    public void NormalizarCodigo_tira_CR_LF_e_espacos_das_pontas_e_guarda_os_internos()
     {
         Assert.Equal("5600", LogicaLeitura.NormalizarCodigo("  5600\r\n"));
-        Assert.Equal("AB12", LogicaLeitura.NormalizarCodigo("A B\t1\u00002\r"));
+        Assert.Equal("A B12", LogicaLeitura.NormalizarCodigo("A B\t1\u00002\r"));
+        Assert.Equal("RL 6204", LogicaLeitura.NormalizarCodigo("​RL 6204﻿\n"));
     }
 
     [Fact]
