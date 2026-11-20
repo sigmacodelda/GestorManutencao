@@ -179,19 +179,19 @@
                                 @if (ClassificacaoErros.IdLocal(m.Id)) { <span class="chip chip-pendente">Por enviar</span> }
                                 <br />
                                 <span class="intervencao-desc">@m.Qtt.ToString("0.###") × @m.Epv.ToString("0.00") € = @m.Custo.ToString("0.00") €</span>
-                                @if (m.Ref != "")
+                                @if (!string.IsNullOrEmpty(m.Ref))
                                 {
                                     <br />
                                     <span class="intervencao-desc">Peça @m.Ref · @TextoSaida(m)</span>
                                 }
                             </span>
-                            @if (m.Ref != "" && !m.SaidaDada && !ClassificacaoErros.IdLocal(m.Id) && _d is { PodeEditar: true })
+                            @if (!string.IsNullOrEmpty(m.Ref) && !m.SaidaDada && !ClassificacaoErros.IdLocal(m.Id) && _d is { PodeEditar: true })
                             {
-                                <button type="button" class="btn-texto" disabled="@_a_gravar" @onclick="() => RepetirSaidaAsync(m)">Repetir saída</button>
+                                <button type="button" class="btn-texto" aria-label="Repetir saída de @m.Design" disabled="@_a_gravar" @onclick="() => RepetirSaidaAsync(m)">Repetir saída</button>
                             }
                             @if (_d is { PodeEditar: true } && !ClassificacaoErros.IdLocal(m.Id))
                             {
-                                <button type="button" class="btn-texto" aria-label="Editar @m.Design" disabled="@_a_gravar" @onclick="() => EditarMaterial(m)"><Icone Nome="wrench" /></button>
+                                <button type="button" class="btn-texto" aria-label="Editar @m.Design" disabled="@_a_gravar" @onclick="() => EditarMaterialAsync(m)"><Icone Nome="wrench" /></button>
                             }
                             @if (_i.Estado == EstadoIntervencao.EmCurso)
                             {
@@ -202,12 +202,16 @@
                 </ul>
                 @if (_matEditId is not null)
                 {
-                    <form class="formulario" @onsubmit="GuardarMaterialEditadoAsync" novalidate>
-                        <PecaPesquisa OnEscolher="EscolherPecaEditada" />
+                    @* A pesquisa de peça tem o seu próprio form: fica fora do form de guardar para o Enter não gravar. *@
+                    <div class="formulario">
+                        <PecaPesquisa IdCampo="e-peca-texto" OnEscolher="EscolherPecaEditada" />
                         @if (_eRef != "")
                         {
-                            <p class="campo-aviso" role="status">Peça @_eRef <button type="button" class="btn-texto" @onclick="TirarPecaEditada">Tirar peça</button></p>
+                            <p class="campo-aviso">Peça @_eRef</p>
+                            <button type="button" class="btn-texto" @onclick="TirarPecaEditada">Tirar peça</button>
                         }
+                    </div>
+                    <form class="formulario" @onsubmit="GuardarMaterialEditadoAsync" novalidate>
                         @if (_eAvisoStock is not null) { <p class="campo-aviso" role="status">@_eAvisoStock</p> }
                         <div class="material-novo">
                             <div class="campo">
@@ -230,12 +234,19 @@
                 }
                 @if (_i.Estado == EstadoIntervencao.EmCurso)
                 {
-                    <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
-                        <PecaPesquisa OnEscolher="EscolherPeca" />
+                    <div class="formulario">
+                        @* Só uma pesquisa/leitor de cada vez: com a edição aberta, a de juntar fica de fora. *@
+                        @if (_matEditId is null)
+                        {
+                            <PecaPesquisa OnEscolher="EscolherPeca" />
+                        }
                         @if (_pecaRef != "")
                         {
-                            <p class="campo-aviso" role="status">Peça @_pecaRef <button type="button" class="btn-texto" @onclick="TirarPeca">Tirar peça</button></p>
+                            <p class="campo-aviso">Peça @_pecaRef</p>
+                            <button type="button" class="btn-texto" @onclick="TirarPeca">Tirar peça</button>
                         }
+                    </div>
+                    <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
                         @if (_avisoStock is not null) { <p class="campo-aviso" role="status">@_avisoStock</p> }
                         <div class="material-novo">
                             <div class="campo">
@@ -431,14 +442,21 @@
         StateHasChanged();
     }
 
-    private void EditarMaterial(Material m)
+    // Relê o material no servidor: uma lista de cache antiga sem Ref não pode anular a saída ao guardar.
+    private async Task EditarMaterialAsync(Material m)
     {
+        try
+        {
+            var lista = await Intervencoes.ListarMateriaisAsync(Id);
+            if (lista.FirstOrDefault(x => x.Id == m.Id) is { } atual) { m = atual; _materiais = lista; }
+        }
+        catch (Exception) { /* sem rede o guardar também falha, com a sua mensagem */ }
         _matEditId = m.Id; _eDesign = m.Design; _eQtt = m.Qtt; _eEpv = m.Epv; _erroMaterial = "";
-        _eRef = m.Ref; _eStockPeca = null; _eAvisoStock = null;
+        _eRef = m.Ref ?? ""; _eStockPeca = null; _eAvisoStock = null;
     }
 
     private static string TextoSaida(Material m) =>
-        m.SaidaDada ? "Saída dada" : ClassificacaoErros.IdLocal(m.Id) ? "Saída por dar (sem ligação)" : "Saída por dar";
+        m.SaidaDada ? "Saída dada" : ClassificacaoErros.IdLocal(m.Id) ? "Saída por dar quando sincronizar" : "Saída por dar";
 
     private static string Cortar35(string texto) => texto.Length > 35 ? texto[..35] : texto;
 
@@ -472,8 +490,15 @@
             await Intervencoes.RepetirSaidaAsync(Id, m.Id);
             await RecarregarAsync();
         }
-        catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível dar saída. Tente outra vez."); }
+        catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível dar saída. Tente outra vez."); await RecarregarMateriaisSeguroAsync(); }
         finally { _a_gravar = false; }
+    }
+
+    // Depois de um erro a lista pode já estar diferente (ex.: a saída ficou dada); nunca falha.
+    private async Task RecarregarMateriaisSeguroAsync()
+    {
+        try { await RefrescarFichaAsync(); await CarregarMateriaisAsync(); }
+        catch (Exception) { /* fica a lista que já tem */ }
     }
 
     private async Task GuardarMaterialEditadoAsync()
@@ -584,7 +609,7 @@
     {
         _a_gravar = true; _erroMaterial = "";
         try { await Intervencoes.ApagarMaterialAsync(Id, m.Id); await RefrescarFichaAsync(); await CarregarMateriaisAsync(); }
-        catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível tirar o material. Tente outra vez."); }
+        catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível tirar o material. Tente outra vez."); await RecarregarMateriaisSeguroAsync(); }
         finally { _a_gravar = false; }
     }
 

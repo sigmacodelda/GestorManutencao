@@ -5,15 +5,15 @@
 <form class="pesquisa" role="search" @onsubmit="PesquisarAsync" novalidate>
     <div class="pesquisa-linha">
         <div class="campo">
-            <label for="peca-texto">Peça</label>
-            <input id="peca-texto" type="search" autocomplete="off" maxlength="60" placeholder="Referência, nome ou código de barras"
-                   aria-describedby="peca-erro" @ref="_campo" @bind="_texto" @bind:event="oninput" />
+            <label for="@IdCampo">Peça</label>
+            <input id="@IdCampo" type="search" autocomplete="off" maxlength="60" placeholder="Referência, nome ou código de barras"
+                   aria-describedby="@IdErro" @ref="_campo" @bind="_texto" @bind:event="oninput" />
         </div>
         <button type="submit" class="btn btn-secundario" disabled="@_a_pesquisar" aria-label="Pesquisar peça"><Icone Nome="search" /></button>
     </div>
 </form>
 <LeitorEtiquetas OnLido="LerCodigoAsync" />
-<p id="peca-erro" class="campo-erro" role="alert">@_erro</p>
+<p id="@IdErro" class="campo-erro" role="alert">@_erro</p>
 
 @if (_resultado is { CampoExiste: false })
 {
@@ -49,6 +49,10 @@ else if (_resultado is not null)
     private const int MaxVisiveis = 6;
 
     [Parameter] public EventCallback<Peca> OnEscolher { get; set; }
+    // Com mais de uma pesquisa na mesma página os ids têm de ser diferentes.
+    [Parameter] public string IdCampo { get; set; } = "peca-texto";
+
+    private string IdErro => IdCampo + "-erro";
 
     private string _texto = "", _erro = "";
     private string? _pendente;

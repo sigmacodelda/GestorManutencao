@@ -1,5 +1,7 @@
+using System.Net;
 using GestorManutencao.UI.Modelos;
 using GestorManutencao.UI.Offline;
+using GestorManutencao.UI.Servicos;
 
 namespace GestorManutencao.Tests;
 
@@ -98,5 +100,75 @@ public class MaterialPecasOfflineTests
         Assert.Equal(1, c.Remoto.Contar("AdicionarMaterial"));
         Assert.Equal(["P001"], c.Remoto.RefsMaterial);
         Assert.Equal("P001", Assert.Single((await c.Cache.LerMateriaisAsync("T1"))!).Ref);
+    }
+
+    [Fact]
+    public async Task Repetir_saida_de_material_local_sem_rede_diz_sem_ligacao_e_nao_chama_o_remoto()
+    {
+        var c = await CenarioEmCursoAsync();
+        c.Rede.Definir(false);
+        var local = await c.Svc.AdicionarMaterialAsync("T1", "Rolamento 6204", 1, 5, "P001");
+
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => c.Svc.RepetirSaidaAsync("T1", local.Id));
+
+        Assert.Equal(MensagensIntervencao.SemRede, e.Message);
+        Assert.Equal(0, c.Remoto.Contar("RepetirSaida"));
+    }
+
+    private sealed class Fixo(HttpStatusCode codigo, string corpo) : HttpMessageHandler
+    {
+        public string? Corpo { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage pedido, CancellationToken ct)
+        {
+            Corpo = pedido.Content is null ? null : await pedido.Content.ReadAsStringAsync(ct);
+            return new HttpResponseMessage(codigo) { Content = new StringContent(corpo, System.Text.Encoding.UTF8, "application/json") };
+        }
+    }
+
+    private static IntervencoesApiService Api(Fixo h) =>
+        new(new HttpClient(h) { BaseAddress = new Uri("https://exemplo.invalid/") }, new SessaoService(new DevAutenticacaoService(), new ArmazemSessaoMemoria()));
+
+    [Fact]
+    public async Task Api_envia_a_ref_no_corpo_ao_juntar_e_ao_editar()
+    {
+        var h = new Fixo(HttpStatusCode.OK, """{"id":"M1","design":"x","qtt":1,"epv":1,"custo":1,"ref":"P001","saidaDada":true}""");
+        var api = Api(h);
+
+        await api.AdicionarMaterialAsync("T1", "Rolamento", 2, 3, "P001");
+        Assert.Contains("\"ref\":\"P001\"", h.Corpo);
+
+        await api.EditarMaterialAsync("T1", "M1", "Rolamento", 2, 3, "P002");
+        Assert.Contains("\"ref\":\"P002\"", h.Corpo);
+    }
+
+    [Fact]
+    public async Task Api_400_com_peca_mostra_a_mensagem_da_api()
+    {
+        var api = Api(new Fixo(HttpStatusCode.BadRequest, """{"mensagem":"Essa peça não existe."}"""));
+
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => api.AdicionarMaterialAsync("T1", "Rolamento", 2, 3, "P999"));
+
+        Assert.Equal("Essa peça não existe.", e.Message);
+    }
+
+    [Fact]
+    public async Task Api_400_sem_peca_nao_e_convertido_em_mensagem()
+    {
+        var api = Api(new Fixo(HttpStatusCode.BadRequest, """{"mensagem":"Essa peça não existe."}"""));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => api.AdicionarMaterialAsync("T1", "Rolamento", 2, 3));
+    }
+
+    [Fact]
+    public async Task Api_409_com_texto_mostra_o_texto_e_com_codigo_usa_o_mapa()
+    {
+        var comTexto = Api(new Fixo(HttpStatusCode.Conflict, """{"erro":"Stock insuficiente para a saída."}"""));
+        var e1 = await Assert.ThrowsAsync<InvalidOperationException>(() => comTexto.RepetirSaidaAsync("T1", "M1"));
+        Assert.Equal("Stock insuficiente para a saída.", e1.Message);
+
+        var comCodigo = Api(new Fixo(HttpStatusCode.Conflict, """{"erro":"sem_permissao"}"""));
+        var e2 = await Assert.ThrowsAsync<InvalidOperationException>(() => comCodigo.ApagarMaterialAsync("T1", "M1"));
+        Assert.Equal(MensagensIntervencao.Para("sem_permissao"), e2.Message);
     }
 }
