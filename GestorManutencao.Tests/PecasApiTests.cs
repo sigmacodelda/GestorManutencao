@@ -144,6 +144,7 @@ public class PecasApiTests : IDisposable
         public Task<ResultadoMovimento> AnularEntradaAsync(string id, CancellationToken ct) => Task.FromResult(anular!());
         public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) => throw new NotSupportedException();
         public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct) => throw new NotSupportedException();
+        public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private async Task<HttpClient> ComoAnaComAsync(IRepositorioPecas repo)

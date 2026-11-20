@@ -15,6 +15,9 @@ public sealed record EntradaPecaDto(string Id, string Ref, string Design, decima
 
 public sealed record PedidoEntrada(string? Ref, decimal? Qtt);
 
+// Repetir a saída de um material cuja ligação à peça não ficou gravada (a saída falhou); sem corpo vale a ref já ligada.
+public sealed record PedidoSaida(string? Ref);
+
 public static class RegrasPecas
 {
     public const int NdosSaida = 63, NdosEntrada = 64, Armazem = 104;
@@ -65,6 +68,9 @@ public interface IRepositorioPecas
     // Saída: dossier 63 da ficha, linha por material (bi.lobs = materialId). Grava também u_matinterv.ref.
     Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct);
     Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct);
+
+    // Junta a Ref ligada e se a saída existe (SaidaDada) aos materiais lidos da ficha.
+    Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct);
 }
 
 public static class EndpointsPecas

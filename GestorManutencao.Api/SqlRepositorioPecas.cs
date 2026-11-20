@@ -192,6 +192,8 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
 
     public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) => Executar(async conn =>
     {
+        if (!RegrasPecas.ReferenciaValida(refPeca) || !RegrasPecas.QuantidadeValida(qtt)) return ResultadoMovimento.Falha("Indique uma peça e uma quantidade positiva, com no máximo 3 casas decimais.");
+        refPeca = refPeca.Trim();
         iniciais = string.IsNullOrWhiteSpace(iniciais) ? "XX" : iniciais.Trim();
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
         try
@@ -228,7 +230,8 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
                 ?? await CriarDossierAsync(conn, tx, RegrasPecas.NdosSaida, $"Ficha {numero:0} {equip}", iniciais, ct);
             await InserirLinhaAsync(conn, tx, bostamp, RegrasPecas.NdosSaida, refPeca, qtt, materialId, iniciais, ct);
 
-            await using var liga = Cmd(conn, tx, "UPDATE u_matinterv SET ref = @ref WHERE u_matintervstamp = @m", ("@ref", refPeca), ("@m", materialId));
+            await using var liga = Cmd(conn, tx, $"UPDATE u_matinterv SET ref = @ref, usrinis = @iniciais, usrdata = {Hoje}, usrhora = {Hora} WHERE u_matintervstamp = @m",
+                ("@ref", refPeca), ("@iniciais", iniciais), ("@m", materialId));
             await liga.ExecuteNonQueryAsync(ct);
             await tx.CommitAsync(ct);
             return ResultadoMovimento.Sucesso(materialId);
@@ -243,8 +246,31 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct) => Executar(async conn =>
     {
         await using var cmd = Cmd(conn, null, "SELECT bistamp FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND LTRIM(RTRIM(lobs)) = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId));
-        if (await cmd.ExecuteScalarAsync(ct) is not string bistamp) return ResultadoMovimento.Sucesso(materialId);
-        return await ApagarLinhaAsync(bistamp, RegrasPecas.NdosSaida, ct);
+        var r = await cmd.ExecuteScalarAsync(ct) is string bistamp ? await ApagarLinhaAsync(bistamp, RegrasPecas.NdosSaida, ct) : ResultadoMovimento.Sucesso(materialId);
+        // Sem saída a ligação à peça deixa de valer (senão a lista mostraria uma saída por dar).
+        if (r.Ok)
+        {
+            await using var limpa = Cmd(conn, null, "UPDATE u_matinterv SET ref = '' WHERE u_matintervstamp = @m AND ref <> ''", ("@m", materialId));
+            await limpa.ExecuteNonQueryAsync(ct);
+        }
+        return r;
+    });
+
+    public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => Executar<IReadOnlyList<MaterialDto>>(async conn =>
+    {
+        if (materiais.Count == 0) return materiais;
+        var ids = materiais.Select(m => m.Id).ToList();
+        var nomes = string.Join(",", ids.Select((_, i) => $"@m{i}"));
+        await using var cmd = Cmd(conn, null, $"""
+            SELECT LTRIM(RTRIM(mi.u_matintervstamp)), LTRIM(RTRIM(ISNULL(mi.ref, ''))),
+                   CASE WHEN EXISTS (SELECT 1 FROM bi i WITH (NOLOCK) WHERE i.ndos = @ndos AND LTRIM(RTRIM(i.lobs)) = LTRIM(RTRIM(mi.u_matintervstamp))) THEN 1 ELSE 0 END
+            FROM u_matinterv mi WITH (NOLOCK) WHERE mi.u_matintervstamp IN ({nomes})
+            """, ("@ndos", RegrasPecas.NdosSaida));
+        for (var i = 0; i < ids.Count; i++) Parametro(cmd, $"@m{i}", ids[i]);
+        var porId = new Dictionary<string, (string Ref, bool Saida)>();
+        await using (var r = await cmd.ExecuteReaderAsync(ct))
+            while (await r.ReadAsync(ct)) porId[r.GetString(0)] = (r.GetString(1), r.GetInt32(2) == 1);
+        return materiais.Select(m => porId.TryGetValue(m.Id, out var x) ? m with { Ref = x.Ref, SaidaDada = x.Saida } : m).ToList();
     });
 
     // ---------- Dossier e linhas (padrão do TransferenciasService da LandeiroMaui)

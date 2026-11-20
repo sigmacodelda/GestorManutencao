@@ -75,10 +75,18 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
         {
             if (!_pecas.ContainsKey(refPeca.Trim())) return Task.FromResult(ResultadoMovimento.Falha("Referência inexistente."));
             if (_saidas.ContainsKey(materialId)) return Task.FromResult(ResultadoMovimento.Falha("Já foi dada saída desta peça."));
-            _saidas[materialId] = (refPeca.Trim(), qtt);
-            Mexer(refPeca.Trim(), -qtt);
+            _saidas[materialId] = (_pecas[refPeca.Trim()].Ref, qtt);
+            Mexer(_pecas[refPeca.Trim()].Ref, -qtt);
             return Task.FromResult(ResultadoMovimento.Sucesso(materialId));
         }
+    }
+
+    // Em memória a ref só existe enquanto a saída existe.
+    public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct)
+    {
+        lock (_trinco)
+            return Task.FromResult<IReadOnlyList<MaterialDto>>(materiais
+                .Select(m => _saidas.TryGetValue(m.Id, out var s) ? m with { Ref = s.Ref, SaidaDada = true } : m).ToList());
     }
 
     public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct)

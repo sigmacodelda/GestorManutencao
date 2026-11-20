@@ -50,7 +50,7 @@ public sealed record PaginaFichasDto(IReadOnlyList<IntervencaoDto> Itens, bool T
 
 public sealed record PedidoConfiguracao(int? Antecedencia, bool? GerarPlaneadas, bool? AvancaOrdem, bool? ValidarPropria, bool? ExtExigeDoc, bool? ComprasFichaInt);
 
-public sealed record MaterialDto(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo);
+public sealed record MaterialDto(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo, string Ref = "", bool SaidaDada = false);
 
 // Foto anexada à intervenção (tabela anexos do PHC); os bytes só vêm no pedido da própria foto.
 public sealed record FotoDto(string Id, string Nome, int Bytes);
@@ -62,7 +62,7 @@ public sealed record PedidoAvaria(string? EquipamentoId, string? Anomalia, strin
 
 public sealed record PedidoConclusao(string? Feito, TimeOnly? Inicio, TimeOnly? Fim);
 
-public sealed record PedidoMaterial(string? Design, decimal? Qtt, decimal? Epv);
+public sealed record PedidoMaterial(string? Design, decimal? Qtt, decimal? Epv, string? Ref = null);
 
 public sealed record PedidoDevolucao(string? Motivo);
 
@@ -413,23 +413,80 @@ public static partial class EndpointsIntervencoes
                 ? Task.FromResult(PedidoInvalido(erro))
                 : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) => Resposta(await repo.AssinarExternaAsync(id, p.Nome!.Trim(), p.Assinatura!, t, sup, ct))));
 
-        g.MapGet("/intervencoes/{id}/materiais", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
-            ComoTecnico(eu, utilizadores, ct, async t => await repo.ListarMateriaisAsync(id, t, ct) is { } m ? Results.Ok(m) : Results.NotFound()));
+        g.MapGet("/intervencoes/{id}/materiais", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>
+            ComoTecnico(eu, utilizadores, ct, async t => await repo.ListarMateriaisAsync(id, t, ct) is { } m ? Results.Ok(await pecas.EnriquecerMateriaisAsync(m, ct)) : Results.NotFound()));
 
-        g.MapPost("/intervencoes/{id}/materiais", (string id, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        g.MapPost("/intervencoes/{id}/materiais", (string id, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>
             RegrasIntervencao.ValidarMaterial(p.Design, p.Qtt, p.Epv) is not null
                 ? Task.FromResult(Results.BadRequest())
-                : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) => Resposta(await repo.AdicionarMaterialAsync(id, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, ct, sup))));
+                : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) =>
+                {
+                    var (refPeca, erro) = await ResolverPecaAsync(p, pecas, ct);
+                    if (erro is not null) return erro;
+                    var (res, mat) = await repo.AdicionarMaterialAsync(id, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, ct, sup);
+                    if (res == ResultadoIntervencao.Ok && mat is not null && refPeca != "")
+                        mat = mat with { Ref = refPeca, SaidaDada = await TentarSaidaAsync(pecas, mat.Id, refPeca, mat.Qtt, t.Codigo, ct) };
+                    return Resposta((res, mat));
+                }));
 
-        g.MapPut("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        g.MapPut("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>
             RegrasIntervencao.ValidarMaterial(p.Design, p.Qtt, p.Epv) is not null
                 ? Task.FromResult(Results.BadRequest())
-                : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) => Resposta(await repo.EditarMaterialAsync(id, materialId, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, sup, ct))));
+                : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) =>
+                {
+                    var (refPeca, erro) = await ResolverPecaAsync(p, pecas, ct);
+                    if (erro is not null) return erro;
+                    // Só mexe na saída depois de a ficha aceitar a edição (acesso e estado).
+                    var (res, mat) = await repo.EditarMaterialAsync(id, materialId, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, sup, ct);
+                    if (res != ResultadoIntervencao.Ok || mat is null) return Resposta((res, mat));
+                    // O material já está gravado: uma falha ao mexer no stock nunca o desfaz (SaidaDada = false e o ecrã oferece repetir).
+                    var anulada = false;
+                    try { anulada = (await pecas.AnularSaidaAsync(materialId, ct)).Ok; }
+                    catch (RepositorioIndisponivelException) { }
+                    if (refPeca != "")
+                        mat = mat with { Ref = refPeca, SaidaDada = anulada && await TentarSaidaAsync(pecas, materialId, refPeca, mat.Qtt, t.Codigo, ct) };
+                    return Resposta((res, mat));
+                }));
 
-        g.MapDelete("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
-            ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) => await repo.ApagarMaterialAsync(id, materialId, t, ct, sup) is var r && r == ResultadoIntervencao.Ok
-                ? Results.NoContent()
-                : Resposta<object>((r, null))));
+        // Repete a saída que falhou. Mesmo acesso de edição da ficha que o POST do material (PodeEditar do detalhe, já calculado para quem pede).
+        g.MapPost("/intervencoes/{id}/materiais/{materialId}/saida", (string id, string materialId, PedidoSaida? p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>
+            ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) =>
+            {
+                if (await repo.ObterDetalheAsync(id, t, sup, ct) is not { } ficha) return Results.NotFound();
+                if (!ficha.PodeEditar) return Resposta<MaterialDto>((ResultadoIntervencao.Conflito, null));
+                if (ficha.Materiais.FirstOrDefault(x => x.Id == materialId) is not { } mat) return Results.NotFound();
+                var m = (await pecas.EnriquecerMateriaisAsync([mat], ct))[0];
+                if (m.SaidaDada) return Results.Json(new { erro = "Já foi dada saída desta peça." }, statusCode: StatusCodes.Status409Conflict);
+                var (refPeca, erro) = await ResolverPecaAsync(new PedidoMaterial(m.Design, m.Qtt, m.Epv, m.Ref != "" ? m.Ref : p?.Ref), pecas, ct);
+                if (erro is not null) return erro;
+                if (refPeca == "") return PedidoInvalido("Indique a peça a que o material corresponde.");
+                var r = await pecas.DarSaidaAsync(materialId, refPeca, m.Qtt, t.Codigo, ct);
+                return r.Ok
+                    ? Results.Ok(m with { Ref = refPeca, SaidaDada = true })
+                    : Results.Json(new { erro = r.Erro }, statusCode: StatusCodes.Status409Conflict);
+            }));
+
+        g.MapDelete("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, ILogger<Program> log, CancellationToken ct) =>
+            ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) =>
+            {
+                // Lê o material antes de mexer no stock (o supervisor lê pelo detalhe, porque a lista só mostra as fichas do técnico).
+                var materiais = sup ? (await repo.ObterDetalheAsync(id, t, true, ct))?.Materiais : await repo.ListarMateriaisAsync(id, t, ct);
+                if (materiais?.FirstOrDefault(x => x.Id == materialId) is not { } lido) return Results.NotFound();
+                var mat = (await pecas.EnriquecerMateriaisAsync([lido], ct))[0];
+
+                // A saída anula-se antes de apagar; se a anulação falhar nada se apaga, e se o apagar falhar a seguir repõe-se a saída.
+                if (mat.SaidaDada)
+                {
+                    var anul = await pecas.AnularSaidaAsync(materialId, ct);
+                    if (!anul.Ok) return Results.Json(new { erro = anul.Erro }, statusCode: StatusCodes.Status409Conflict);
+                }
+                ResultadoIntervencao r;
+                try { r = await repo.ApagarMaterialAsync(id, materialId, t, ct, sup); }
+                catch (RepositorioIndisponivelException) { await ReporSaidaAsync(pecas, mat, t.Codigo, log); throw; }
+                if (r == ResultadoIntervencao.Ok) return Results.NoContent();
+                await ReporSaidaAsync(pecas, mat, t.Codigo, log);
+                return Resposta<object>((r, null));
+            }));
 
         // Ficha manual (operador e supervisor com número de técnico), ficha completa, edição, cancelamento e fecho das fichas antigas.
         g.MapPost("/intervencoes", (PedidoFichaManual p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
@@ -699,6 +756,31 @@ public static partial class EndpointsIntervencoes
 
     // Na ficha, o nome do técnico cabe em 45 caracteres.
     internal static string Truncar(string nome) => nome.Length > 45 ? nome[..45] : nome;
+
+    // Peça do pedido: vazia = material sem peça; inválida ou inexistente = 400 e nada se grava. Devolve a ref canónica da peça.
+    private static async Task<(string Ref, IResult? Erro)> ResolverPecaAsync(PedidoMaterial p, IRepositorioPecas pecas, CancellationToken ct)
+    {
+        var pedida = (p.Ref ?? "").Trim();
+        if (pedida == "") return ("", null);
+        if (!RegrasPecas.ReferenciaValida(pedida) || !RegrasPecas.QuantidadeValida(p.Qtt))
+            return ("", PedidoInvalido("Indique uma peça (até 18 caracteres) e uma quantidade positiva, com no máximo 3 casas decimais."));
+        return await pecas.ObterPorCodigoAsync(pedida, ct) is { } peca ? (peca.Ref, null) : ("", PedidoInvalido("Peça inexistente."));
+    }
+
+    // Recusa, bloqueio ou base em baixo ao dar saída não desfazem o material: o resultado é false e o ecrã oferece repetir.
+    private static async Task<bool> TentarSaidaAsync(IRepositorioPecas pecas, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
+    {
+        try { return (await pecas.DarSaidaAsync(materialId, refPeca, qtt, iniciais, ct)).Ok; }
+        catch (RepositorioIndisponivelException) { return false; }
+    }
+
+    // Sem token de cancelamento do pedido: a reposição tem de acabar mesmo que o cliente desista.
+    private static async Task ReporSaidaAsync(IRepositorioPecas pecas, MaterialDto mat, string iniciais, ILogger log)
+    {
+        if (!mat.SaidaDada) return;
+        if (!await TentarSaidaAsync(pecas, mat.Id, mat.Ref, mat.Qtt, iniciais, CancellationToken.None))
+            log.LogError("Não foi possível repor a saída do material {Material} depois de a ficha recusar apagá-lo.", mat.Id);
+    }
 
     private static IResult Conflito(string codigo) => Results.Json(new { erro = codigo }, statusCode: StatusCodes.Status409Conflict);
 
