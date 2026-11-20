@@ -87,11 +87,12 @@ public class PecasApiTests : IDisposable
         public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult(new ResultadoPecasDto(true, [], false));
         public Task<PecaDto?> ObterPorCodigoAsync(string codigo, CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult<PecaDto?>(null);
         public Task<ResultadoMovimento> AbrirConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => throw new NotSupportedException();
-        public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) => throw new NotSupportedException();
+        public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct, string? local = null) => throw new NotSupportedException();
         public Task<ResultadoMovimento> ConfirmarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => throw new NotSupportedException();
         public Task<ResultadoMovimento> CancelarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct) => throw new NotSupportedException();
         public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct) => throw new NotSupportedException();
+        public Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => throw new NotSupportedException();
     }

@@ -14,7 +14,7 @@ public sealed record PecaDto(string Ref, string Design, string Codigo, string Lo
 public sealed record ResultadoPecasDto(bool CampoExiste, IReadOnlyList<PecaDto> Pecas, bool HaMais);
 
 // Repetir a saída de um material cuja ligação à peça não ficou gravada (a saída falhou); sem corpo vale a ref já ligada.
-public sealed record PedidoSaida(string? Ref);
+public sealed record PedidoSaida(string? Ref, string? Local = null);
 
 public static class RegrasPecas
 {
@@ -63,7 +63,8 @@ public interface IRepositorioPecas
     // Dossier 63 da ficha em conferência: bo.emconf=1 (bo, bo2, bo3). Idempotente: se já existe devolve o id.
     Task<ResultadoMovimento> AbrirConferenciaAsync(string fichaId, string iniciais, CancellationToken ct);
     // Linha bi.emconf=1 do material (bi.lobs = materialId, armazém 104); cria o dossier se faltar. Grava também u_matinterv.ref.
-    Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct);
+    // local = texto normalizado do lugar de onde saiu (A-02-1-01), gravado em bi.lobs2 (campo por confirmar na Task 7).
+    Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct, string? local = null);
     // Apaga a linha em conferência e limpa u_matinterv.ref na mesma transação; o dossier mantém-se até validar ou cancelar.
     Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct);
     // Validar: bo.emconf=0 e bi.emconf=0 mais os "toques" que movem o stock. Idempotente.
@@ -76,7 +77,10 @@ public interface IRepositorioPecas
     // Liga a peça ao material sem movimento (a saída falhou): Ref preenchida e SaidaDada = false = "por dar".
     Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct);
 
-    // Junta a Ref ligada e se a saída existe (SaidaDada) aos materiais lidos da ficha.
+    // Lugar gravado na saída em conferência do material (null se não há saída ou não tem lugar).
+    Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct);
+
+    // Junta a Ref ligada, o lugar e se a saída existe (SaidaDada) aos materiais lidos da ficha.
     Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct);
 }
 

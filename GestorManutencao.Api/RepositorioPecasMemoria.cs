@@ -5,7 +5,7 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
 {
     private readonly object _trinco = new();
     private readonly Dictionary<string, PecaDto> _pecas = (pecas ?? Amostra()).ToDictionary(p => p.Ref, StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, (string FichaId, string Ref, decimal Qtt)> _saidas = []; // materialId → linha do dossier
+    private readonly Dictionary<string, (string FichaId, string Ref, decimal Qtt, string? Local)> _saidas = []; // materialId → linha do dossier
     private readonly Dictionary<string, bool> _dossiers = []; // fichaId → em conferência
     private readonly Dictionary<string, string> _ligacoes = []; // materialId → peça por dar (sem saída)
 
@@ -58,7 +58,7 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
         }
     }
 
-    public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
+    public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct, string? local = null)
     {
         lock (_trinco)
         {
@@ -67,7 +67,7 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
             if (_dossiers.TryGetValue(fichaId, out var emConf) && !emConf) return Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroValidada));
             _dossiers[fichaId] = true;
             _ligacoes.Remove(materialId);
-            _saidas[materialId] = (fichaId, _pecas[refPeca.Trim()].Ref, qtt);
+            _saidas[materialId] = (fichaId, _pecas[refPeca.Trim()].Ref, qtt, local);
             return Task.FromResult(ResultadoMovimento.Sucesso(materialId));
         }
     }
@@ -86,8 +86,14 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
     {
         lock (_trinco)
             return Task.FromResult<IReadOnlyList<MaterialDto>>(materiais
-                .Select(m => _saidas.TryGetValue(m.Id, out var s) ? m with { Ref = s.Ref, SaidaDada = true }
+                .Select(m => _saidas.TryGetValue(m.Id, out var s) ? m with { Ref = s.Ref, SaidaDada = true, Local = s.Local }
                     : _ligacoes.TryGetValue(m.Id, out var l) ? m with { Ref = l, SaidaDada = false } : m).ToList());
+    }
+
+    public Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct)
+    {
+        lock (_trinco)
+            return Task.FromResult(_saidas.TryGetValue(materialId, out var s) ? s.Local : null);
     }
 
     public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct)

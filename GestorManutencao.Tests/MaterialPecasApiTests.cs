@@ -216,10 +216,10 @@ public class MaterialPecasApiTests : IDisposable
 
         public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct) => memoria.ListarAsync(texto, maximo, ct);
         public Task<PecaDto?> ObterPorCodigoAsync(string codigo, CancellationToken ct) => memoria.ObterPorCodigoAsync(codigo, ct);
-        public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
+        public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct, string? local = null)
         {
             if (SaidaIndisponivel) throw new RepositorioIndisponivelException();
-            return SaidaFalha ? Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado)) : memoria.DarSaidaAsync(fichaId, materialId, refPeca, qtt, iniciais, ct);
+            return SaidaFalha ? Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado)) : memoria.DarSaidaAsync(fichaId, materialId, refPeca, qtt, iniciais, ct, local);
         }
         public Task<ResultadoMovimento> AbrirConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => memoria.AbrirConferenciaAsync(fichaId, iniciais, ct);
         public Task<ResultadoMovimento> ConfirmarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct) => memoria.ConfirmarConferenciaAsync(fichaId, iniciais, ct);
@@ -232,6 +232,7 @@ public class MaterialPecasApiTests : IDisposable
             if (FalharSaidaAposAnular) SaidaFalha = true;
             return r;
         }
+        public Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct) => memoria.LugarDaSaidaAsync(materialId, ct);
         public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => memoria.LigarPecaAsync(stampMaterial, refPeca, usrinis, ct);
         public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) =>
             EnriquecerIndisponivel ? throw new RepositorioIndisponivelException() : memoria.EnriquecerMateriaisAsync(materiais, ct);

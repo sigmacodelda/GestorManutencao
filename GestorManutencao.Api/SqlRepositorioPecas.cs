@@ -109,6 +109,13 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return _emconfExiste;
     }
 
+    // 0 = o PHC não tem bi.lobs2; -1 = varchar(max). Guarda o lugar de onde saiu a peça (pressuposto por confirmar na Task 7).
+    private static async Task<int> Lobs2TamanhoAsync(SqlConnection conn, CancellationToken ct, SqlTransaction? tx = null)
+    {
+        await using var cmd = Cmd(conn, tx, "SELECT ISNULL(COL_LENGTH('bi', 'lobs2'), 0)");
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
+    }
+
     private static string Colunas(bool emconf) => $"""
         LTRIM(RTRIM(s.ref)) AS Ref, LTRIM(RTRIM(s.design)) AS Design, LTRIM(RTRIM(s.codigo)) AS Codigo,
         LTRIM(RTRIM(s.local)) AS LocalArtigo,
@@ -215,7 +222,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         }
     });
 
-    public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) => Executar(async conn =>
+    public Task<ResultadoMovimento> DarSaidaAsync(string fichaId, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct, string? local = null) => Executar(async conn =>
     {
         if (!RegrasPecas.ReferenciaValida(refPeca) || !RegrasPecas.QuantidadeValida(qtt)) return ResultadoMovimento.Falha("Indique uma peça e uma quantidade positiva, com no máximo 3 casas decimais.");
         refPeca = refPeca.Trim();
@@ -232,13 +239,19 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
             await using var lobs = Cmd(conn, tx, "SELECT ISNULL(COL_LENGTH('bi', 'lobs'), 0)");
             if ((int)(await lobs.ExecuteScalarAsync(ct))! < 25) throw new InvalidOperationException("A coluna bi.lobs não comporta o stamp do material (25 caracteres).");
 
+            if (local is not null)
+            {
+                var tamanho = await Lobs2TamanhoAsync(conn, ct, tx);
+                if (tamanho == 0 || (tamanho > 0 && tamanho < local.Length)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("O PHC não tem o campo bi.lobs2 com espaço para o lugar da saída."); }
+            }
+
             await using (var m = Cmd(conn, tx, "SELECT COUNT(*) FROM u_matinterv WITH (NOLOCK) WHERE u_matintervstamp = @m AND u_fichaintstamp = @ficha", ("@m", materialId), ("@ficha", StampFicha(fichaId))))
                 if ((int)(await m.ExecuteScalarAsync(ct))! == 0) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("O material já não existe."); }
 
             var dossier = await GarantirDossierAsync(conn, tx, fichaId, iniciais, ct);
             if (dossier is null) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemFicha); }
             if (dossier is false) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroValidada); }
-            await InserirLinhaAsync(conn, tx, StampFicha(fichaId), RegrasPecas.NdosSaida, refPeca, qtt, materialId, iniciais, ct);
+            await InserirLinhaAsync(conn, tx, StampFicha(fichaId), RegrasPecas.NdosSaida, refPeca, qtt, materialId, local, iniciais, ct);
 
             await using var liga = Cmd(conn, tx, $"UPDATE u_matinterv SET ref = @ref, usrinis = @iniciais, usrdata = {Hoje}, usrhora = {Hora} WHERE u_matintervstamp = @m",
                 ("@ref", refPeca), ("@iniciais", iniciais), ("@m", materialId));
@@ -383,21 +396,33 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     });
 
+    public Task<string?> LugarDaSaidaAsync(string materialId, CancellationToken ct) => Executar<string?>(async conn =>
+    {
+        if (await Lobs2TamanhoAsync(conn, ct) == 0) return null;
+        await using var cmd = Cmd(conn, null, "SELECT TOP 1 LTRIM(RTRIM(CAST(lobs2 AS varchar(60)))) FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND LTRIM(RTRIM(lobs)) = @m",
+            ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId));
+        return await cmd.ExecuteScalarAsync(ct) is string t && t != "" ? t : null;
+    });
+
     public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => Executar<IReadOnlyList<MaterialDto>>(async conn =>
     {
         if (materiais.Count == 0) return materiais;
         var ids = materiais.Select(m => m.Id).ToList();
         var nomes = string.Join(",", ids.Select((_, i) => $"@m{i}"));
+        var lugar = await Lobs2TamanhoAsync(conn, ct) != 0
+            ? "ISNULL((SELECT TOP 1 LTRIM(RTRIM(CAST(i.lobs2 AS varchar(60)))) FROM bi i WITH (NOLOCK) WHERE i.ndos = @ndos AND LTRIM(RTRIM(i.lobs)) = LTRIM(RTRIM(mi.u_matintervstamp))), '')"
+            : "''";
         await using var cmd = Cmd(conn, null, $"""
             SELECT LTRIM(RTRIM(mi.u_matintervstamp)), LTRIM(RTRIM(ISNULL(mi.ref, ''))),
-                   CASE WHEN EXISTS (SELECT 1 FROM bi i WITH (NOLOCK) WHERE i.ndos = @ndos AND LTRIM(RTRIM(i.lobs)) = LTRIM(RTRIM(mi.u_matintervstamp))) THEN 1 ELSE 0 END
+                   CASE WHEN EXISTS (SELECT 1 FROM bi i WITH (NOLOCK) WHERE i.ndos = @ndos AND LTRIM(RTRIM(i.lobs)) = LTRIM(RTRIM(mi.u_matintervstamp))) THEN 1 ELSE 0 END,
+                   {lugar}
             FROM u_matinterv mi WITH (NOLOCK) WHERE mi.u_matintervstamp IN ({nomes})
             """, ("@ndos", RegrasPecas.NdosSaida));
         for (var i = 0; i < ids.Count; i++) Parametro(cmd, $"@m{i}", ids[i]);
-        var porId = new Dictionary<string, (string Ref, bool Saida)>();
+        var porId = new Dictionary<string, (string Ref, bool Saida, string? Local)>();
         await using (var r = await cmd.ExecuteReaderAsync(ct))
-            while (await r.ReadAsync(ct)) porId[r.GetString(0)] = (r.GetString(1), r.GetInt32(2) == 1);
-        return materiais.Select(m => porId.TryGetValue(m.Id, out var x) ? m with { Ref = x.Ref, SaidaDada = x.Saida } : m).ToList();
+            while (await r.ReadAsync(ct)) porId[r.GetString(0)] = (r.GetString(1), r.GetInt32(2) == 1, r.GetString(3) is { Length: > 0 } l ? l : null);
+        return materiais.Select(m => porId.TryGetValue(m.Id, out var x) ? m with { Ref = x.Ref, SaidaDada = x.Saida, Local = x.Local } : m).ToList();
     });
 
     // ---------- Dossier e linhas (padrão do TransferenciasService da LandeiroMaui)
@@ -431,7 +456,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
 
     // Linha em conferência (emconf = 1, sem toques: não move stock). lobs = stamp do material. Devolve o bistamp. RAISERROR classe 16 se a referência não existir.
     private static async Task<string> InserirLinhaAsync(SqlConnection conn, SqlTransaction tx, string bostamp, int ndos, string refPeca,
-        decimal qtt, string lobs, string iniciais, CancellationToken ct)
+        decimal qtt, string lobs, string? local, string iniciais, CancellationToken ct)
     {
         var bistamp = Guid.NewGuid().ToString("N")[..25];
         await using var cmd = Cmd(conn, tx, $"""
@@ -448,14 +473,15 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
                 RETURN;
             END
             INSERT INTO bi (bistamp, emconf, ref, design, qtt, unidade, edebito, debito, armazem, iva, tabiva, rdata, lordem, bostamp, obranome,
-                            dataobra, obrano, ndos, nmdos, lote, usalote, binum1, lobs, epcusto, pcusto, ttdeb, ettdeb,
+                            dataobra, obrano, ndos, nmdos, lote, usalote, binum1, lobs,{(local is null ? "" : " lobs2,")} epcusto, pcusto, ttdeb, ettdeb,
                             ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
             VALUES (@bistamp, 1, @ref, @design, @qtt, ISNULL(NULLIF(@unidade, ''), 'UN'), @edebito, @debito, @armazem, 0, 0, GETDATE(), @lordem, @bostamp, '',
-                    GETDATE(), @obrano, @ndos, @nmdos, '', 0, @ordem, @lobs, @epcusto, @pcusto, @qtt * @debito, @qtt * @edebito,
+                    GETDATE(), @obrano, @ndos, @nmdos, '', 0, @ordem, @lobs,{(local is null ? "" : " @lobs2,")} @epcusto, @pcusto, @qtt * @debito, @qtt * @edebito,
                     @iniciais, {Hoje}, {Hora}, @iniciais, {Hoje}, {Hora});
             INSERT INTO bi2 (bi2stamp) VALUES (@bistamp);
             """, ("@bistamp", bistamp), ("@bostamp", bostamp), ("@ndos", ndos), ("@ref", refPeca), ("@qtt", qtt),
                  ("@lobs", lobs), ("@iniciais", iniciais), ("@armazem", RegrasPecas.Armazem));
+        if (local is not null) Parametro(cmd, "@lobs2", local);
         await cmd.ExecuteNonQueryAsync(ct);
         return bistamp;
     }
