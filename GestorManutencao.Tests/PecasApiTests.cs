@@ -143,7 +143,8 @@ public class PecasApiTests : IDisposable
         public Task<IReadOnlyList<EntradaPecaDto>> EntradasDeHojeAsync(CancellationToken ct) => indisponivel ? throw Indisp() : Task.FromResult<IReadOnlyList<EntradaPecaDto>>([]);
         public Task<ResultadoMovimento> AnularEntradaAsync(string id, CancellationToken ct) => Task.FromResult(anular!());
         public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) => throw new NotSupportedException();
-        public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct) => throw new NotSupportedException();
+        public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => throw new NotSupportedException();
     }
 

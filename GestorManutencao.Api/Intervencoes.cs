@@ -416,40 +416,66 @@ public static partial class EndpointsIntervencoes
         g.MapGet("/intervencoes/{id}/materiais", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>
             ComoTecnico(eu, utilizadores, ct, async t => await repo.ListarMateriaisAsync(id, t, ct) is { } m ? Results.Ok(await pecas.EnriquecerMateriaisAsync(m, ct)) : Results.NotFound()));
 
-        g.MapPost("/intervencoes/{id}/materiais", (string id, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>
+        // Ordem comum a POST/PUT/DELETE/saída: 1) acesso e PodeEditar da ficha, sem efeitos; 2) peça; 3) depois do primeiro efeito, CancellationToken.None
+        // e qualquer exceção apanhada com log, para o stock e o material não ficarem a meio.
+        g.MapPost("/intervencoes/{id}/materiais", (string id, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, ILogger<Program> log, CancellationToken ct) =>
             RegrasIntervencao.ValidarMaterial(p.Design, p.Qtt, p.Epv) is not null
                 ? Task.FromResult(Results.BadRequest())
                 : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) =>
                 {
+                    if (await repo.ObterDetalheAsync(id, t, sup, ct) is not { } ficha) return Results.NotFound();
+                    if (!ficha.PodeEditar) return Resposta<MaterialDto>((ResultadoIntervencao.Conflito, null));
                     var (refPeca, erro) = await ResolverPecaAsync(p, pecas, ct);
                     if (erro is not null) return erro;
                     var (res, mat) = await repo.AdicionarMaterialAsync(id, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, ct, sup);
                     if (res == ResultadoIntervencao.Ok && mat is not null && refPeca != "")
-                        mat = mat with { Ref = refPeca, SaidaDada = await TentarSaidaAsync(pecas, mat.Id, refPeca, mat.Qtt, t.Codigo, ct) };
+                        mat = mat with { Ref = refPeca, SaidaDada = (await TentarSaidaAsync(pecas, mat.Id, refPeca, mat.Qtt, t.Codigo, log)).Ok };
                     return Resposta((res, mat));
                 }));
 
-        g.MapPut("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>
+        g.MapPut("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, PedidoMaterial p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, ILogger<Program> log, CancellationToken ct) =>
             RegrasIntervencao.ValidarMaterial(p.Design, p.Qtt, p.Epv) is not null
                 ? Task.FromResult(Results.BadRequest())
                 : ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) =>
                 {
+                    if (await repo.ObterDetalheAsync(id, t, sup, ct) is not { } ficha) return Results.NotFound();
+                    if (!ficha.PodeEditar) return Resposta<MaterialDto>((ResultadoIntervencao.Conflito, null));
+                    if (ficha.Materiais.FirstOrDefault(x => x.Id == materialId) is not { } lido) return Results.NotFound();
                     var (refPeca, erro) = await ResolverPecaAsync(p, pecas, ct);
                     if (erro is not null) return erro;
-                    // Só mexe na saída depois de a ficha aceitar a edição (acesso e estado).
-                    var (res, mat) = await repo.EditarMaterialAsync(id, materialId, p.Design!.Trim(), p.Qtt!.Value, p.Epv ?? 0, t, sup, ct);
-                    if (res != ResultadoIntervencao.Ok || mat is null) return Resposta((res, mat));
-                    // O material já está gravado: uma falha ao mexer no stock nunca o desfaz (SaidaDada = false e o ecrã oferece repetir).
-                    var anulada = false;
-                    try { anulada = (await pecas.AnularSaidaAsync(materialId, ct)).Ok; }
-                    catch (RepositorioIndisponivelException) { }
-                    if (refPeca != "")
-                        mat = mat with { Ref = refPeca, SaidaDada = anulada && await TentarSaidaAsync(pecas, materialId, refPeca, mat.Qtt, t.Codigo, ct) };
-                    return Resposta((res, mat));
+                    var antigo = (await pecas.EnriquecerMateriaisAsync([lido], ct))[0];
+                    var qtt = p.Qtt!.Value;
+
+                    // A saída antiga só se anula se a ligação ou a quantidade mudam; se a anulação falhar o material não se edita.
+                    var anular = antigo.Ref != "" && (antigo.Ref != refPeca || (antigo.SaidaDada && antigo.Qtt != qtt));
+                    if (anular)
+                    {
+                        var (ok, motivo) = await AnularSaidaSeguraAsync(pecas, materialId, t.Codigo, log);
+                        if (!ok) return Results.Json(new { erro = motivo }, statusCode: StatusCodes.Status409Conflict);
+                    }
+                    var tk = anular ? CancellationToken.None : ct;
+                    (ResultadoIntervencao Resultado, MaterialDto? Material) edicao;
+                    try { edicao = await repo.EditarMaterialAsync(id, materialId, p.Design!.Trim(), qtt, p.Epv ?? 0, t, sup, tk); }
+                    catch (Exception ex)
+                    {
+                        log.LogError(ex, "Falha ao editar o material {Material}.", materialId);
+                        if (anular) await ReporSaidaAsync(pecas, antigo, t.Codigo, log);
+                        throw;
+                    }
+                    var (res, mat) = edicao;
+                    if (res != ResultadoIntervencao.Ok || mat is null)
+                    {
+                        if (anular) await ReporSaidaAsync(pecas, antigo, t.Codigo, log);
+                        return Resposta((res, mat));
+                    }
+                    // O material já está gravado: uma falha ao mexer no stock nunca o desfaz (SaidaDada = false, a ligação fica e o ecrã oferece repetir).
+                    if (refPeca == "") return Resposta((res, mat with { Ref = "", SaidaDada = false }));
+                    if (antigo.SaidaDada && !anular) return Resposta((res, mat with { Ref = antigo.Ref, SaidaDada = true }));
+                    return Resposta((res, mat with { Ref = refPeca, SaidaDada = (await TentarSaidaAsync(pecas, materialId, refPeca, qtt, t.Codigo, log)).Ok }));
                 }));
 
-        // Repete a saída que falhou. Mesmo acesso de edição da ficha que o POST do material (PodeEditar do detalhe, já calculado para quem pede).
-        g.MapPost("/intervencoes/{id}/materiais/{materialId}/saida", (string id, string materialId, PedidoSaida? p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>
+        // Repete a saída que falhou. Sem Ref no corpo vale a peça já ligada ao material; a do corpo, se vier, prevalece.
+        g.MapPost("/intervencoes/{id}/materiais/{materialId}/saida", (string id, string materialId, PedidoSaida? p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, ILogger<Program> log, CancellationToken ct) =>
             ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) =>
             {
                 if (await repo.ObterDetalheAsync(id, t, sup, ct) is not { } ficha) return Results.NotFound();
@@ -457,35 +483,41 @@ public static partial class EndpointsIntervencoes
                 if (ficha.Materiais.FirstOrDefault(x => x.Id == materialId) is not { } mat) return Results.NotFound();
                 var m = (await pecas.EnriquecerMateriaisAsync([mat], ct))[0];
                 if (m.SaidaDada) return Results.Json(new { erro = "Já foi dada saída desta peça." }, statusCode: StatusCodes.Status409Conflict);
-                var (refPeca, erro) = await ResolverPecaAsync(new PedidoMaterial(m.Design, m.Qtt, m.Epv, m.Ref != "" ? m.Ref : p?.Ref), pecas, ct);
+                var doCorpo = (p?.Ref ?? "").Trim();
+                var (refPeca, erro) = await ResolverPecaAsync(new PedidoMaterial(m.Design, m.Qtt, m.Epv, doCorpo != "" ? doCorpo : m.Ref), pecas, ct);
                 if (erro is not null) return erro;
                 if (refPeca == "") return PedidoInvalido("Indique a peça a que o material corresponde.");
-                var r = await pecas.DarSaidaAsync(materialId, refPeca, m.Qtt, t.Codigo, ct);
-                return r.Ok
+                var (ok, motivo) = await TentarSaidaAsync(pecas, materialId, refPeca, m.Qtt, t.Codigo, log);
+                return ok
                     ? Results.Ok(m with { Ref = refPeca, SaidaDada = true })
-                    : Results.Json(new { erro = r.Erro }, statusCode: StatusCodes.Status409Conflict);
+                    : Results.Json(new { erro = motivo }, statusCode: StatusCodes.Status409Conflict);
             }));
 
         g.MapDelete("/intervencoes/{id}/materiais/{materialId}", (string id, string materialId, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, ILogger<Program> log, CancellationToken ct) =>
             ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, sup) =>
             {
-                // Lê o material antes de mexer no stock (o supervisor lê pelo detalhe, porque a lista só mostra as fichas do técnico).
-                var materiais = sup ? (await repo.ObterDetalheAsync(id, t, true, ct))?.Materiais : await repo.ListarMateriaisAsync(id, t, ct);
-                if (materiais?.FirstOrDefault(x => x.Id == materialId) is not { } lido) return Results.NotFound();
+                if (await repo.ObterDetalheAsync(id, t, sup, ct) is not { } ficha) return Results.NotFound();
+                if (ficha.Materiais.FirstOrDefault(x => x.Id == materialId) is not { } lido) return Results.NotFound();
+                if (!ficha.PodeEditar) return Resposta<object>((ResultadoIntervencao.Conflito, null));
                 var mat = (await pecas.EnriquecerMateriaisAsync([lido], ct))[0];
 
                 // A saída anula-se antes de apagar; se a anulação falhar nada se apaga, e se o apagar falhar a seguir repõe-se a saída.
                 if (mat.SaidaDada)
                 {
-                    var anul = await pecas.AnularSaidaAsync(materialId, ct);
-                    if (!anul.Ok) return Results.Json(new { erro = anul.Erro }, statusCode: StatusCodes.Status409Conflict);
+                    var (ok, motivo) = await AnularSaidaSeguraAsync(pecas, materialId, t.Codigo, log);
+                    if (!ok) return Results.Json(new { erro = motivo }, statusCode: StatusCodes.Status409Conflict);
                 }
+                var tk = mat.SaidaDada ? CancellationToken.None : ct;
                 ResultadoIntervencao r;
-                try { r = await repo.ApagarMaterialAsync(id, materialId, t, ct, sup); }
-                catch (RepositorioIndisponivelException) { await ReporSaidaAsync(pecas, mat, t.Codigo, log); throw; }
+                try { r = await repo.ApagarMaterialAsync(id, materialId, t, tk, sup); }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Falha ao apagar o material {Material}.", materialId);
+                    if (!await ReporSaidaAsync(pecas, mat, t.Codigo, log)) return StockDesfasado();
+                    throw;
+                }
                 if (r == ResultadoIntervencao.Ok) return Results.NoContent();
-                await ReporSaidaAsync(pecas, mat, t.Codigo, log);
-                return Resposta<object>((r, null));
+                return await ReporSaidaAsync(pecas, mat, t.Codigo, log) ? Resposta<object>((r, null)) : StockDesfasado();
             }));
 
         // Ficha manual (operador e supervisor com número de técnico), ficha completa, edição, cancelamento e fecho das fichas antigas.
@@ -767,20 +799,66 @@ public static partial class EndpointsIntervencoes
         return await pecas.ObterPorCodigoAsync(pedida, ct) is { } peca ? (peca.Ref, null) : ("", PedidoInvalido("Peça inexistente."));
     }
 
-    // Recusa, bloqueio ou base em baixo ao dar saída não desfazem o material: o resultado é false e o ecrã oferece repetir.
-    private static async Task<bool> TentarSaidaAsync(IRepositorioPecas pecas, string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
+    // Dá a saída sem token do pedido (o material já está gravado). Qualquer falha devolve o motivo e liga a peça ao material
+    // (u_matinterv.ref), para que Ref preenchida e SaidaDada = false signifique "peça por dar" depois de recarregar a lista.
+    private static async Task<(bool Ok, string? Erro)> TentarSaidaAsync(IRepositorioPecas pecas, string materialId, string refPeca, decimal qtt, string iniciais, ILogger log)
     {
-        try { return (await pecas.DarSaidaAsync(materialId, refPeca, qtt, iniciais, ct)).Ok; }
-        catch (RepositorioIndisponivelException) { return false; }
+        string erro;
+        try
+        {
+            var r = await pecas.DarSaidaAsync(materialId, refPeca, qtt, iniciais, CancellationToken.None);
+            if (r.Ok) return (true, null);
+            erro = r.Erro ?? "Não foi possível dar saída da peça.";
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Falha ao dar saída do material {Material}.", materialId);
+            erro = "Não foi possível dar saída da peça agora; tente repetir.";
+        }
+        try { await pecas.LigarPecaAsync(materialId, refPeca, iniciais, CancellationToken.None); }
+        catch (Exception ex) { log.LogError(ex, "Não foi possível ligar a peça ao material {Material}.", materialId); }
+        return (false, erro);
     }
 
-    // Sem token de cancelamento do pedido: a reposição tem de acabar mesmo que o cliente desista.
-    private static async Task ReporSaidaAsync(IRepositorioPecas pecas, MaterialDto mat, string iniciais, ILogger log)
+    private static async Task<(bool Ok, string? Erro)> AnularSaidaSeguraAsync(IRepositorioPecas pecas, string materialId, string iniciais, ILogger log)
     {
-        if (!mat.SaidaDada) return;
-        if (!await TentarSaidaAsync(pecas, mat.Id, mat.Ref, mat.Qtt, iniciais, CancellationToken.None))
-            log.LogError("Não foi possível repor a saída do material {Material} depois de a ficha recusar apagá-lo.", mat.Id);
+        try
+        {
+            var r = await pecas.AnularSaidaAsync(materialId, iniciais, CancellationToken.None);
+            return r.Ok ? (true, null) : (false, r.Erro ?? "Não foi possível anular a saída da peça.");
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Falha ao anular a saída do material {Material}.", materialId);
+            return (false, "Não foi possível anular a saída da peça agora; nada foi alterado.");
+        }
     }
+
+    // Repõe o que a anulação desfez (a saída, ou só a ligação quando estava por dar). Devolve false se não conseguiu.
+    private static async Task<bool> ReporSaidaAsync(IRepositorioPecas pecas, MaterialDto mat, string iniciais, ILogger log)
+    {
+        try
+        {
+            if (mat.SaidaDada)
+            {
+                var r = await pecas.DarSaidaAsync(mat.Id, mat.Ref, mat.Qtt, iniciais, CancellationToken.None);
+                if (r.Ok) return true;
+                log.LogError("Não foi possível repor a saída do material {Material}: {Erro}", mat.Id, r.Erro);
+                return false;
+            }
+            if (mat.Ref != "") await pecas.LigarPecaAsync(mat.Id, mat.Ref, iniciais, CancellationToken.None);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Não foi possível repor a saída do material {Material}.", mat.Id);
+            return false;
+        }
+    }
+
+    private static IResult StockDesfasado() => Results.Json(
+        new { erro = "A ficha recusou a operação e não foi possível repor a saída da peça: o stock pode estar desfasado. Avise o supervisor." },
+        statusCode: StatusCodes.Status409Conflict);
 
     private static IResult Conflito(string codigo) => Results.Json(new { erro = codigo }, statusCode: StatusCodes.Status409Conflict);
 

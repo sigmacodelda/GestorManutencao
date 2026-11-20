@@ -243,17 +243,38 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         }
     });
 
-    public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct) => Executar(async conn =>
+    // Anula a linha e limpa a ligação à peça na mesma transação e sob o mesmo applock.
+    public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct) => Executar(async conn =>
     {
-        await using var cmd = Cmd(conn, null, "SELECT bistamp FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND LTRIM(RTRIM(lobs)) = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId));
-        var r = await cmd.ExecuteScalarAsync(ct) is string bistamp ? await ApagarLinhaAsync(bistamp, RegrasPecas.NdosSaida, ct) : ResultadoMovimento.Sucesso(materialId);
-        // Sem saída a ligação à peça deixa de valer (senão a lista mostraria uma saída por dar).
-        if (r.Ok)
+        iniciais = string.IsNullOrWhiteSpace(iniciais) ? "XX" : iniciais.Trim();
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(ct);
+        try
         {
-            await using var limpa = Cmd(conn, null, "UPDATE u_matinterv SET ref = '' WHERE u_matintervstamp = @m AND ref <> ''", ("@m", materialId));
+            if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
+            await using (var proc = Cmd(conn, tx, "SELECT bistamp FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND LTRIM(RTRIM(lobs)) = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
+                if (await proc.ExecuteScalarAsync(ct) is string bistamp) await ApagarNaTransacaoAsync(conn, tx, bistamp, RegrasPecas.NdosSaida, ct);
+            // Sem saída a ligação à peça deixa de valer (senão a lista mostraria uma saída por dar).
+            await using var limpa = Cmd(conn, tx, $"UPDATE u_matinterv SET ref = '', usrinis = @iniciais, usrdata = {Hoje}, usrhora = {Hora} WHERE u_matintervstamp = @m AND ref <> ''",
+                ("@iniciais", iniciais), ("@m", materialId));
             await limpa.ExecuteNonQueryAsync(ct);
+            await tx.CommitAsync(ct);
+            return ResultadoMovimento.Sucesso(materialId);
         }
-        return r;
+        catch (Exception ex) when (ErroDeNegocio(ex))
+        {
+            await RollbackSeguroAsync(tx);
+            return Falhou(ex);
+        }
+    });
+
+    // Grava só a intenção "peça por dar" (a saída falhou): a Ref fica ligada ao material, sem movimento.
+    public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => Executar(async conn =>
+    {
+        if (!RegrasPecas.ReferenciaValida(refPeca)) return false;
+        usrinis = string.IsNullOrWhiteSpace(usrinis) ? "XX" : usrinis.Trim();
+        await using var cmd = Cmd(conn, null, $"UPDATE u_matinterv SET ref = @ref, usrinis = @iniciais, usrdata = {Hoje}, usrhora = {Hora} WHERE u_matintervstamp = @m",
+            ("@ref", refPeca.Trim()), ("@iniciais", usrinis), ("@m", stampMaterial));
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
     });
 
     public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => Executar<IReadOnlyList<MaterialDto>>(async conn =>
@@ -338,7 +359,21 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return bistamp;
     }
 
-    // Apaga a linha (e a bi2) e, se o dossier ficar sem linhas, o dossier (bo/bo2/bo3). Só linhas do ndos indicado.
+    // Apaga a linha (e a bi2) e, se o dossier ficar sem linhas, o dossier (bo/bo2/bo3). Só linhas do ndos indicado. false = a linha não existe.
+    private static async Task<bool> ApagarNaTransacaoAsync(SqlConnection conn, SqlTransaction tx, string bistamp, int ndos, CancellationToken ct)
+    {
+        bistamp = bistamp.Trim();
+        await using var proc = Cmd(conn, tx, "SELECT bostamp FROM bi WITH (NOLOCK) WHERE bistamp = @b AND ndos = @ndos", ("@b", bistamp), ("@ndos", ndos));
+        if (await proc.ExecuteScalarAsync(ct) is not string bostamp) return false;
+        await using (var del = Cmd(conn, tx, "DELETE FROM bi2 WHERE bi2stamp = @b; DELETE FROM bi WHERE bistamp = @b;", ("@b", bistamp)))
+            await del.ExecuteNonQueryAsync(ct);
+        await using var restam = Cmd(conn, tx, "SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE bostamp = @s", ("@s", bostamp));
+        if ((int)(await restam.ExecuteScalarAsync(ct))! == 0)
+            await using (var d = Cmd(conn, tx, "DELETE FROM bo3 WHERE bo3stamp = @s; DELETE FROM bo2 WHERE bo2stamp = @s; DELETE FROM bo WHERE bostamp = @s;", ("@s", bostamp)))
+                await d.ExecuteNonQueryAsync(ct);
+        return true;
+    }
+
     private Task<ResultadoMovimento> ApagarLinhaAsync(string bistamp, int ndos, CancellationToken ct) => Executar(async conn =>
     {
         bistamp = bistamp.Trim();
@@ -346,14 +381,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         try
         {
             if (!await BloquearAsync(conn, tx, ndos, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
-            await using var proc = Cmd(conn, tx, "SELECT bostamp FROM bi WITH (NOLOCK) WHERE bistamp = @b AND ndos = @ndos", ("@b", bistamp), ("@ndos", ndos));
-            if (await proc.ExecuteScalarAsync(ct) is not string bostamp) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroLinhaInexistente); }
-            await using (var del = Cmd(conn, tx, "DELETE FROM bi2 WHERE bi2stamp = @b; DELETE FROM bi WHERE bistamp = @b;", ("@b", bistamp)))
-                await del.ExecuteNonQueryAsync(ct);
-            await using var restam = Cmd(conn, tx, "SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE bostamp = @s", ("@s", bostamp));
-            if ((int)(await restam.ExecuteScalarAsync(ct))! == 0)
-                await using (var d = Cmd(conn, tx, "DELETE FROM bo3 WHERE bo3stamp = @s; DELETE FROM bo2 WHERE bo2stamp = @s; DELETE FROM bo WHERE bostamp = @s;", ("@s", bostamp)))
-                    await d.ExecuteNonQueryAsync(ct);
+            if (!await ApagarNaTransacaoAsync(conn, tx, bistamp, ndos, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroLinhaInexistente); }
             await tx.CommitAsync(ct);
             return ResultadoMovimento.Sucesso(bistamp);
         }

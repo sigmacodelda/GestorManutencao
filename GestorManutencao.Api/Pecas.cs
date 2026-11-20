@@ -67,7 +67,11 @@ public interface IRepositorioPecas
 
     // Saída: dossier 63 da ficha, linha por material (bi.lobs = materialId). Grava também u_matinterv.ref.
     Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct);
-    Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct);
+    // Anular desfaz a linha e limpa u_matinterv.ref na mesma transação.
+    Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct);
+
+    // Liga a peça ao material sem movimento (a saída falhou): Ref preenchida e SaidaDada = false = "por dar".
+    Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct);
 
     // Junta a Ref ligada e se a saída existe (SaidaDada) aos materiais lidos da ficha.
     Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct);

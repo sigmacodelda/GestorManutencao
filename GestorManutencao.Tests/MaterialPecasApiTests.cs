@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Reflection;
 using GestorManutencao.Api;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -208,31 +209,81 @@ public class MaterialPecasApiTests : IDisposable
         Assert.Equal(10, await StockAsync(c));
     }
 
-    // Repositório de peças que falha a dar saída (recusa ou base em baixo); o resto é o de memória.
-    private sealed class SaidaQueFalha(RepositorioPecasMemoria memoria, bool indisponivel) : IRepositorioPecas
+    // Repositório de peças com falhas ligáveis a meio do teste; o resto é o de memória.
+    private sealed class PecasInstaveis(RepositorioPecasMemoria memoria) : IRepositorioPecas
     {
+        public bool SaidaFalha, SaidaIndisponivel, AnularFalha, EnriquecerIndisponivel, FalharSaidaAposAnular;
+
         public Task<ResultadoPecasDto> ListarAsync(string? texto, int maximo, CancellationToken ct) => memoria.ListarAsync(texto, maximo, ct);
         public Task<PecaDto?> ObterPorCodigoAsync(string codigo, CancellationToken ct) => memoria.ObterPorCodigoAsync(codigo, ct);
         public Task<ResultadoMovimento> DarEntradaAsync(string refPeca, decimal qtt, string iniciais, CancellationToken ct) => memoria.DarEntradaAsync(refPeca, qtt, iniciais, ct);
         public Task<IReadOnlyList<EntradaPecaDto>> EntradasDeHojeAsync(CancellationToken ct) => memoria.EntradasDeHojeAsync(ct);
         public Task<ResultadoMovimento> AnularEntradaAsync(string id, CancellationToken ct) => memoria.AnularEntradaAsync(id, ct);
-        public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct) =>
-            indisponivel ? throw new RepositorioIndisponivelException() : Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado));
-        public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct) => memoria.AnularSaidaAsync(materialId, ct);
-        public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => memoria.EnriquecerMateriaisAsync(materiais, ct);
+        public Task<ResultadoMovimento> DarSaidaAsync(string materialId, string refPeca, decimal qtt, string iniciais, CancellationToken ct)
+        {
+            if (SaidaIndisponivel) throw new RepositorioIndisponivelException();
+            return SaidaFalha ? Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado)) : memoria.DarSaidaAsync(materialId, refPeca, qtt, iniciais, ct);
+        }
+        public async Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct)
+        {
+            if (AnularFalha) return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado);
+            var r = await memoria.AnularSaidaAsync(materialId, iniciais, ct);
+            if (FalharSaidaAposAnular) SaidaFalha = true;
+            return r;
+        }
+        public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => memoria.LigarPecaAsync(stampMaterial, refPeca, usrinis, ct);
+        public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) =>
+            EnriquecerIndisponivel ? throw new RepositorioIndisponivelException() : memoria.EnriquecerMateriaisAsync(materiais, ct);
     }
+
+    public sealed class FlagsApagar { public bool Indisponivel; }
+
+    // Repositório de fichas que só falha o apagar do material (indisponível); o resto delega no de memória.
+    public class ProxyIntervencoes : DispatchProxy
+    {
+        public IRepositorioIntervencoes Real = null!;
+        public FlagsApagar Flags = null!;
+
+        protected override object? Invoke(MethodInfo? metodo, object?[]? args)
+        {
+            if (metodo!.Name == nameof(IRepositorioIntervencoes.ApagarMaterialAsync) && Flags.Indisponivel) throw new RepositorioIndisponivelException();
+            try { return metodo.Invoke(Real, args); }
+            catch (TargetInvocationException e) { throw e.InnerException!; }
+        }
+    }
+
+    private async Task<HttpClient> ComoAnaCom(PecasInstaveis pecas, FlagsApagar? flags = null)
+    {
+        var f = _fabrica.WithWebHostBuilder(b => b.ConfigureServices(s =>
+        {
+            s.Replace(ServiceDescriptor.Singleton<IRepositorioPecas>(pecas));
+            if (flags is not null)
+                s.Replace(ServiceDescriptor.Singleton<IRepositorioIntervencoes>(sp =>
+                {
+                    var proxy = DispatchProxy.Create<IRepositorioIntervencoes, ProxyIntervencoes>();
+                    var p = (ProxyIntervencoes)(object)proxy;
+                    p.Real = new RepositorioIntervencoesMemoria(sp.GetRequiredService<TimeProvider>(), new ConfigManutencao(AvancaOrdem: true, ExtExigeDoc: false));
+                    p.Flags = flags;
+                    return proxy;
+                }));
+        }));
+        var c = f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var login = await (await c.PostAsJsonAsync("/auth/login", new PedidoLogin("482913"))).Content.ReadFromJsonAsync<RespostaLogin>();
+        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync("/intervencoes/F1/iniciar", null)).StatusCode);
+        return c;
+    }
+
+    private static async Task<List<MaterialDto>> ListaAsync(HttpClient c) =>
+        (await c.GetFromJsonAsync<List<MaterialDto>>("/intervencoes/F1/materiais"))!;
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Falha_ao_dar_saida_nao_desfaz_o_material_e_diz_saida_por_dar(bool indisponivel)
     {
-        var memoria = new RepositorioPecasMemoria();
-        var f = _fabrica.WithWebHostBuilder(b => b.ConfigureServices(s => s.Replace(ServiceDescriptor.Singleton<IRepositorioPecas>(new SaidaQueFalha(memoria, indisponivel)))));
-        var c = f.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var login = await (await c.PostAsJsonAsync("/auth/login", new PedidoLogin("482913"))).Content.ReadFromJsonAsync<RespostaLogin>();
-        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
-        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync("/intervencoes/F1/iniciar", null)).StatusCode);
+        var pecas = new PecasInstaveis(new RepositorioPecasMemoria()) { SaidaFalha = !indisponivel, SaidaIndisponivel = indisponivel };
+        var c = await ComoAnaCom(pecas);
 
         var r = await c.PostAsJsonAsync("/intervencoes/F1/materiais", new PedidoMaterial("Parafuso M8", 4, 0.12m, "P001"));
 
@@ -240,7 +291,162 @@ public class MaterialPecasApiTests : IDisposable
         var m = await r.Content.ReadFromJsonAsync<MaterialDto>();
         Assert.False(m!.SaidaDada);
         Assert.Equal("P001", m.Ref);
-        Assert.Single((await c.GetFromJsonAsync<List<MaterialDto>>("/intervencoes/F1/materiais"))!);
-        Assert.Equal(10, (await memoria.ObterPorCodigoAsync("P001", default))!.Stock);
+        Assert.Equal(10, await StockAsync(c));
+    }
+
+    [Fact]
+    public async Task Depois_de_falhar_a_saida_a_lista_mostra_a_ref_ligada_e_saida_por_dar()
+    {
+        var pecas = new PecasInstaveis(new RepositorioPecasMemoria()) { SaidaFalha = true };
+        var c = await ComoAnaCom(pecas);
+        await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+
+        var m = Assert.Single(await ListaAsync(c));
+        Assert.Equal("P001", m.Ref);
+        Assert.False(m.SaidaDada);
+    }
+
+    [Fact]
+    public async Task Repetir_saida_depois_de_falha_real_usa_a_ref_ligada_sem_corpo()
+    {
+        var pecas = new PecasInstaveis(new RepositorioPecasMemoria()) { SaidaFalha = true };
+        var c = await ComoAnaCom(pecas);
+        var m = await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+        Assert.False(m.SaidaDada);
+
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"/intervencoes/F1/materiais/{m.Id}/saida", null)).StatusCode);
+        pecas.SaidaFalha = false;
+        var r = await c.PostAsync($"/intervencoes/F1/materiais/{m.Id}/saida", null);
+
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var ok = await r.Content.ReadFromJsonAsync<MaterialDto>();
+        Assert.True(ok!.SaidaDada);
+        Assert.Equal("P001", ok.Ref);
+        Assert.Equal(6, await StockAsync(c));
+        Assert.True(Assert.Single(await ListaAsync(c)).SaidaDada);
+    }
+
+    [Fact]
+    public async Task Repetir_saida_com_ref_no_corpo_prevalece_sobre_a_ligada()
+    {
+        var pecas = new PecasInstaveis(new RepositorioPecasMemoria()) { SaidaFalha = true };
+        var c = await ComoAnaCom(pecas);
+        var m = await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+        pecas.SaidaFalha = false;
+
+        var r = await c.PostAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}/saida", new PedidoSaida("P002"));
+
+        Assert.Equal("P002", (await r.Content.ReadFromJsonAsync<MaterialDto>())!.Ref);
+        Assert.Equal(10, await StockAsync(c));
+        Assert.Equal(-4, await StockAsync(c, "P002"));
+    }
+
+    [Fact]
+    public async Task Editar_com_falha_na_nova_saida_grava_o_material_e_deixa_a_peca_por_dar()
+    {
+        var pecas = new PecasInstaveis(new RepositorioPecasMemoria());
+        var c = await ComoAnaCom(pecas);
+        var m = await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+        pecas.SaidaFalha = true;
+
+        var e = await c.PutAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}", new PedidoMaterial("Parafuso M8", 7, 0.12m, "P001"));
+
+        Assert.Equal(HttpStatusCode.OK, e.StatusCode);
+        Assert.False((await e.Content.ReadFromJsonAsync<MaterialDto>())!.SaidaDada);
+        var lido = Assert.Single(await ListaAsync(c));
+        Assert.Equal(7, lido.Qtt);
+        Assert.Equal("P001", lido.Ref);
+        Assert.False(lido.SaidaDada);
+        Assert.Equal(10, await StockAsync(c));
+    }
+
+    [Fact]
+    public async Task Editar_em_ficha_concluida_da_409_e_o_stock_nao_muda()
+    {
+        var c = await ComoAnaAsync();
+        var m = await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/intervencoes/F1/concluir", new PedidoConclusao("Feito", new TimeOnly(8, 0), new TimeOnly(9, 0)))).StatusCode);
+
+        var r = await c.PutAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}", new PedidoMaterial("Parafuso M8", 7, 0.12m, "P001"));
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Equal(6, await StockAsync(c));
+        var lido = Assert.Single(await ListaAsync(c));
+        Assert.Equal(4, lido.Qtt);
+        Assert.True(lido.SaidaDada);
+    }
+
+    [Fact]
+    public async Task Editar_com_anulacao_recusada_da_409_e_nao_edita_o_material()
+    {
+        var pecas = new PecasInstaveis(new RepositorioPecasMemoria());
+        var c = await ComoAnaCom(pecas);
+        var m = await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+        pecas.AnularFalha = true;
+
+        var r = await c.PutAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}", new PedidoMaterial("Parafuso M8", 7, 0.12m, "P001"));
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("erro", await r.Content.ReadAsStringAsync());
+        var lido = Assert.Single(await ListaAsync(c));
+        Assert.Equal(4, lido.Qtt);
+        Assert.True(lido.SaidaDada);
+        Assert.Equal(6, await StockAsync(c));
+    }
+
+    [Fact]
+    public async Task Apagar_com_o_apagar_a_falhar_repoe_a_saida_e_responde_503()
+    {
+        var flags = new FlagsApagar();
+        var c = await ComoAnaCom(new PecasInstaveis(new RepositorioPecasMemoria()), flags);
+        var m = await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+        flags.Indisponivel = true;
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await c.DeleteAsync($"/intervencoes/F1/materiais/{m.Id}")).StatusCode);
+
+        Assert.Equal(6, await StockAsync(c));
+        var lido = Assert.Single(await ListaAsync(c));
+        Assert.True(lido.SaidaDada);
+        Assert.Equal("P001", lido.Ref);
+    }
+
+    [Fact]
+    public async Task Apagar_com_reposicao_a_falhar_da_409_com_aviso_de_stock_desfasado()
+    {
+        var flags = new FlagsApagar();
+        var pecas = new PecasInstaveis(new RepositorioPecasMemoria()) { FalharSaidaAposAnular = true };
+        var c = await ComoAnaCom(pecas, flags);
+        var m = await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+        flags.Indisponivel = true;
+
+        var r = await c.DeleteAsync($"/intervencoes/F1/materiais/{m.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("desfasado", await r.Content.ReadAsStringAsync());
+        Assert.Single(await ListaAsync(c));
+    }
+
+    [Fact]
+    public async Task Material_em_ficha_alheia_da_404_mesmo_com_peca_invalida_e_nao_mexe_no_stock()
+    {
+        var c = await ComoAnaAsync();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsJsonAsync("/intervencoes/F2/materiais", new PedidoMaterial("X", 1, 1m, "P001"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsJsonAsync("/intervencoes/F2/materiais", new PedidoMaterial("X", 1, 1m, "NAOEXISTE"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PutAsJsonAsync("/intervencoes/F2/materiais/X", new PedidoMaterial("X", 1, 1m, "P001"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PutAsJsonAsync("/intervencoes/F2/materiais/X", new PedidoMaterial("X", 1, 1m, "NAOEXISTE"))).StatusCode);
+        Assert.Equal(10, await StockAsync(c));
+    }
+
+    // Decisão: com as peças indisponíveis a lista de materiais não se degrada em silêncio (Ref/SaidaDada seriam falsos): responde 503.
+    [Fact]
+    public async Task Listar_materiais_com_pecas_indisponiveis_da_503()
+    {
+        var pecas = new PecasInstaveis(new RepositorioPecasMemoria());
+        var c = await ComoAnaCom(pecas);
+        await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
+        pecas.EnriquecerIndisponivel = true;
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await c.GetAsync("/intervencoes/F1/materiais")).StatusCode);
     }
 }

@@ -7,6 +7,7 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
     private readonly Dictionary<string, PecaDto> _pecas = (pecas ?? Amostra()).ToDictionary(p => p.Ref, StringComparer.OrdinalIgnoreCase);
     private readonly List<EntradaPecaDto> _entradas = [];
     private readonly Dictionary<string, (string Ref, decimal Qtt)> _saidas = []; // materialId → saída
+    private readonly Dictionary<string, string> _ligacoes = []; // materialId → peça por dar (sem saída)
 
     private static IEnumerable<PecaDto> Amostra() =>
     [
@@ -75,24 +76,36 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
         {
             if (!_pecas.ContainsKey(refPeca.Trim())) return Task.FromResult(ResultadoMovimento.Falha("Referência inexistente."));
             if (_saidas.ContainsKey(materialId)) return Task.FromResult(ResultadoMovimento.Falha("Já foi dada saída desta peça."));
+            _ligacoes.Remove(materialId);
             _saidas[materialId] = (_pecas[refPeca.Trim()].Ref, qtt);
             Mexer(_pecas[refPeca.Trim()].Ref, -qtt);
             return Task.FromResult(ResultadoMovimento.Sucesso(materialId));
         }
     }
 
-    // Em memória a ref só existe enquanto a saída existe.
+    public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (!RegrasPecas.ReferenciaValida(refPeca) || !_pecas.TryGetValue(refPeca.Trim(), out var p)) return Task.FromResult(false);
+            _ligacoes[stampMaterial] = p.Ref;
+            return Task.FromResult(true);
+        }
+    }
+
     public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct)
     {
         lock (_trinco)
             return Task.FromResult<IReadOnlyList<MaterialDto>>(materiais
-                .Select(m => _saidas.TryGetValue(m.Id, out var s) ? m with { Ref = s.Ref, SaidaDada = true } : m).ToList());
+                .Select(m => _saidas.TryGetValue(m.Id, out var s) ? m with { Ref = s.Ref, SaidaDada = true }
+                    : _ligacoes.TryGetValue(m.Id, out var l) ? m with { Ref = l, SaidaDada = false } : m).ToList());
     }
 
-    public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, CancellationToken ct)
+    public Task<ResultadoMovimento> AnularSaidaAsync(string materialId, string iniciais, CancellationToken ct)
     {
         lock (_trinco)
         {
+            _ligacoes.Remove(materialId);
             if (!_saidas.Remove(materialId, out var s)) return Task.FromResult(ResultadoMovimento.Sucesso(materialId));
             Mexer(s.Ref, s.Qtt);
             return Task.FromResult(ResultadoMovimento.Sucesso(materialId));
