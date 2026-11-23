@@ -1,3 +1,5 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 @* Escolha obrigatória: não fecha ao tocar fora nem com Escape; só se sai escolhendo uma opção ou descartando a leitura. *@
 <div class="dialogo-fundo">
     <div class="dialogo" role="dialog" aria-modal="true" aria-labelledby="@(IdBase + "-titulo")" tabindex="-1" @ref="_caixa">
@@ -15,11 +17,28 @@
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private ElementReference _caixa;
+    private IJSObjectReference? _modulo, _prisao;
 
     protected override async Task OnAfterRenderAsync(bool primeira)
     {
         if (!primeira) return;
-        try { await _caixa.FocusAsync(); }
+        try
+        {
+            await _caixa.FocusAsync();
+            // Tab preso no modal: sem isto o foco sai para o formulário que está por baixo e a escolha obrigatória pode ser contornada.
+            _modulo = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GestorManutencao.UI/js/modal.js");
+            _prisao = await _modulo.InvokeAsync<IJSObjectReference>("prender", _caixa);
+        }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException or InvalidOperationException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_prisao is not null) { await _prisao.InvokeVoidAsync("parar"); await _prisao.DisposeAsync(); }
+            if (_modulo is not null) await _modulo.DisposeAsync();
+        }
         catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException or InvalidOperationException) { }
     }
 }

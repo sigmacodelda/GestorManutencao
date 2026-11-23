@@ -307,8 +307,9 @@ a.intervencao { color: inherit; text-decoration: none; }
 .material-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-3); }
 .material-escolha { flex: 1 1 100%; display: grid; gap: var(--esp-2); }
 .peca-lugar { display: grid; gap: var(--esp-3); }
-/* Botão da câmara fixo logo abaixo do topo da app (.topo, 64px), por cima do resto da ficha. */
-.picar-topo { position: sticky; top: 64px; z-index: 9; display: grid; padding: var(--esp-2) 0; background: var(--fundo); }
+/* Botão da câmara fixo no topo da ficha, por cima do resto. No telemóvel (< 720px) o cabeçalho da app não existe; a partir daí fica logo abaixo dele (.topo, 64px). */
+.picar-topo { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; display: grid; padding: var(--esp-2) 0; background: color-mix(in srgb, var(--fundo) 94%, transparent); backdrop-filter: blur(6px); }
+@media (min-width: 720px) { .picar-topo { top: 64px; } }
 .material-novo { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-3); }
 .material-novo .campo { min-width: 0; }
 .material-novo .campo:first-child { grid-column: 1 / -1; }
