@@ -46,8 +46,14 @@ public static class LogicaLeitura
 {
     // Um leitor tipo teclado pode acrescentar CR/LF/Tab nas pontas e carateres invisíveis; os espaços internos são do código
     // (uma referência com espaço nunca casaria sem eles) e os códigos de peça são arbitrários, por isso nada mais se mexe.
-    public static string NormalizarCodigo(string? texto) =>
-        texto is null ? "" : string.Concat(texto.Where(c => !char.IsControl(c) && c is not ('\u200B' or '\uFEFF'))).Trim();
+    // Etiquetas geradas pela app com acentos v\u00EAm como "U8:" + UTF-8 em percentagem (PE\u00C7A1 = U8:PE%C3%87A1): ASCII puro,
+    // porque os leitores adivinham mal a codifica\u00E7\u00E3o de um QR sem indica\u00E7\u00E3o (PE?A1).
+    public static string NormalizarCodigo(string? texto)
+    {
+        if (texto is null) return "";
+        var limpo = string.Concat(texto.Where(c => !char.IsControl(c) && c is not ('\u200B' or '\uFEFF'))).Trim();
+        return limpo.StartsWith("U8:", StringComparison.Ordinal) ? Uri.UnescapeDataString(limpo[3..]).Trim() : limpo;
+    }
 
     // "motorola" sozinho é o telemóvel de consumo; só a Motorola Solutions (e a Symbol) faz coletores.
     private static readonly string[] Fabricantes =
