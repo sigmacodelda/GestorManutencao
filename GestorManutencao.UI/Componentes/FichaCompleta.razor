@@ -378,7 +378,14 @@
             _origem = d;
             _antigaSupervisionada = d.Supervisao;
             _antigaFechada = d.Fechada;
-            if (outra) { _tId = null; _tTecno = 0; _tHoras = _tCustoHora = null; _motivoAcao = null; }
+            if (outra) { _tId = null; _tTecno = 0; _tHoras = _tCustoHora = null; _motivoAcao = null; _avisoConf = _confAcao = _confMotivo = null; }
+            // Conferência a meio de uma validação ou cancelamento anterior (a API só avisa o supervisor): oferece repetir também depois de reabrir a ficha.
+            if (_confAcao is null && !string.IsNullOrWhiteSpace(d.AvisoStock))
+            {
+                _avisoConf = d.AvisoStock;
+                _confAcao = d.Estado == EstadoIntervencao.Cancelada ? "cancelar" : "validar";
+                _confMotivo = d.Estado == EstadoIntervencao.Cancelada ? d.Motivo : null;
+            }
             await CarregarExtrasAsync(d);
         }
     }
@@ -570,7 +577,8 @@
         _erroAcao = "";
         await Executar(async () =>
         {
-            var ficha = _confAcao == "cancelar" ? await Intervencoes.CancelarAsync(d.Id, _confMotivo ?? "") : await Intervencoes.ValidarAsync(d.Id);
+            // O motivo só conta para a API na primeira vez (repetir só refaz a limpeza); sem o original usa-se um texto válido.
+            var ficha = _confAcao == "cancelar" ? await Intervencoes.CancelarAsync(d.Id, string.IsNullOrWhiteSpace(_confMotivo) ? "Cancelamento da intervenção." : _confMotivo) : await Intervencoes.ValidarAsync(d.Id);
             // Pendente = o pedido só ficou na fila (sem rede): nada foi confirmado, o aviso fica.
             var res = LogicaConferencia.AposRepetir(_avisoConf, ficha);
             if (res.Mensagem is not null) _erroAcao = res.Mensagem;

@@ -103,6 +103,7 @@ async function entrar(page, pin) {
   const aguardar = (ms) => Promise.race([hero.waitFor({ timeout: ms }).then(() => false), ass.waitFor({ timeout: ms }).then(() => true)]);
   let pede;
   try { pede = await aguardar(5000); } catch { await botao(page, 'Entrar').click(); pede = await aguardar(30000); }
+  if (!pede) pede = await ass.waitFor({ timeout: 3500 }).then(() => true).catch(() => false); // a verificação da assinatura pode demorar um pouco
   if (pede) {
     afirma((await page.locator('nav.navegacao:visible').count()) === 0, 'a navegação devia estar escondida até haver assinatura');
     afirma(await botao(page, 'Guardar').isDisabled(), 'Guardar devia estar bloqueado sem texto');
@@ -176,7 +177,8 @@ const MODOS_TODOS = [
   { nome: 'telemovel', aplicar: () => cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }) }
 ];
 
-const MODOS = process.env.SO_MODO ? MODOS_TODOS.filter(m => m.nome === process.env.SO_MODO) : MODOS_TODOS;
+// A app é só para telemóvel: por defeito corre só em vista de telemóvel. SO_MODO=computador para a vista larga (só diagnóstico).
+const MODOS = MODOS_TODOS.filter((m) => m.nome === (process.env.SO_MODO ?? 'telemovel'));
 try {
   for (const modo of MODOS) {
     await modo.aplicar();

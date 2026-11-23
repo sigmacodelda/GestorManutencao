@@ -728,6 +728,274 @@ public class FichaConferenciaApiTests : IDisposable
         Assert.Equal(["F1"], _pecas.Canceladas);
     }
 
+    // ---------- Supervisor: detalhe com peças, Ref omitida e validar com peças por dar
+
+    private static async Task<FichaDetalheDto> DetalheAsync(HttpClient c) => (await c.GetFromJsonAsync<FichaDetalheDto>("/intervencoes/F1/detalhe"))!;
+
+    // Corpo sem o campo "ref" (como as APKs antigas) ou com ele, à escolha; JSON à mão para não depender da serialização do record.
+    private static Task<HttpResponseMessage> PutBrutoAsync(HttpClient c, string id, string corpo) =>
+        c.PutAsync($"/intervencoes/F1/materiais/{id}", new StringContent(corpo, System.Text.Encoding.UTF8, "application/json"));
+
+    [Fact]
+    public async Task Detalhe_do_supervisor_traz_a_peca_a_saida_e_o_lugar_dos_materiais()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        await JuntarAsync(ana, 2);
+        await JuntarSemPecaAsync(ana);
+
+        var m = (await DetalheAsync(chefe)).Materiais;
+
+        var comPeca = Assert.Single(m, x => x.Ref == "P001");
+        Assert.True(comPeca.SaidaDada);
+        Assert.Equal("A-02-1-01", comPeca.Local);
+        var semPeca = Assert.Single(m, x => x.Ref == "");
+        Assert.False(semPeca.SaidaDada);
+        Assert.Null(semPeca.Local);
+    }
+
+    private static Task<HttpResponseMessage> JuntarSemPecaAsync(HttpClient c) =>
+        c.PostAsJsonAsync("/intervencoes/F1/materiais", new PedidoMaterial("Fita", 1, 1m));
+
+    [Fact]
+    public async Task Supervisor_corrige_so_o_preco_pelo_detalhe_e_a_saida_e_o_lugar_mantem_se()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        var m = await MaterialAsync(await JuntarAsync(ana, 2));
+        var lido = (await DetalheAsync(chefe)).Materiais.Single();
+
+        // O ecrã do supervisor repete o que leu do detalhe (peça e lugar) e só muda o preço.
+        var r = await chefe.PutAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}", new PedidoMaterial("Peça", lido.Qtt, 9m, lido.Ref));
+
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var e = await MaterialAsync(r);
+        Assert.True(e.SaidaDada);
+        Assert.Equal("P001", e.Ref);
+        Assert.Equal("A-02-1-01", e.Local);
+        Assert.Equal(1, await NoLugarAsync(chefe, "A-02-1-01"));
+        Assert.Equal(8, (await PecaAsync(chefe)).Disponivel);
+        var depois = Assert.Single((await DetalheAsync(chefe)).Materiais);
+        Assert.Equal(9m, depois.Epv);
+        Assert.True(depois.SaidaDada);
+    }
+
+    [Fact]
+    public async Task Put_sem_ref_mantem_a_peca_a_saida_e_o_lugar()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        var m = await MaterialAsync(await JuntarAsync(ana, 2));
+
+        var r = await PutBrutoAsync(chefe, m.Id, """{"design":"Peça","qtt":2,"epv":7}""");
+
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        var e = await MaterialAsync(r);
+        Assert.True(e.SaidaDada);
+        Assert.Equal("P001", e.Ref);
+        Assert.Equal("A-02-1-01", e.Local);
+        Assert.Equal(1, await NoLugarAsync(chefe, "A-02-1-01"));
+        Assert.Equal(8, (await PecaAsync(chefe)).Disponivel);
+        // "ref": null é o mesmo que omitir.
+        Assert.True((await MaterialAsync(await PutBrutoAsync(ana, m.Id, """{"design":"Peça","qtt":2,"epv":8,"ref":null}"""))).SaidaDada);
+        Assert.Equal(1, await NoLugarAsync(chefe, "A-02-1-01"));
+    }
+
+    [Fact]
+    public async Task Put_sem_ref_e_com_outra_quantidade_refaz_a_saida_da_mesma_peca_no_mesmo_lugar()
+    {
+        var ana = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(ana, 2));
+
+        var e = await MaterialAsync(await PutBrutoAsync(ana, m.Id, """{"design":"Peça","qtt":1,"epv":1}"""));
+
+        Assert.True(e.SaidaDada);
+        Assert.Equal("P001", e.Ref);
+        Assert.Equal("A-02-1-01", e.Local);
+        Assert.Equal(2, await NoLugarAsync(ana, "A-02-1-01"));
+        Assert.Equal(9, (await PecaAsync(ana)).Disponivel);
+    }
+
+    [Fact]
+    public async Task Put_sem_ref_num_material_por_dar_mantem_a_ligacao_sem_tentar_a_saida()
+    {
+        var ana = await ComoAnaAsync();
+        _lugares.Ocupado = true;
+        var m = await MaterialAsync(await JuntarAsync(ana, 2, "A-02-1-01"));
+        Assert.False(m.SaidaDada);
+        _lugares.Ocupado = false;
+
+        var e = await MaterialAsync(await PutBrutoAsync(ana, m.Id, """{"design":"Peça","qtt":2,"epv":5}"""));
+
+        Assert.False(e.SaidaDada);
+        Assert.Equal("P001", e.Ref);
+        Assert.Equal(3, await NoLugarAsync(ana, "A-02-1-01"));
+        Assert.Equal(10, (await PecaAsync(ana)).Disponivel);
+    }
+
+    [Fact]
+    public async Task Put_com_ref_vazia_explicita_desliga_a_peca_e_repoe_o_lugar()
+    {
+        var ana = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(ana, 2));
+        Assert.Equal(1, await NoLugarAsync(ana, "A-02-1-01"));
+
+        var e = await MaterialAsync(await PutBrutoAsync(ana, m.Id, """{"design":"Peça","qtt":2,"epv":1,"ref":""}"""));
+
+        Assert.False(e.SaidaDada);
+        Assert.Equal("", e.Ref);
+        Assert.Equal(3, await NoLugarAsync(ana, "A-02-1-01"));
+        Assert.Equal(10, (await PecaAsync(ana)).Disponivel);
+        Assert.Equal("", Assert.Single(await ListaAsync(ana)).Ref);
+    }
+
+    [Fact]
+    public async Task Validar_com_peca_por_dar_da_409_sem_efeitos_e_depois_de_repetir_a_saida_valida()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        _lugares.Ocupado = true;
+        var m = await MaterialAsync(await JuntarAsync(ana, 2, "A-02-1-01"));
+        _lugares.Ocupado = false;
+        Assert.Equal(HttpStatusCode.OK, (await ConcluirAsync(ana)).StatusCode);
+
+        var r = await chefe.PostAsync("/validacao/F1", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        var corpo = JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("pecas_por_dar", corpo.GetProperty("erro").GetString());
+        Assert.Equal("Há 1 peça(s) por dar saída; repita a saída ou desligue a peça antes de validar.", corpo.GetProperty("mensagem").GetString());
+        Assert.Equal(EstadoIntervencao.Concluida, (await DetalheAsync(chefe)).Estado);
+        Assert.Empty(_pecas.Confirmadas);
+
+        // O supervisor repete a saída na ficha Concluída e a validação passa.
+        Assert.Equal(HttpStatusCode.OK, (await chefe.PostAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}/saida", new PedidoSaida(null, "A-02-1-01"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await chefe.PostAsync("/validacao/F1", null)).StatusCode);
+        Assert.Equal(["F1"], _pecas.Confirmadas);
+        Assert.Equal(8, (await PecaAsync(chefe)).Stock);
+    }
+
+    [Fact]
+    public async Task Validar_com_peca_por_dar_desligada_pelo_supervisor_valida()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        _lugares.Ocupado = true;
+        var m = await MaterialAsync(await JuntarAsync(ana, 2, "A-02-1-01"));
+        _lugares.Ocupado = false;
+        await ConcluirAsync(ana);
+        Assert.Equal(HttpStatusCode.Conflict, (await chefe.PostAsync("/validacao/F1", null)).StatusCode);
+
+        var e = await PutBrutoAsync(chefe, m.Id, """{"design":"Peça","qtt":2,"epv":1,"ref":""}""");
+
+        Assert.Equal(HttpStatusCode.OK, e.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await chefe.PostAsync("/validacao/F1", null)).StatusCode);
+        Assert.Equal(10, (await PecaAsync(chefe)).Stock);
+    }
+
+    // ---------- Conferência a meio vista no detalhe
+
+    [Fact]
+    public async Task Detalhe_de_ficha_validada_com_a_conferencia_a_meio_traz_o_aviso_e_repetir_limpa_o()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        await JuntarAsync(ana, 2);
+        await ConcluirAsync(ana);
+        _pecas.FalharConfirmar = true;
+        await chefe.PostAsync("/validacao/F1", null);
+
+        var d = await DetalheAsync(chefe);
+
+        Assert.Equal(EstadoIntervencao.Validada, d.Estado);
+        Assert.Equal("Conferência por confirmar", d.AvisoStock);
+        // O técnico não repete a confirmação: não recebe o aviso.
+        Assert.Null((await DetalheAsync(ana)).AvisoStock);
+
+        _pecas.FalharConfirmar = false;
+        Assert.Null((await (await chefe.PostAsync("/validacao/F1", null)).Content.ReadFromJsonAsync<IntervencaoDto>())!.AvisoStock);
+        Assert.Null((await DetalheAsync(chefe)).AvisoStock);
+    }
+
+    [Fact]
+    public async Task Detalhe_de_ficha_cancelada_com_a_conferencia_a_meio_traz_o_aviso_e_repetir_limpa_o()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        await JuntarAsync(ana, 2);
+        _pecas.FalharCancelar = true;
+        await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"));
+
+        var d = await DetalheAsync(chefe);
+
+        Assert.Equal(EstadoIntervencao.Cancelada, d.Estado);
+        Assert.Equal("Conferência por cancelar", d.AvisoStock);
+
+        _pecas.FalharCancelar = false;
+        Assert.Null((await (await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento(d.Motivo ?? "Duplicada"))).Content.ReadFromJsonAsync<IntervencaoDto>())!.AvisoStock);
+        Assert.Null((await DetalheAsync(chefe)).AvisoStock);
+    }
+
+    [Fact]
+    public async Task Detalhe_de_ficha_validada_sem_nada_a_meio_nao_traz_aviso()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        await JuntarAsync(ana, 2);
+        await ConcluirAsync(ana);
+        await chefe.PostAsync("/validacao/F1", null);
+
+        Assert.Null((await DetalheAsync(chefe)).AvisoStock);
+    }
+
+    // ---------- Cancelar com peças por dar
+
+    [Fact]
+    public async Task Cancelar_limpa_tambem_a_ligacao_das_pecas_por_dar_e_repetir_ja_e_recusado()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        _lugares.Ocupado = true;
+        await JuntarAsync(ana, 2, "A-02-1-01");
+        _lugares.Ocupado = false;
+
+        var r = (await (await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"))).Content.ReadFromJsonAsync<IntervencaoDto>())!;
+
+        Assert.Null(r.AvisoStock);
+        Assert.Equal("", Assert.Single((await DetalheAsync(chefe)).Materiais).Ref);
+        Assert.Equal(HttpStatusCode.Conflict, (await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"))).StatusCode);
+    }
+
+    // ---------- Reposição da saída que falha, lugares fora do formato
+
+    [Fact]
+    public async Task Editar_recusado_com_a_saida_a_nao_repor_responde_stock_desfasado()
+    {
+        var c = await ComoAnaAsync();
+        var m = await MaterialAsync(await JuntarAsync(c, 2));
+        _recusa.RecusarMaterial = true;
+        _pecas.FalharSaida = true;
+
+        var r = await EditarAsync(c, m.Id, 3);
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("desfasado", await r.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Lugar_com_formato_nao_reconhecido_nao_se_desconta_e_a_peca_sai_com_aviso()
+    {
+        var c = await ComoAnaAsync();
+        await _lugares.ArrumarAsync("P002", "ABCDE", 5, 1, 1, 3, "XX", CancellationToken.None); // corredor com mais de 3 letras: não se sabe repor
+
+        var m = await MaterialAsync(await JuntarAsync(c, 1, null, "P002"));
+
+        Assert.True(m.SaidaDada);
+        Assert.Null(m.Local);
+        Assert.Contains("formato", m.AvisoStock);
+        Assert.Equal(3, Assert.Single((await LugaresAsync(c, "P002")).Lugares).Qtt);
+    }
+
     // Repositório de peças que regista as chamadas e falha onde se pedir; o resto é o de memória.
     private sealed class PecasEspia(RepositorioPecasMemoria memoria) : IRepositorioPecas
     {
@@ -766,6 +1034,7 @@ public class FichaConferenciaApiTests : IDisposable
         public Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct) =>
             memoria.EmConferenciaPorPecaAsync(refs, excetoFichaId, ct);
         public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => memoria.LigarPecaAsync(stampMaterial, refPeca, usrinis, ct);
+        public Task<bool> ConferenciaPendenteAsync(string fichaId, CancellationToken ct) => memoria.ConferenciaPendenteAsync(fichaId, ct);
         public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) => memoria.EnriquecerMateriaisAsync(materiais, ct);
     }
 

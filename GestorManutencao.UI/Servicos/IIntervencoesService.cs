@@ -63,7 +63,8 @@ public interface IIntervencoesService
     Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default);
     // Só supervisor, só fichas antigas (sem estado).
     Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default);
-    Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default);
+    // refPeca nulo = manter a peça e o lugar do material; "" = desligar a peça.
+    Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string? refPeca = null, string localPeca = "", CancellationToken ct = default);
     // Mão de obra interna: custo = horas x custo por hora; o custo por hora sugerido é o do último registo do técnico.
     Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default);
     Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default);
@@ -493,7 +494,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
         throw new InvalidOperationException(MensagensIntervencao.Mudou);
 
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default)
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string? refPeca = null, string localPeca = "", CancellationToken ct = default)
     {
         if (RegrasMaterial.Validar(design, qtt, epv) is not null) throw new InvalidOperationException(MensagensIntervencao.Mudou);
         lock (_trinco)
@@ -502,7 +503,10 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
             var pos = lista?.FindIndex(m => m.Id == materialId) ?? -1;
             if (lista is null || pos < 0 || _lista.FirstOrDefault(i => i.Id == id)?.Estado is null or EstadoIntervencao.Validada or EstadoIntervencao.Cancelada)
                 throw new InvalidOperationException(MensagensIntervencao.Mudou);
-            return Task.FromResult(lista[pos] = new Material(materialId, design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), refPeca.Trim(), refPeca.Trim() != "", localPeca.Trim() == "" ? null : localPeca.Trim()));
+            var antes = lista[pos];
+            var nova = refPeca is null ? antes.Ref : refPeca.Trim();
+            return Task.FromResult(lista[pos] = new Material(materialId, design.Trim(), qtt, epv, Math.Round(qtt * epv, 3), nova, nova != "" && (refPeca is not null || antes.SaidaDada),
+                localPeca.Trim() == "" ? (refPeca is null ? antes.Local : null) : localPeca.Trim()));
         }
     }
 
@@ -607,7 +611,7 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> CriarFichaManualAsync(NovaFicha ficha, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string? refPeca = null, string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<TempoMaoDeObra> EditarMaoDeObraAsync(string id, string tempoId, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default) => throw new NotSupportedException();

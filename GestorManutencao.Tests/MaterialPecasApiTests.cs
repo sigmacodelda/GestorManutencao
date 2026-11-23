@@ -86,11 +86,11 @@ public class MaterialPecasApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Editar_sem_referencia_desliga_a_peca_e_devolve_o_stock()
+    public async Task Editar_com_referencia_vazia_explicita_desliga_a_peca_e_devolve_o_stock()
     {
         var c = await ComoAnaAsync();
         var m = await JuntarAsync(c, "Parafuso M8", 4, 0.12m, "P001");
-        var e = await (await c.PutAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}", new PedidoMaterial("Parafuso M8", 4, 0.12m))).Content.ReadFromJsonAsync<MaterialDto>();
+        var e = await (await c.PutAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}", new PedidoMaterial("Parafuso M8", 4, 0.12m, ""))).Content.ReadFromJsonAsync<MaterialDto>();
         Assert.False(e!.SaidaDada);
         Assert.Equal("", e.Ref);
         Assert.Equal(10, await StockAsync(c));
@@ -233,6 +233,7 @@ public class MaterialPecasApiTests : IDisposable
             return r;
         }
         public Task<bool> LigarPecaAsync(string stampMaterial, string refPeca, string usrinis, CancellationToken ct) => memoria.LigarPecaAsync(stampMaterial, refPeca, usrinis, ct);
+        public Task<bool> ConferenciaPendenteAsync(string fichaId, CancellationToken ct) => memoria.ConferenciaPendenteAsync(fichaId, ct);
         public Task<IReadOnlyList<MaterialDto>> EnriquecerMateriaisAsync(IReadOnlyList<MaterialDto> materiais, CancellationToken ct) =>
             EnriquecerIndisponivel ? throw new RepositorioIndisponivelException() : memoria.EnriquecerMateriaisAsync(materiais, ct);
     }

@@ -356,6 +356,8 @@
     // Peça e lugar escolhidos vêm do componente PecaLugar (EstadoPicagem, fonte única); aqui só ficam o que o ecrã mostra.
     // _eRef = peça já ligada ao material em edição (vazia = sem peça). O aviso de stock disponível nunca bloqueia.
     private string _eRef = "";
+    // Só se envia "ref" ao guardar quando a pessoa a conhece ou a mudou; senão a API mantém a peça e o lugar do material.
+    private bool _eRefConhecida;
     private string? _avisoStock, _eAvisoStock;
     private PecaLugar? _plAdd, _plEdit;
     private EscolhaPecaLugar? _esc, _escEdit;
@@ -480,15 +482,21 @@
         StateHasChanged();
     }
 
-    // Relê o material no servidor: uma lista de cache antiga sem Ref não pode anular a saída ao guardar.
+    // Relê o material no servidor: uma lista de cache antiga sem Ref não pode anular a saída ao guardar. A ficha de outra pessoa (supervisor)
+    // relê-se pelo detalhe, porque GET /materiais é só do técnico. Sem a releitura a peça fica por conhecer e o guardar não envia "ref" (a API mantém-na).
     private async Task EditarMaterialAsync(Material m)
     {
+        var conhecida = false;
         try
         {
-            var lista = await Intervencoes.ListarMateriaisAsync(Id);
-            if (lista.FirstOrDefault(x => x.Id == m.Id) is { } atual) { m = atual; _materiais = lista; }
+            IReadOnlyList<Material> lista;
+            if (_viaDetalhe) { await CarregarDetalheAsync(); lista = _d?.ListaMateriais ?? []; }
+            else lista = await Intervencoes.ListarMateriaisAsync(Id);
+            if (lista.FirstOrDefault(x => x.Id == m.Id) is { } atual) { m = atual; _materiais = lista; conhecida = true; }
         }
         catch (Exception) { /* sem rede o guardar também falha, com a sua mensagem */ }
+        // Material que veio do detalhe já traz a peça (a API enriquece-o); só uma lista sem releitura nem Ref fica por conhecer.
+        _eRefConhecida = conhecida || _viaDetalhe || !string.IsNullOrEmpty(m.Ref);
         _matEditId = m.Id; _eDesign = m.Design; _eQtt = m.Qtt; _eEpv = m.Epv; _erroMaterial = "";
         // A escolha de juntar sai do ecrã enquanto se edita (só um leitor de cada vez): limpa-se tudo para não ficar um material
         // com o nome da peça mas sem peça nem lugar.
@@ -527,7 +535,7 @@
         var pecaNova = e.Peca is not null && _escEdit?.Ref != e.Ref;
         var podiaAvancar = _escEdit is { PodeIrParaQuantidade: true, Peca: not null };
         _escEdit = e;
-        if (pecaNova) { _eRef = e.Ref!; _eDesign = Cortar35(e.Peca!.Design); _eEpv = e.Peca.Preco; }
+        if (pecaNova) { _eRef = e.Ref!; _eRefConhecida = true; _eDesign = Cortar35(e.Peca!.Design); _eEpv = e.Peca.Preco; }
         RecalcularAvisoEditado();
         StateHasChanged();
         if (e.Peca is not null && e.PodeIrParaQuantidade && (pecaNova || !podiaAvancar)) await FocarQuantidadeAsync(_eQttCampo);
@@ -541,7 +549,7 @@
         catch (Exception ex) when (ex is JSException or JSDisconnectedException or ObjectDisposedException or InvalidOperationException) { }
     }
 
-    private void TirarPecaEditada() { _eRef = ""; _eAvisoStock = null; }
+    private void TirarPecaEditada() { _eRef = ""; _eRefConhecida = true; _eAvisoStock = null; }
 
     private void RecalcularAviso() =>
         _avisoStock = _esc?.Peca is { } p ? LogicaFichaPeca.AvisoDisponivel(p, _qtt ?? 1) : null;
@@ -585,7 +593,7 @@
             // A gravação corre na fila das leituras do componente: uma picada que chegue a meio não se perde na limpeza.
             async Task<bool> Gravar(EscolhaPecaLugar esc)
             {
-                var guardado = await Intervencoes.EditarMaterialAsync(Id, _matEditId, _eDesign!.Trim(), _eQtt!.Value, _eEpv ?? 0, esc.Ref ?? _eRef, esc.Local ?? "");
+                var guardado = await Intervencoes.EditarMaterialAsync(Id, _matEditId, _eDesign!.Trim(), _eQtt!.Value, _eEpv ?? 0, esc.Ref ?? (_eRefConhecida ? _eRef : null), esc.Local ?? "");
                 if (!string.IsNullOrWhiteSpace(guardado.AvisoStock)) _avisosMat[guardado.Id] = guardado.AvisoStock;
                 return true;
             }

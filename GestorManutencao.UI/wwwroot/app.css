@@ -188,6 +188,7 @@ h1:focus-visible { outline: none; }
 .conteudo-wrap { flex: 1; padding: var(--esp-5) calc(var(--esp-4) + env(safe-area-inset-right)) calc(var(--esp-6) + env(safe-area-inset-bottom)) calc(var(--esp-4) + env(safe-area-inset-left)); }
 .conteudo { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--esp-5); }
 .boas-vindas { display: flex; flex-direction: column; gap: var(--esp-1); }
+.boas-vindas .login-sub { text-align: left; margin-top: 0; }
 
 .segmentos { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-2); background: var(--superficie-2); padding: var(--esp-1); border-radius: var(--raio); max-width: 420px; }
 .segmento {

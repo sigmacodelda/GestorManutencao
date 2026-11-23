@@ -105,13 +105,21 @@ ORDER BY q DESC, corredor, estante, nivel, posicao",
     public Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
         => SomarAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
 
+    // qtt, nivel e posicao são varchar no PHC e podem ter lixo (outra app): lê-se só texto limpo (dígitos, no máximo um ponto), o resto vale 0,
+    // para uma linha estranha da tabela nunca fazer falhar a conversão de um movimento (e não se compara texto com número sem proteção).
+    private static string Texto(string col) => $"LTRIM(RTRIM(ISNULL({col}, '')))";
+    private static string Qtd(string col) =>
+        $"CASE WHEN {Texto(col)} LIKE '%[0-9]%' AND {Texto(col)} NOT LIKE '%[^0-9.]%' AND LEN({Texto(col)}) - LEN(REPLACE({Texto(col)}, '.', '')) <= 1 AND LEN({Texto(col)}) <= 13 THEN CAST({Texto(col)} AS decimal(13, 3)) ELSE CAST(0 AS decimal(13, 3)) END";
+    private static string Inteiro(string col) =>
+        $"CASE WHEN {Texto(col)} LIKE '[0-9]%' AND {Texto(col)} NOT LIKE '%[^0-9]%' AND LEN({Texto(col)}) <= 9 THEN CAST({Texto(col)} AS int) ELSE 0 END";
+
     // Um só comando: soma ao lugar se existir, senão cria.
     private Task<ResultadoMovimento> SomarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
         => Escrever(refPeca, estante, nivel, posicao, ct, async (conn, tx) =>
         {
             await using var cmd = Cmd(conn, tx, $@"
-UPDATE u_pecaloc SET qtt = ISNULL(qtt, 0) + @q, usrinis = @ini, usrdata = {Hoje}, usrhora = {Hora}
-WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND nivel = @n AND posicao = @po;
+UPDATE u_pecaloc SET qtt = CAST(CAST({Qtd("qtt")} + @q AS decimal(13, 3)) AS varchar(13)), usrinis = @ini, usrdata = {Hoje}, usrhora = {Hora}
+WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po;
 IF @@ROWCOUNT = 0
 INSERT INTO u_pecaloc (u_pecalocstamp, ref, armazem, corredor, estante, nivel, posicao, qtt, marcada, ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
 VALUES (@s, @r, @a, @c, @e, @n, @po, @q, 0, @ini, {Hoje}, {Hora}, @ini, {Hoje}, {Hora})",
@@ -124,8 +132,8 @@ VALUES (@s, @r, @a, @c, @e, @n, @po, @q, 0, @ini, {Hoje}, {Hora}, @ini, {Hoje}, 
         => Escrever(refPeca, estante, nivel, posicao, ct, async (conn, tx) =>
         {
             await using var cmd = Cmd(conn, tx, $@"
-UPDATE u_pecaloc SET qtt = ISNULL(qtt, 0) - @q, usrinis = @ini, usrdata = {Hoje}, usrhora = {Hora}
-WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND nivel = @n AND posicao = @po AND ISNULL(qtt, 0) >= @q;
+UPDATE u_pecaloc SET qtt = CAST(CAST({Qtd("qtt")} - @q AS decimal(13, 3)) AS varchar(13)), usrinis = @ini, usrdata = {Hoje}, usrhora = {Hora}
+WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po AND {Qtd("qtt")} >= @q;
 SELECT @@ROWCOUNT",
                 Parametros(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ""));
             return (int)(await cmd.ExecuteScalarAsync(ct))! == 0

@@ -368,7 +368,7 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
     }
 
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) => throw new NotSupportedException();
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string? refPeca = null, string localPeca = "", CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default) { Entrar("ListarMaoDeObra", id); return Task.FromResult<IReadOnlyList<TempoMaoDeObra>>([]); }
     public Task<TempoMaoDeObra> AdicionarMaoDeObraAsync(string id, int tecno, decimal horas, decimal custoHora, CancellationToken ct = default)
     {

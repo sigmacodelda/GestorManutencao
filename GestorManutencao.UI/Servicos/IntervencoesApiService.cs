@@ -143,8 +143,13 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
 
     private sealed record CorpoAviso(string? AvisoStock);
 
-    private static object CorpoMaterial(string design, decimal qtt, decimal epv, string refPeca, string localPeca) =>
-        string.IsNullOrWhiteSpace(localPeca) ? new { design, qtt, epv, @ref = refPeca } : new { design, qtt, epv, @ref = refPeca, local = localPeca.Trim() };
+    private static object CorpoMaterial(string design, decimal qtt, decimal epv, string? refPeca, string localPeca)
+    {
+        var campos = new Dictionary<string, object> { ["design"] = design, ["qtt"] = qtt, ["epv"] = epv };
+        if (refPeca is not null) campos["ref"] = refPeca;
+        if (!string.IsNullOrWhiteSpace(localPeca)) campos["local"] = localPeca.Trim();
+        return campos;
+    }
 
     private async Task<Material> MaterialJsonAsync(HttpMethod metodo, string url, object? corpo, CancellationToken ct)
     {
@@ -303,7 +308,8 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
         JsonAsync<FichaDetalhe>(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/antiga", new { supervisao, fechada }, ct);
 
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) =>
+    // refPeca nulo = não se envia "ref" e a API mantém a peça e o lugar; "" desliga a peça (só quando a pessoa a tirou).
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string? refPeca = null, string localPeca = "", CancellationToken ct = default) =>
         MaterialJsonAsync(HttpMethod.Put, $"intervencoes/{Uri.EscapeDataString(id)}/materiais/{Uri.EscapeDataString(materialId)}", CorpoMaterial(design, qtt, epv, refPeca, localPeca), ct);
 
     public async Task<IReadOnlyList<TempoMaoDeObra>> ListarMaoDeObraAsync(string id, CancellationToken ct = default)
@@ -383,13 +389,25 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
         if (resposta.StatusCode == HttpStatusCode.Conflict)
         {
             // Os códigos não têm espaços; um texto com espaços é a explicação da API (ex.: falha na saída de stock).
-            var erro = await LerErroAsync(resposta, ct);
-            throw new InvalidOperationException(erro is { } e && e.Contains(' ') ? e : MensagensIntervencao.Para(erro));
+            // "pecas_por_dar" (validar com peças sem saída) traz a explicação em "mensagem".
+            var corpo = await LerConflitoAsync(resposta, ct);
+            var erro = corpo?.Erro;
+            throw new InvalidOperationException(erro is { } e && e.Contains(' ') ? e
+                : erro == "pecas_por_dar" && !string.IsNullOrWhiteSpace(corpo?.Mensagem) ? corpo.Mensagem
+                : MensagensIntervencao.Para(erro));
         }
         resposta.EnsureSuccessStatusCode();
     }
 
     private sealed record CorpoErro(string? Erro);
+
+    private sealed record CorpoConflito(string? Erro, string? Mensagem);
+
+    private static async Task<CorpoConflito?> LerConflitoAsync(HttpResponseMessage resposta, CancellationToken ct)
+    {
+        try { return await resposta.Content.ReadFromJsonAsync<CorpoConflito>(ct); }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
 
     private static async Task<string?> LerErroAsync(HttpResponseMessage resposta, CancellationToken ct)
     {

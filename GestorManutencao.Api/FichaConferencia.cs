@@ -10,6 +10,7 @@ public static partial class EndpointsIntervencoes
     private const string AvisoPorConfirmar = "Conferência por confirmar";
     private const string AvisoPorCancelar = "Conferência por cancelar";
     private const string AvisoPorRepor = "Lugares por repor";
+    private const string AvisoLugaresSemFormato = "Os lugares da peça não têm um formato reconhecido: saiu sem descontar de nenhum lugar.";
     private const string AvisoSaiuSemRepor = "Material apagado, mas a peça saiu sem repor no lugar: avise o supervisor.";
 
     // Lugar, aviso (peça sem lugar) ou erro de resposta (400 lugar inválido, 409 escolha_o_lugar).
@@ -32,11 +33,13 @@ public static partial class EndpointsIntervencoes
         {
             if (await locs.VerificarTabelaAsync(ct) != "") return new(null, AvisoSemLugar, null);
             var comStock = (await locs.ListarAsync(refPeca, ct)).Lugares.Where(l => l.Qtt > 0).ToList();
-            return comStock.Count switch
+            // Só se desconta de um lugar que se sabe repor: o texto tem de passar por LerLugar (o mesmo que a reposição usa).
+            var usaveis = comStock.Where(l => RegrasLocalizacao.LerLugar(l.Texto) is not null).ToList();
+            return usaveis.Count switch
             {
-                1 => new(comStock[0], null, null),
-                0 => new(null, AvisoSemLugar, null),
-                _ => new(null, null, Results.Json(new { erro = ErroEscolhaLugar, lugares = comStock }, statusCode: StatusCodes.Status409Conflict))
+                1 => new(RegrasLocalizacao.LerLugar(usaveis[0].Texto), null, null),
+                0 => new(null, comStock.Count == 0 ? AvisoSemLugar : AvisoLugaresSemFormato, null),
+                _ => new(null, null, Results.Json(new { erro = ErroEscolhaLugar, lugares = usaveis }, statusCode: StatusCodes.Status409Conflict))
             };
         }
         catch (RepositorioIndisponivelException ex)
@@ -46,10 +49,16 @@ public static partial class EndpointsIntervencoes
         }
     }
 
-    // Soma de volta ao lugar. Sem lugar conhecido não há nada a repor (true). Nunca lança: false = o lugar ficou desfasado (e fica no log).
+    // Soma de volta ao lugar. Sem lugar gravado não há nada a repor (true); um lugar gravado que não se consegue ler é false (desfasado, fica no log).
+    // Nunca lança: false = o lugar ficou desfasado.
     private static async Task<bool> ReporLugarAsync(IRepositorioLocalizacoes locs, string refPeca, string? local, decimal qtt, string iniciais, ILogger log)
     {
-        if (RegrasLocalizacao.LerLugar(local) is not { } l) return true;
+        if (string.IsNullOrWhiteSpace(local)) return true;
+        if (RegrasLocalizacao.LerLugar(local) is not { } l)
+        {
+            log.LogError("Não foi possível repor {Qtt} da peça {Peca}: o lugar gravado '{Lugar}' não tem formato reconhecido.", qtt, refPeca, local);
+            return false;
+        }
         try
         {
             var r = await locs.ReporAsync(refPeca, l.Corredor, l.Estante, l.Nivel, l.Posicao, qtt, iniciais, CancellationToken.None);
@@ -173,6 +182,29 @@ public static partial class EndpointsIntervencoes
         return AvisoPorConfirmar;
     }
 
+    // Materiais do detalhe com a peça, a saída e o lugar (o repositório de fichas só conhece o material).
+    private static async Task<FichaDetalheDto> ComPecasAsync(FichaDetalheDto d, IRepositorioPecas pecas, CancellationToken ct) =>
+        d.Materiais.Count == 0 ? d : d with { Materiais = await pecas.EnriquecerMateriaisAsync(d.Materiais, ct) };
+
+    // Ficha validada com o dossier ainda em conferência = "por confirmar"; cancelada com dossier ou peças ligadas por limpar = "por cancelar".
+    // Os materiais de d já vêm enriquecidos. Só informa: se não der para ler, não há aviso (a ficha abre na mesma).
+    private static async Task<string?> AvisoConferenciaPendenteAsync(FichaDetalheDto d, IRepositorioPecas pecas, ILogger log, CancellationToken ct)
+    {
+        if (d.Antiga || d.Estado is not (EstadoIntervencao.Validada or EstadoIntervencao.Cancelada)) return null;
+        try
+        {
+            var pendente = await pecas.ConferenciaPendenteAsync(d.Id, ct);
+            if (d.Estado == EstadoIntervencao.Validada) return pendente ? AvisoPorConfirmar : null;
+            return pendente || d.Materiais.Any(m => m.Ref != "") ? AvisoPorCancelar : null;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Não foi possível ver se a conferência da ficha {Ficha} ficou a meio.", d.Id);
+            return null;
+        }
+    }
+
     // A ficha já validada, lida do detalhe, na forma que a resposta de validar sempre teve (o supervisor não passa por ObterAsync, que é do técnico).
     private static IntervencaoDto ComoIntervencao(FichaDetalheDto d, string? avisoStock) => new(
         d.Id, d.Equipamento, d.Zona, d.Tipo, d.Data, d.Estado,
@@ -199,13 +231,23 @@ public static partial class EndpointsIntervencoes
     {
         try
         {
-            var saidas = (await pecas.EnriquecerMateriaisAsync(materiais, CancellationToken.None)).Where(m => m.SaidaDada && m.Ref != "").ToList();
+            var enriquecidos = await pecas.EnriquecerMateriaisAsync(materiais, CancellationToken.None);
+            var saidas = enriquecidos.Where(m => m.SaidaDada && m.Ref != "").ToList();
+            var porDar = enriquecidos.Where(m => !m.SaidaDada && m.Ref != "").ToList();
             var r = await pecas.CancelarConferenciaAsync(fichaId, iniciais, CancellationToken.None);
             if (!r.Ok)
             {
                 log.LogError("Não foi possível cancelar a conferência da ficha {Ficha}: {Erro}", fichaId, r.Erro);
                 return AvisoPorCancelar;
             }
+            // Peças "por dar" não têm linha no dossier: a ligação limpa-se à parte (o cancelar repetido conta qualquer Ref, por isso tem de as limpar todas).
+            var ligacoesLimpas = true;
+            foreach (var m in porDar)
+            {
+                var a = await pecas.AnularSaidaAsync(m.Id, iniciais, CancellationToken.None);
+                if (!a.Ok) { log.LogError("Não foi possível limpar a peça por dar do material {Material}: {Erro}", m.Id, a.Erro); ligacoesLimpas = false; }
+            }
+            if (!ligacoesLimpas) return AvisoPorCancelar;
             var todosRepostos = true;
             foreach (var m in saidas) todosRepostos &= await ReporLugarAsync(locs, m.Ref, m.Local, m.Qtt, iniciais, log);
             return todosRepostos ? null : AvisoPorRepor;

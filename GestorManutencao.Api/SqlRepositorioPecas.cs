@@ -1,5 +1,4 @@
 using System.Data;
-using System.Globalization;
 using Microsoft.Data.SqlClient;
 
 namespace GestorManutencao.Api;
@@ -7,7 +6,7 @@ namespace GestorManutencao.Api;
 // Peças e conferência de saídas por dossier PHC (63, um por ficha; a entrada é da LandeiroMaui), como a LandeiroMaui.
 // O dossier e as linhas nascem com emconf = 1 (sem mover stock); ao validar passam a 0 e os "toques" (UPDATE x = x) fazem
 // os triggers do PHC moverem o stock. bo.bostamp = id da ficha (25 caracteres), para achar o dossier sem campo novo.
-// Pressuposto por verificar na base de testes: emconf = 1 não move stock e 0 mais toques move.
+// Verificado na base de testes TESTES_LAND2 (2026-11-20): emconf = 1 não move stock e emconf = 0 mais os toques move.
 public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<SqlRepositorioPecas> log) : IRepositorioPecas
 {
     private const string Hoje = "CAST(CONVERT(date, GETDATE()) AS datetime)";
@@ -109,8 +108,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return _emconfExiste;
     }
 
-    // bi.lobs = "<stamp do material, 25>" ou "<stamp>|<lugar>": o material lê-se pelos primeiros 25 caracteres, o lugar depois do 26.º.
-    // bi.lobs = "<stamp>" ou "<stamp>|<lugar>"; os stamps do PHC podem ter menos de 25 caracteres, por isso parte-se no '|'.
+    // bi.lobs = "<stamp>" ou "<stamp>|<lugar>"; os stamps do PHC podem ter menos de 25 caracteres, por isso parte-se no '|' (não por posição fixa).
     private static string MaterialDeLobs(string coluna = "lobs") =>
         $"LTRIM(RTRIM(CASE WHEN CHARINDEX('|', {coluna}) > 0 THEN LEFT({coluna}, CHARINDEX('|', {coluna}) - 1) ELSE {coluna} END))";
 
@@ -177,7 +175,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     private static string Iniciais(string iniciais) => string.IsNullOrWhiteSpace(iniciais) ? "XX" : iniciais.Trim();
 
     // null = sem dossier; senão diz se continua em conferência.
-    private static async Task<bool?> EstadoDossierAsync(SqlConnection conn, SqlTransaction tx, string bostamp, CancellationToken ct)
+    private static async Task<bool?> EstadoDossierAsync(SqlConnection conn, SqlTransaction? tx, string bostamp, CancellationToken ct)
     {
         await using var cmd = Cmd(conn, tx, "SELECT emconf FROM bo WITH (NOLOCK) WHERE bostamp = @b AND ndos = @ndos", ("@b", bostamp), ("@ndos", RegrasPecas.NdosSaida));
         return await cmd.ExecuteScalarAsync(ct) is { } v and not DBNull ? Convert.ToBoolean(v) : null;
@@ -234,7 +232,8 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
             if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
             if (!await EmconfExisteAsync(conn, ct, tx)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemEmconf); }
             if (!await EPecaAsync(conn, tx, refPeca, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Referência não é uma peça de manutenção."); }
-            await using (var ja = Cmd(conn, tx, $"SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND {MaterialDeLobs()} = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
+            await using (var ja = Cmd(conn, tx, $"SELECT COUNT(*) FROM bi WITH (NOLOCK) WHERE bostamp = @ficha AND ndos = @ndos AND {MaterialDeLobs()} = @m",
+                ("@ficha", StampFicha(fichaId)), ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
                 if ((int)(await ja.ExecuteScalarAsync(ct))! > 0) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha("Já foi dada saída desta peça."); }
 
             // -1 = varchar(max).
@@ -277,7 +276,10 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
             if (!await BloquearAsync(conn, tx, RegrasPecas.NdosSaida, ct)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroOcupado); }
             if (!await EmconfExisteAsync(conn, ct, tx)) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemEmconf); }
             string? bistamp = null; var emConf = false;
-            await using (var proc = Cmd(conn, tx, $"SELECT bistamp, emconf FROM bi WITH (NOLOCK) WHERE ndos = @ndos AND {MaterialDeLobs()} = @m", ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
+            await using (var proc = Cmd(conn, tx, $"""
+                SELECT bistamp, emconf FROM bi WITH (NOLOCK)
+                WHERE bostamp = (SELECT u_fichaintstamp FROM u_matinterv WITH (NOLOCK) WHERE u_matintervstamp = @m) AND ndos = @ndos AND {MaterialDeLobs()} = @m
+                """, ("@ndos", RegrasPecas.NdosSaida), ("@m", materialId)))
             await using (var r = await proc.ExecuteReaderAsync(ct))
                 if (await r.ReadAsync(ct)) { bistamp = r.GetString(0); emConf = Convert.ToBoolean(r.GetValue(1)); }
             if (bistamp is not null)
@@ -364,6 +366,10 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         }
     });
 
+    // Só leitura: o dossier da ficha existe e ainda está em conferência. Sem bo.emconf no PHC não há conferência.
+    public Task<bool> ConferenciaPendenteAsync(string fichaId, CancellationToken ct) => Executar(async conn =>
+        await EmconfExisteAsync(conn, ct) && await EstadoDossierAsync(conn, null, StampFicha(fichaId), ct) is true);
+
     public Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct) => Executar<IReadOnlyDictionary<string, decimal>>(async conn =>
     {
         var lista = refs.Select(r => r.Trim()).Where(RegrasPecas.ReferenciaValida).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -404,9 +410,9 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         var nomes = string.Join(",", ids.Select((_, i) => $"@m{i}"));
         await using var cmd = Cmd(conn, null, $"""
             SELECT LTRIM(RTRIM(mi.u_matintervstamp)), LTRIM(RTRIM(ISNULL(mi.ref, ''))),
-                   CASE WHEN EXISTS (SELECT 1 FROM bi i WITH (NOLOCK) WHERE i.ndos = @ndos AND {MaterialDeLobs("i.lobs")} = LTRIM(RTRIM(mi.u_matintervstamp))) THEN 1 ELSE 0 END,
+                   CASE WHEN EXISTS (SELECT 1 FROM bi i WITH (NOLOCK) WHERE i.bostamp = mi.u_fichaintstamp AND i.ndos = @ndos AND {MaterialDeLobs("i.lobs")} = LTRIM(RTRIM(mi.u_matintervstamp))) THEN 1 ELSE 0 END,
                    ISNULL((SELECT TOP 1 {LugarDeLobs("i.lobs")} FROM bi i WITH (NOLOCK)
-                           WHERE i.ndos = @ndos AND {MaterialDeLobs("i.lobs")} = LTRIM(RTRIM(mi.u_matintervstamp))), '')
+                           WHERE i.bostamp = mi.u_fichaintstamp AND i.ndos = @ndos AND {MaterialDeLobs("i.lobs")} = LTRIM(RTRIM(mi.u_matintervstamp))), '')
             FROM u_matinterv mi WITH (NOLOCK) WHERE mi.u_matintervstamp IN ({nomes})
             """, ("@ndos", RegrasPecas.NdosSaida));
         for (var i = 0; i < ids.Count; i++) Parametro(cmd, $"@m{i}", ids[i]);
@@ -445,7 +451,8 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         await extra.ExecuteNonQueryAsync(ct);
     }
 
-    // Linha em conferência (emconf = 1, sem toques: não move stock). lobs = stamp do material. Devolve o bistamp. RAISERROR classe 16 se a referência não existir.
+    // Linha em conferência (emconf = 1, sem toques: não move stock). lobs = stamp do material (e o lugar, se houver). Devolve o bistamp.
+    // RAISERROR classe 16 se a referência não existir.
     private static async Task<string> InserirLinhaAsync(SqlConnection conn, SqlTransaction tx, string bostamp, int ndos, string refPeca,
         decimal qtt, string lobs, string iniciais, CancellationToken ct)
     {

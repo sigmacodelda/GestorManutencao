@@ -130,6 +130,11 @@ public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) 
         }
     }
 
+    public Task<bool> ConferenciaPendenteAsync(string fichaId, CancellationToken ct)
+    {
+        lock (_trinco) return Task.FromResult(_dossiers.TryGetValue(fichaId, out var emConf) && emConf);
+    }
+
     public Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct)
     {
         lock (_trinco)

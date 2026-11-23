@@ -75,3 +75,17 @@ ORDER BY tabela, trigger_nome;
 SELECT TOP 5 bostamp, ndos, obrano, obranome, dataopen, emconf FROM bo WHERE ndos = 63 ORDER BY dataopen DESC;
 SELECT TOP 5 bostamp, ndos, obrano, obranome, dataopen FROM bo WHERE ndos = 64 ORDER BY dataopen DESC;
 SELECT COUNT(*) AS fichas_em_conferencia FROM bo WHERE ndos = 63 AND emconf = 1;
+
+-- 11. Conferencias a meio: dossiers 63 ainda em conferencia (emconf = 1) de fichas ja validadas ou canceladas (so leitura).
+-- Validada com emconf = 1: falta confirmar (a app mostra "Conferencia por confirmar" ao supervisor). Cancelada com dossier: falta cancelar.
+SELECT b.bostamp, b.obrano, b.obranome, b.dataopen, LTRIM(RTRIM(f.estado)) AS estado_ficha
+FROM bo b WITH (NOLOCK)
+JOIN u_fichaint f WITH (NOLOCK) ON f.u_fichaintstamp = b.bostamp
+WHERE b.ndos = 63 AND b.emconf = 1 AND LTRIM(RTRIM(f.estado)) IN ('Validada', 'Cancelada')
+ORDER BY b.dataopen;                                                          -- esperado: 0 linhas
+
+-- 12. Materiais de fichas canceladas que continuam ligados a uma peca (u_matinterv.ref preenchida): a limpeza do cancelar nao acabou
+SELECT m.u_matintervstamp, m.u_fichaintstamp, LTRIM(RTRIM(m.ref)) AS ref
+FROM u_matinterv m WITH (NOLOCK)
+JOIN u_fichaint f WITH (NOLOCK) ON f.u_fichaintstamp = m.u_fichaintstamp
+WHERE LTRIM(RTRIM(f.estado)) = 'Cancelada' AND LTRIM(RTRIM(ISNULL(m.ref, ''))) <> '';   -- esperado: 0 linhas

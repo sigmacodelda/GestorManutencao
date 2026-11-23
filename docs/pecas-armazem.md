@@ -35,12 +35,13 @@ Peças e lugares (técnico ou supervisor):
 Material da ficha:
 - `GET/POST /intervencoes/{id}/materiais`, `PUT/DELETE /intervencoes/{id}/materiais/{materialId}`.
 - `POST /intervencoes/{id}/materiais/{materialId}/saida`: repete a saída "por dar". Corpo opcional `{ref, local}`.
-- O pedido de material leva `Ref` e `Local` (texto do lugar ou `LOC-…`). A resposta traz `Ref`, `Local` (lugar de onde saiu), `SaidaDada` e `AvisoStock`.
+- O pedido de material leva `Ref` e `Local` (texto do lugar ou `LOC-…`). **No PUT, `Ref` omitido (ou `null`) mantém a peça, a saída e o lugar** (aparelhos antigos, ecrãs que não conhecem a peça); só `Ref` vazio explícito (`"ref": ""`) desliga a peça, anula a saída e repõe o lugar. A UI só envia `ref` quando a pessoa o conhece ou o alterou. Se a reposição da saída falhar depois de a ficha recusar a edição, o PUT responde 409 de stock desfasado, como o DELETE. A resposta traz `Ref`, `Local` (lugar de onde saiu), `SaidaDada` e `AvisoStock`.
 - Escolha do lugar sem `Local` no pedido: o lugar anterior da saída (na edição), senão o único lugar da peça com stock. Com vários lugares com stock responde **409 `{erro:"escolha_o_lugar", lugares:[…]}`** e nada se grava: o ecrã mostra a lista ou pede para picar a etiqueta do lugar. Sem nenhum lugar com stock (ou sem a tabela), grava e avisa "Peça sem localização" (`avisoStock`).
 - Lugar sem quantidade suficiente: o material grava, a peça sai e o `avisoStock` diz que saiu sem descontar do lugar. Lugar ocupado por outro movimento: a peça fica por dar (repetível).
 - `POST /intervencoes/{id}/iniciar`: depois de iniciar abre a conferência. Se falhar só se regista; o primeiro material com peça abre-a de novo (idempotente).
-- `POST /validacao/{id}` (supervisor): valida a ficha e depois confirma a conferência. Se a confirmação falhar a ficha fica validada, a resposta é 200 com `avisoStock = "Conferência por confirmar"` e uma nova chamada repete só a confirmação.
-- `POST /intervencoes/{id}/cancelar` (supervisor): cancela a ficha, apaga a conferência e repõe os lugares. Falhas ficam em `avisoStock` ("Conferência por cancelar" ou "Lugares por repor") e repetir o cancelar repete só a limpeza.
+- `POST /validacao/{id}` (supervisor): valida a ficha e depois confirma a conferência. Se a confirmação falhar a ficha fica validada, a resposta é 200 com `avisoStock = "Conferência por confirmar"` e uma nova chamada repete só a confirmação. **Antes de validar**, se há materiais com peça ligada e sem saída dada ("por dar"), responde **409 `{erro:"pecas_por_dar", mensagem}`** ("Há N peça(s) por dar saída; repita a saída ou desligue a peça antes de validar.") e não faz nada: depois de validada já não se repete a saída. O supervisor pode repetir a saída ou desligar a peça numa ficha Concluída (`PodeEditar` do supervisor vale para qualquer ficha que não seja Validada ou Cancelada).
+- `POST /intervencoes/{id}/cancelar` (supervisor): cancela a ficha, apaga a conferência, repõe os lugares e limpa a ligação à peça de **todos** os materiais (também os "por dar", que não têm linha no dossier). Falhas ficam em `avisoStock` ("Conferência por cancelar" ou "Lugares por repor") e repetir o cancelar repete só a limpeza.
+- `GET /intervencoes/{id}/detalhe`: os materiais vêm com `Ref`, `SaidaDada` e `Local` (também para o supervisor, que não usa `GET /materiais`). Ao supervisor, numa ficha **Validada** com o dossier ainda em `emconf = 1` ou **Cancelada** com dossier (ou peças ainda ligadas), traz `avisoStock` ("Conferência por confirmar" / "Conferência por cancelar"); o ecrã oferece então "Repetir confirmação" / "Repetir cancelamento" mesmo depois de reabrir a ficha. A consulta é só leitura (`IRepositorioPecas.ConferenciaPendenteAsync`).
 - `POST /validacao/{id}/devolver`: não mexe na conferência.
 
 ## Tabelas e campos do PHC usados
@@ -69,7 +70,9 @@ Regra: uma falha ao mexer no stock ou nos lugares nunca desfaz o estado da ficha
 
 - **Peça por dar**: material com `Ref` ligada e `SaidaDada = false`. O ecrã oferece "Repetir saída"; se já está dada, 409.
 - **Validar** primeiro valida a ficha e só depois confirma a conferência. O stock do PHC nunca se move para uma ficha por validar. Se a confirmação falhar: "Conferência por confirmar". Confirmar é idempotente (verificado: confirmar duas vezes não desce duas).
-- **Cancelar** primeiro apaga a conferência e só depois repõe os lugares (se a conferência não saiu, os lugares ficam). Falhas: "Conferência por cancelar" e "Lugares por repor". É idempotente: uma ficha já cancelada com a limpeza por fazer repete só a limpeza; sem nada por limpar mantém a recusa 409. Cancelar depois de confirmado é recusado pelo repositório.
+- **Cancelar** primeiro apaga a conferência e só depois repõe os lugares (se a conferência não saiu, os lugares ficam). Falhas: "Conferência por cancelar" e "Lugares por repor". É idempotente: uma ficha já cancelada com a limpeza por fazer (qualquer material com `Ref` ligada, com ou sem linha no dossier) repete só a limpeza, que limpa a ligação de todos esses materiais; com tudo limpo mantém a recusa 409. Cancelar depois de confirmado é recusado pelo repositório.
+- Apagar material "por dar" não repõe nada se a ficha recusar (não se desfez nenhuma saída).
+- Lugares: só se desconta de um lugar que se sabe repor (formato lido por `RegrasLocalizacao.LerLugar`); um lugar da lista com formato não reconhecido não é oferecido nem descontado (a peça sai com aviso), e um lugar gravado ilegível devolve "lugares por repor".
 - Apagar material com a reposição do lugar falhada: o material apaga-se e avisa "peça saiu sem repor no lugar: avise o supervisor".
 - Todas as escritas de dossier usam `sp_getapplock` exclusivo por tipo de dossier (10 s); se ocupado, 409 "Outro movimento em curso, tente outra vez.". Os lugares usam applock por lugar.
 
@@ -111,7 +114,7 @@ Pré-requisitos que ficam por confirmar em cada cliente: `docs/sql/pecas-verific
 - **Limites do lugar** mais apertados que as colunas (corredor até 3 caracteres, estante até 999, nível e posição até 99); vêm da etiqueta. Lugares fora disto, criados noutra app, podem não se conseguir escolher aqui.
 - **`bi.lobs`** pode ser usado por outras rotinas do PHC do cliente: confirmar antes de instalar. Esta app guarda aí o stamp do material e o lugar.
 - **Duas fontes de quantidade por lugar**: o desconto de `u_pecaloc` é do picking e o do stock do PHC é da validação; entre os dois momentos os números diferem de propósito (o disponível mostra o que já está em conferência).
-- **Revisão**: as correções das Tasks 2 a 6 não tiveram segunda revisão.
+- **Revisão**: a revisão final do ramo (críticos e importantes) foi corrigida (relatório `.superpowers/sdd/v2-final-fix-report.md`); as correções dessa ronda não tiveram segunda revisão.
 - A API depende dos triggers e colunas do PHC (`u_manut`, `emconf`, `bi.lobs`, dossiers 63, armazém 104). Uma atualização do PHC que mude os triggers pode afetar o circuito.
 - Os dossiers criam-se com o cliente 1 ("Carnes Landeiro, SA.") e origem "Gestor Manutencao", como na LandeiroMaui.
 - O armazém é fixo (104).

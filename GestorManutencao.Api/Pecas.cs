@@ -83,6 +83,8 @@ public interface IRepositorioPecas
     Task<ResultadoMovimento> ConfirmarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct);
     // Cancelar: apaga linhas, bi2 e o dossier da ficha, só se ainda em conferência.
     Task<ResultadoMovimento> CancelarConferenciaAsync(string fichaId, string iniciais, CancellationToken ct);
+    // O dossier da ficha existe e ainda está em conferência (emconf = 1): numa ficha validada falta confirmar, numa cancelada falta cancelar. Só leitura.
+    Task<bool> ConferenciaPendenteAsync(string fichaId, CancellationToken ct);
     // Soma das quantidades em conferência (dossiers 63, armazém 104) por peça, sem contar a ficha indicada.
     Task<IReadOnlyDictionary<string, decimal>> EmConferenciaPorPecaAsync(IReadOnlyCollection<string> refs, string? excetoFichaId, CancellationToken ct);
 

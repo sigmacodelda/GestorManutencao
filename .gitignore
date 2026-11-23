@@ -421,3 +421,5 @@ GestorManutencao.Api/dados/
 segredos/
 **/firebase-adminsdk*.json
 GestorManutencao.App/Platforms/Android/google-services.json
+Testes-Circuito/resultados-offline/
+Testes-Circuito/resultados-dia-a-dia/

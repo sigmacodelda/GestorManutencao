@@ -707,7 +707,7 @@ public sealed class OfflineIntervencoesService(
 
     public Task<FichaDetalhe> FecharFichaAntigaAsync(string id, bool supervisao, bool fechada, CancellationToken ct = default) =>
         SoOnlineAsync(id, i => remoto.FecharFichaAntigaAsync(i, supervisao, fechada, ct), true, ct: ct);
-    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string refPeca = "", string localPeca = "", CancellationToken ct = default) =>
+    public Task<Material> EditarMaterialAsync(string id, string materialId, string design, decimal qtt, decimal epv, string? refPeca = null, string localPeca = "", CancellationToken ct = default) =>
         SoOnlineAsync(id, i => remoto.EditarMaterialAsync(i, materialId, design, qtt, epv, refPeca, localPeca, ct), true, ct: ct);
 
     public Task<Material> RepetirSaidaAsync(string id, string materialId, string localPeca = "", CancellationToken ct = default) =>
