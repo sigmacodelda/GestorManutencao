@@ -157,11 +157,19 @@ async function entrar(page, pin) {
 // Sem assinatura a app pede-a antes de continuar: desenha-se um traço com o rato e guarda-se.
 async function assinar(page) {
   const c = page.locator('#assinatura-tela');
-  const b = await c.boundingBox();
-  await page.mouse.move(b.x + b.width * 0.15, b.y + b.height * 0.6); await page.mouse.down();
-  for (let i = 1; i <= 12; i++) await page.mouse.move(b.x + b.width * (0.15 + 0.06 * i), b.y + b.height * (0.6 - 0.25 * Math.sin(i / 2)), { steps: 3 });
-  await page.mouse.up();
-  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  const guardar = page.getByRole('button', { name: 'Guardar', exact: true });
+  await c.waitFor({ timeout: 15000 });
+  // O canvas só ouve o rato depois de o Blazor o iniciar: desenha-se até o Guardar ficar ativo.
+  for (let tentativa = 0; tentativa < 4 && await guardar.isDisabled(); tentativa++) {
+    await page.waitForTimeout(500);
+    await c.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
+    const b = await c.boundingBox();
+    await page.mouse.move(b.x + b.width * 0.15, b.y + b.height * 0.6); await page.mouse.down();
+    for (let i = 1; i <= 12; i++) await page.mouse.move(b.x + b.width * (0.15 + 0.06 * i), b.y + b.height * (0.6 - 0.25 * Math.sin(i / 2)), { steps: 3 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+  }
+  await guardar.click();
 }
 async function sair(page) {
   // Em vista de telemóvel o botão está no cabeçalho do início (hero-sair); noutros ecrãs, no topo.
