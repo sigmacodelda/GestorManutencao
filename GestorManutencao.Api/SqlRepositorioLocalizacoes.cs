@@ -85,6 +85,7 @@ public sealed class SqlRepositorioLocalizacoes(IConfiguration configuracao, IRep
         {
             var l = new List<LugarDto>();
             if (await VerificarAsync(conn, ct) != "") return l;
+            var buffer = await LerBufferAsync(conn, null, ct);
             await using var cmd = Cmd(conn, null, @"
 SELECT ISNULL(LTRIM(RTRIM(corredor)), ''), ISNULL(LTRIM(RTRIM(estante)), ''), CAST(ISNULL(NULLIF(LTRIM(RTRIM(nivel)), ''), '0') AS int), CAST(ISNULL(NULLIF(LTRIM(RTRIM(posicao)), ''), '0') AS int),
        CAST(ISNULL(NULLIF(LTRIM(RTRIM(qtt)), ''), '0') AS decimal(13, 3)) AS q  -- qtt, nivel e posicao são varchar no PHC
@@ -92,7 +93,12 @@ FROM u_pecaloc WITH (NOLOCK) WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a
 ORDER BY q DESC, corredor, estante, nivel, posicao",
                 ("@r", refPeca.Trim()), ("@a", RegrasPecas.Armazem));
             await using var rd = await cmd.ExecuteReaderAsync(ct);
-            while (await rd.ReadAsync(ct)) l.Add(new LugarDto(rd.GetString(0), rd.GetString(1), rd.GetInt32(2), rd.GetInt32(3), rd.GetDecimal(4)));
+            while (await rd.ReadAsync(ct))
+            {
+                // A linha do buffer é o que espera lugar, não um lugar: fora da lista e do "localizado".
+                var lugar = new LugarDto(rd.GetString(0), rd.GetString(1), rd.GetInt32(2), rd.GetInt32(3), rd.GetDecimal(4));
+                if (!RegrasLocalizacao.EBuffer(lugar, buffer)) l.Add(lugar);
+            }
             return l;
         });
         var localizado = lugares.Sum(l => l.Qtt);
@@ -120,8 +126,39 @@ ORDER BY SUM(q) DESC, r",
             return l;
         });
 
+    // u_configman.localentrada (A-03-2-04 ou texto livre como BUFFER), a mesma da LandeiroMaui; sem o campo ou vazia = sem buffer.
+    private static async Task<LugarDto?> LerBufferAsync(SqlConnection conn, SqlTransaction? tx, CancellationToken ct)
+    {
+        await using (var coluna = Cmd(conn, tx, "SELECT COL_LENGTH('u_configman', 'localentrada')"))
+            if (await coluna.ExecuteScalarAsync(ct) is null or DBNull) return null;
+        await using var cmd = Cmd(conn, tx, "SELECT TOP 1 LTRIM(RTRIM(ISNULL(localentrada, ''))) FROM u_configman WITH (NOLOCK)");
+        return RegrasLocalizacao.LerBuffer(await cmd.ExecuteScalarAsync(ct) as string);
+    }
+
+    // Soma ao lugar de destino e tira o mesmo do buffer, na mesma transação.
     public Task<ResultadoMovimento> ArrumarAsync(string refPeca, string corredor, int estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
-        => SomarAsync(refPeca, corredor, RegrasLocalizacao.NormalizarEstante(corredor, estante), nivel, posicao, qtt, iniciais, ct);
+    {
+        var estanteNormal = RegrasLocalizacao.NormalizarEstante(corredor, estante);
+        return Escrever(refPeca, estanteNormal, nivel, posicao, ct, async (conn, tx) =>
+        {
+            var buffer = await LerBufferAsync(conn, tx, ct);
+            if (RegrasLocalizacao.EBuffer(new LugarDto(corredor.Trim().ToUpperInvariant(), estanteNormal, nivel, posicao, 0), buffer))
+                return ResultadoMovimento.Falha("Escolha um lugar diferente do de entrada (buffer).");
+            await SomarNoLugarAsync(conn, tx, refPeca, corredor, estanteNormal, nivel, posicao, qtt, iniciais, ct);
+            if (buffer is not null)
+            {
+                // Nunca abaixo de 0; a linha esvaziada apaga-se (qtt 0 na u_pecaloc significaria "quantidade não indicada").
+                await using var tirar = Cmd(conn, tx, $@"
+UPDATE u_pecaloc SET qtt = CAST(CAST(CASE WHEN {Qtd("qtt")} > @q THEN {Qtd("qtt")} - @q ELSE 0 END AS decimal(13, 3)) AS varchar(13)), usrinis = @ini, usrdata = {Hoje}, usrhora = {Hora}
+WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND {Texto("corredor")} = @c AND {Texto("estante")} = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po;
+DELETE FROM u_pecaloc
+WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND {Texto("corredor")} = @c AND {Texto("estante")} = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po AND {Qtd("qtt")} <= 0",
+                    Parametros(refPeca, buffer.Corredor, buffer.Estante, buffer.Nivel, buffer.Posicao, qtt, iniciais, ""));
+                await tirar.ExecuteNonQueryAsync(ct);
+            }
+            return ResultadoMovimento.Sucesso("");
+        });
+    }
 
     public Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
         => SomarAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
@@ -138,6 +175,12 @@ ORDER BY SUM(q) DESC, r",
     private Task<ResultadoMovimento> SomarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
         => Escrever(refPeca, estante, nivel, posicao, ct, async (conn, tx) =>
         {
+            await SomarNoLugarAsync(conn, tx, refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
+            return ResultadoMovimento.Sucesso("");
+        });
+
+    private static async Task SomarNoLugarAsync(SqlConnection conn, SqlTransaction tx, string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
+    {
             await using var cmd = Cmd(conn, tx, $@"
 UPDATE u_pecaloc SET qtt = CAST(CAST({Qtd("qtt")} + @q AS decimal(13, 3)) AS varchar(13)), usrinis = @ini, usrdata = {Hoje}, usrhora = {Hora}
 WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po;
@@ -146,8 +189,7 @@ INSERT INTO u_pecaloc (u_pecalocstamp, ref, armazem, corredor, estante, nivel, p
 VALUES (@s, @r, @a, @c, @e, @n, @po, @q, 0, @ini, {Hoje}, {Hora}, @ini, {Hoje}, {Hora})",
                 Parametros(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, Guid.NewGuid().ToString("N")[..25]));
             await cmd.ExecuteNonQueryAsync(ct);
-            return ResultadoMovimento.Sucesso("");
-        });
+    }
 
     public Task<ResultadoMovimento> DescontarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
         => Escrever(refPeca, estante, nivel, posicao, ct, async (conn, tx) =>

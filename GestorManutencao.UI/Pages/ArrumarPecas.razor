@@ -30,12 +30,12 @@
         {
             <div class="intervencao">
                 <span class="intervencao-titulo">@_peca.Ref @_peca.Design</span>
-                <span class="intervencao-desc">Stock @_peca.Stock.ToString("0.###") · Por arrumar @(_lug?.PorArrumar.ToString("0.###") ?? "?")</span>
+                <span class="intervencao-desc">Stock @_peca.Stock.ToString("0.###") · No buffer (por arrumar) @(_lug?.PorArrumar.ToString("0.###") ?? "?")</span>
                 <button type="button" class="btn btn-secundario" @onclick="LimparPeca"><Icone Nome="x" /><span>Mudar de peça</span></button>
             </div>
             @if (_lug is { PorArrumar: <= 0 })
             {
-                <p class="estado-lista" role="status">Já está tudo arrumado.</p>
+                <p class="estado-lista" role="status">Esta peça não tem nada no buffer: só se arruma o que lá está.</p>
             }
         }
 
@@ -68,7 +68,7 @@
             </ul>
         }
 
-        @if (_estado.Completo)
+        @if (_estado.Completo && _lug is { PorArrumar: > 0 })
         {
             <form class="formulario" @onsubmit="ArrumarAsync" novalidate>
                 <div class="campo">
@@ -77,7 +77,7 @@
                 </div>
                 @if (_lug is not null && LogicaPicagem.LerQuantidade(_qttTexto, out var proposta) && proposta > _lug.PorArrumar)
                 {
-                    <p class="estado-lista" role="status">Atenção: é mais do que o que falta arrumar (@_lug.PorArrumar.ToString("0.###")).</p>
+                    <p class="campo-erro" role="alert">Só pode arrumar o que está no buffer (@_lug.PorArrumar.ToString("0.###")).</p>
                 }
                 <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_gravar"><Icone Nome="check" /><span>@(_a_gravar ? "A gravar…" : "Arrumar")</span></button>
             </form>
@@ -180,6 +180,11 @@
         if (!LogicaPicagem.LerQuantidade(_qttTexto, out var qtt))
         {
             _erro = "Quantidade inválida: use um número positivo, com vírgula ou ponto e no máximo 3 casas decimais.";
+            return;
+        }
+        if (_lug is null || qtt > _lug.PorArrumar)
+        {
+            _erro = $"Só pode arrumar o que está no buffer ({_lug?.PorArrumar.ToString("0.###") ?? "?"}).";
             return;
         }
         _a_gravar = true;

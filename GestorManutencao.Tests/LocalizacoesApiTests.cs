@@ -70,7 +70,8 @@ public class LocalizacoesApiTests : IDisposable
     public async Task No_lugar_junta_varias_pecas_e_ignora_as_sem_quantidade()
     {
         var c = await ComoAsync("482913");
-        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/pecas/localizacoes", new PedidoArrumar("P002", "A-02-1-01", 5))).StatusCode);
+        // P002 tem stock 0 (nada no buffer): a quantidade põe-se direto no lugar, sem passar pela arrumação.
+        Assert.True((await _fabrica.Services.GetRequiredService<IRepositorioLocalizacoes>().ReporAsync("P002", "A", "A-02", 1, 1, 5, "XX", CancellationToken.None)).Ok);
         var pecas = (await c.GetFromJsonAsync<List<PecaNoLugarDto>>("/pecas/no-lugar?local=A-02-1-01"))!;
         Assert.Equal(["P002", "P001"], pecas.Select(p => p.Ref));
         Assert.Empty((await c.GetFromJsonAsync<List<PecaNoLugarDto>>("/pecas/no-lugar?local=B-09-9-09"))!);
@@ -124,6 +125,42 @@ public class LocalizacoesApiTests : IDisposable
         Assert.Equal(["A-02-1-01", "B-01-2-03"], d.Lugares.Select(l => l.Texto));
         Assert.Equal(9.5m, d.Localizado);
         Assert.Equal(0.5m, d.PorArrumar);
+    }
+
+    [Fact]
+    public async Task So_se_arruma_o_que_esta_no_buffer()
+    {
+        var c = await ComoAsync("482913"); // P001: stock 10, 3 já arrumadas
+        var r = await c.PostAsJsonAsync("/pecas/localizacoes", new PedidoArrumar("P001", "B-01-1-01", 8));
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Contains("buffer", await r.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/pecas/localizacoes", new PedidoArrumar("P001", "B-01-1-01", 7))).StatusCode);
+
+        // Buffer vazio: nada mais a arrumar. P002 tem stock 0 e também não.
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/localizacoes", new PedidoArrumar("P001", "B-01-1-01", 1))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/localizacoes", new PedidoArrumar("P002", "B-01-1-01", 1))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Linha_do_buffer_nao_conta_como_arrumada_e_arrumar_tira_do_buffer()
+    {
+        var pecas = new RepositorioPecasMemoria([new PecaDto("P001", "Parafuso M8", "560001", "A-01-1-01", 10, 4, 0.12m)]);
+        var repo = new RepositorioLocalizacoesMemoria(pecas);
+        repo.DefinirBuffer("Z-09-9-09");
+        await repo.ReporAsync("P001", "Z", "Z-09", 9, 9, 7, "XX", CancellationToken.None); // entrada: 7 à espera no buffer
+        using var f = new LocalizacoesApiTests(repo);
+        var c = await f.ComoAsync("482913");
+
+        var d = (await c.GetFromJsonAsync<LocalizacoesPecaDto>("/pecas/P001/localizacoes"))!;
+        Assert.Equal(7, d.PorArrumar); // com a linha do buffer a contar daria 0 ("já está tudo arrumado")
+        Assert.DoesNotContain(d.Lugares, l => l.Texto == "Z-09-9-09");
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync("/pecas/localizacoes", new PedidoArrumar("P001", "Z-09-9-09", 1))).StatusCode);
+
+        d = (await (await c.PostAsJsonAsync("/pecas/localizacoes", new PedidoArrumar("P001", "B-01-1-01", 7))).Content.ReadFromJsonAsync<LocalizacoesPecaDto>())!;
+        Assert.Equal(0, d.PorArrumar);
+        Assert.Equal(["A-02-1-01", "B-01-1-01"], d.Lugares.Select(l => l.Texto).Order());
+        Assert.Empty(await repo.ListarPecasDoLugarAsync("Z", "Z-09", 9, 9, CancellationToken.None)); // o buffer ficou vazio
     }
 
     [Fact]

@@ -57,13 +57,30 @@ public static class RegrasLocalizacao
     public static string NormalizarEstante(string corredor, int estante) => $"{corredor.Trim().ToUpperInvariant()}-{estante:00}";
 
     public static decimal Calcular(decimal stock, decimal localizado) => Math.Max(0, stock - localizado);
+
+    // Buffer = u_configman.localentrada (o da LandeiroMaui): onde as entradas esperam por lugar. Texto livre (BUFFER) fica no corredor, sem estante.
+    public static LugarDto? LerBuffer(string? texto)
+    {
+        var t = (texto ?? "").Trim();
+        return t.Length == 0 ? null : LerLugar(t) ?? new LugarDto(t.ToUpperInvariant(), "", 0, 0, 0);
+    }
+
+    public static bool EBuffer(LugarDto lugar, LugarDto? buffer) =>
+        buffer is not null && string.Equals(lugar.Corredor.Trim(), buffer.Corredor, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(lugar.Estante.Trim(), buffer.Estante, StringComparison.OrdinalIgnoreCase) && lugar.Nivel == buffer.Nivel && lugar.Posicao == buffer.Posicao;
+
+    // Só se arruma o que está no buffer (stock do armazém menos o já localizado fora dele).
+    public static string? ErroForaDoBuffer(decimal pedida, decimal porArrumar) =>
+        porArrumar <= 0 ? "Esta peça não tem nada no buffer para arrumar."
+        : pedida > porArrumar ? $"Só pode arrumar o que está no buffer: {porArrumar:0.###} por arrumar."
+        : null;
 }
 
 public interface IRepositorioLocalizacoes
 {
-    // Lugares por qtt desc; PorArrumar = max(0, stock do armazém 104 - localizado).
+    // Lugares definitivos por qtt desc (sem a linha do buffer); PorArrumar = max(0, stock do armazém 104 - localizado fora do buffer).
     Task<LocalizacoesPecaDto> ListarAsync(string refPeca, CancellationToken ct);
-    // Soma ao lugar ou cria-o.
+    // Soma ao lugar ou cria-o e tira o mesmo do buffer; Falha se o lugar é o próprio buffer.
     Task<ResultadoMovimento> ArrumarAsync(string refPeca, string corredor, int estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct);
     // Ok mesmo que o lugar fique a 0; Falha se o lugar não tem quantidade suficiente.
     Task<ResultadoMovimento> DescontarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct);
@@ -118,6 +135,8 @@ public static class EndpointsLocalizacoes
                 if (await pecas.ObterPorCodigoAsync(p.Ref!.Trim(), ct) is not { } peca) return Results.NotFound();
                 var falta = await repo.VerificarTabelaAsync(ct);
                 if (falta != "") return Results.Json(new { erro = falta }, statusCode: StatusCodes.Status409Conflict);
+                if (RegrasLocalizacao.ErroForaDoBuffer(p.Qtt!.Value, (await repo.ListarAsync(peca.Ref, ct)).PorArrumar) is { } foraDoBuffer)
+                    return EndpointsIntervencoes.PedidoInvalido(foraDoBuffer);
                 var r = await repo.ArrumarAsync(peca.Ref, local.Value.Corredor, local.Value.Estante, local.Value.Nivel, posicao, p.Qtt!.Value, t.Codigo, ct);
                 if (!r.Ok) return r.Erro == RegrasPecas.ErroOcupado
                     ? Results.Json(new { erro = r.Erro }, statusCode: StatusCodes.Status409Conflict)

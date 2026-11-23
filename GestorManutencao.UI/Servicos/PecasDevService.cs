@@ -38,6 +38,7 @@ public sealed class PecasDevService : IPecasService
         lock (_trinco)
         {
             if (!_pecas.Any(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException("Peça não encontrada.");
+            if (qtt > Montar(refPeca)!.PorArrumar) throw new InvalidOperationException("Só pode arrumar o que está no buffer.");
             var texto = $"{p[0]}-{estante:00}-{nivel}-{pos:00}";
             var i = _lugares.FindIndex(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase) && x.Lugar.Texto == texto);
             if (i >= 0) _lugares[i] = (_lugares[i].Ref, _lugares[i].Lugar with { Qtt = _lugares[i].Lugar.Qtt + qtt });

@@ -7,12 +7,20 @@ public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IR
     // (ref, estante, nivel, posicao) -> lugar; a amostra casa com a peça P001 (stock 10, 3 arrumadas).
     private readonly List<(string Ref, LugarDto Lugar)> _lugares = [("P001", new LugarDto("A", "A-02", 1, 1, 3))];
 
+    private LugarDto? _buffer;
+
+    // Sem buffer por defeito (como u_configman.localentrada vazio); os testes definem-no.
+    public void DefinirBuffer(string? texto)
+    {
+        lock (_trinco) _buffer = RegrasLocalizacao.LerBuffer(texto);
+    }
+
     public async Task<LocalizacoesPecaDto> ListarAsync(string refPeca, CancellationToken ct)
     {
         var stock = (await pecas.ObterPorCodigoAsync(refPeca, ct))?.Stock ?? 0;
         lock (_trinco)
         {
-            var lugares = _lugares.Where(x => Igual(x.Ref, refPeca)).Select(x => x.Lugar)
+            var lugares = _lugares.Where(x => Igual(x.Ref, refPeca) && !RegrasLocalizacao.EBuffer(x.Lugar, _buffer)).Select(x => x.Lugar)
                 .OrderByDescending(l => l.Qtt).ThenBy(l => l.Estante).ThenBy(l => l.Nivel).ThenBy(l => l.Posicao).ToList();
             var localizado = lugares.Sum(l => l.Qtt);
             return new LocalizacoesPecaDto(refPeca, stock, localizado, RegrasLocalizacao.Calcular(stock, localizado), lugares);
@@ -20,7 +28,24 @@ public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IR
     }
 
     public Task<ResultadoMovimento> ArrumarAsync(string refPeca, string corredor, int estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
-        => Task.FromResult(Somar(refPeca, corredor, RegrasLocalizacao.NormalizarEstante(corredor, estante), nivel, posicao, qtt));
+    {
+        var estanteNormal = RegrasLocalizacao.NormalizarEstante(corredor, estante);
+        lock (_trinco)
+        {
+            if (RegrasLocalizacao.EBuffer(new LugarDto(corredor.Trim().ToUpperInvariant(), estanteNormal, nivel, posicao, 0), _buffer))
+                return Task.FromResult(ResultadoMovimento.Falha("Escolha um lugar diferente do de entrada (buffer)."));
+            var r = Somar(refPeca, corredor, estanteNormal, nivel, posicao, qtt);
+            // Tira do buffer o que passou (nunca abaixo de 0; linha esvaziada apaga-se).
+            var b = _lugares.FindIndex(x => Igual(x.Ref, refPeca) && RegrasLocalizacao.EBuffer(x.Lugar, _buffer));
+            if (b >= 0)
+            {
+                var resto = _lugares[b].Lugar.Qtt - qtt;
+                if (resto > 0) _lugares[b] = (_lugares[b].Ref, _lugares[b].Lugar with { Qtt = resto });
+                else _lugares.RemoveAt(b);
+            }
+            return Task.FromResult(r);
+        }
+    }
 
     public Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
         => Task.FromResult(Somar(refPeca, corredor, estante, nivel, posicao, qtt));

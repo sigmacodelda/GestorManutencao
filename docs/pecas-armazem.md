@@ -29,7 +29,8 @@ Todas exigem sessão. Formato dos erros: 400 `{erro:"pedido_invalido", mensagem}
 Peças e lugares (técnico ou supervisor):
 - `GET /pecas?texto=`: pesquisa por até 4 palavras (máximo 60 resultados, `HaMais` se houver mais; `CampoExiste = false` se falta `stobs.u_manut`). Cada peça traz `Stock`, `EmConferencia` e `Disponivel`.
 - `GET /pecas/codigo/{codigo}`: código de barras ou referência; 404 se não existe.
-- `GET /pecas/{ref}/localizacoes`: lugares da peça (por quantidade decrescente), `Stock`, `Localizado` e `PorArrumar` (nunca negativo).
+- `GET /pecas/{ref}/localizacoes`: lugares da peça (por quantidade decrescente), `Stock`, `Localizado` e `PorArrumar` (nunca negativo). **Buffer** = `u_configman.localentrada` (o da LandeiroMaui, onde as entradas esperam lugar): a linha do buffer em `u_pecaloc` não conta como lugar nem como localizado; `PorArrumar` é o que está no buffer. Sem o campo ou vazio, não há buffer e `PorArrumar` = stock menos localizado.
+- Só se arruma o que está no buffer: `POST /pecas/localizacoes` devolve 400 se a quantidade excede `PorArrumar` (ou este é 0) ou se o destino é o próprio buffer. Ao arrumar, a quantidade sai da linha do buffer (apagada se ficar a 0), na mesma transação.
 - `POST /pecas/localizacoes` com `{ref, local, qtt}`: arruma. `local` é o texto da etiqueta (`LOC-A-03-2-04`) ou do lugar (`A-03-2-04`), sempre com posição. Quantidade positiva, até 3 casas, abaixo de 1.000.000. 400 se inválido, 404 se a peça não existe, 409 se a tabela `u_pecaloc` falta ou o lugar está ocupado. Devolve os lugares atualizados.
 
 Material da ficha:
