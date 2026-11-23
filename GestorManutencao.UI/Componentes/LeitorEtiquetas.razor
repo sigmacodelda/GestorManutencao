@@ -9,7 +9,7 @@
     <input @ref="_campo" id="@Id" class="leitor-escondido" type="text" inputmode="none" autocomplete="off" autocapitalize="off"
            spellcheck="false" tabindex="-1" aria-label="Leitor de etiquetas" />
 }
-else
+else if (!SemBotao)
 {
     <button type="button" id="@Id" class="btn btn-secundario" disabled="@_a_ler" @onclick="LerComCameraAsync">
         <Icone Nome="camera" /><span>@TextoCamara</span>
@@ -24,6 +24,11 @@ else
     [Parameter] public EventCallback<string> OnLido { get; set; }
     [Parameter] public string? Id { get; set; }
     [Parameter] public string TextoCamara { get; set; } = "Picar com a câmara";
+    // O botão da câmara vive noutro sítio do ecrã (barra fixa no topo) e chama PicarComCameraAsync.
+    [Parameter] public bool SemBotao { get; set; }
+
+    public bool UsaCamara => Efetivo == ModoLeitura.Camara;
+    public Task PicarComCameraAsync() => LerComCameraAsync();
 
     private ElementReference _campo;
     private IJSObjectReference? _modulo, _ligacao;

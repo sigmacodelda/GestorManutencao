@@ -54,6 +54,43 @@ public class LocalizacoesApiTests : IDisposable
     }
 
     [Fact]
+    public async Task No_lugar_devolve_as_pecas_com_quantidade_e_aceita_a_etiqueta()
+    {
+        var c = await ComoAsync("482913");
+        foreach (var local in new[] { "A-02-1-01", "LOC-A-02-1-01" })
+        {
+            var r = await c.GetAsync($"/pecas/no-lugar?local={Uri.EscapeDataString(local)}");
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+            var pecas = (await r.Content.ReadFromJsonAsync<List<PecaNoLugarDto>>())!;
+            Assert.Equal(new PecaNoLugarDto("P001", "Parafuso M8", 3), Assert.Single(pecas));
+        }
+    }
+
+    [Fact]
+    public async Task No_lugar_junta_varias_pecas_e_ignora_as_sem_quantidade()
+    {
+        var c = await ComoAsync("482913");
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/pecas/localizacoes", new PedidoArrumar("P002", "A-02-1-01", 5))).StatusCode);
+        var pecas = (await c.GetFromJsonAsync<List<PecaNoLugarDto>>("/pecas/no-lugar?local=A-02-1-01"))!;
+        Assert.Equal(["P002", "P001"], pecas.Select(p => p.Ref));
+        Assert.Empty((await c.GetFromJsonAsync<List<PecaNoLugarDto>>("/pecas/no-lugar?local=B-09-9-09"))!);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("A-02")]
+    [InlineData("lixo")]
+    public async Task No_lugar_local_invalido_400(string local) =>
+        Assert.Equal(HttpStatusCode.BadRequest, (await (await ComoAsync("482913")).GetAsync($"/pecas/no-lugar?local={Uri.EscapeDataString(local)}")).StatusCode);
+
+    [Fact]
+    public async Task No_lugar_sem_token_401_e_Qualidade_403()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await (await ComoAsync(null)).GetAsync("/pecas/no-lugar?local=A-02-1-01")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await (await ComoAsync("715329")).GetAsync("/pecas/no-lugar?local=A-02-1-01")).StatusCode);
+    }
+
+    [Fact]
     public async Task Sem_token_401_e_Qualidade_403()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, (await (await ComoAsync(null)).GetAsync("/pecas/P001/localizacoes")).StatusCode);
@@ -126,6 +163,7 @@ public class LocalizacoesApiTests : IDisposable
         public Task<ResultadoMovimento> DescontarAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
         public Task<ResultadoMovimento> ReporAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
         public Task<string> VerificarTabelaAsync(CancellationToken ct) => Task.FromResult("Falta criar a tabela u_pecaloc no PHC.");
+        public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string c, string e, int n, int p, CancellationToken ct) => throw new InvalidOperationException();
     }
 
     private sealed class RepoIndisponivel : IRepositorioLocalizacoes
@@ -135,6 +173,7 @@ public class LocalizacoesApiTests : IDisposable
         public Task<ResultadoMovimento> DescontarAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<ResultadoMovimento> ReporAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<string> VerificarTabelaAsync(CancellationToken ct) => throw new RepositorioIndisponivelException();
+        public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string c, string e, int n, int p, CancellationToken ct) => throw new RepositorioIndisponivelException();
     }
 
     [Fact]
@@ -153,6 +192,7 @@ public class LocalizacoesApiTests : IDisposable
         public Task<ResultadoMovimento> DescontarAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
         public Task<ResultadoMovimento> ReporAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
         public Task<string> VerificarTabelaAsync(CancellationToken ct) => Task.FromResult("");
+        public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string c, string e, int n, int p, CancellationToken ct) => throw new InvalidOperationException();
     }
 
     [Fact]

@@ -19,6 +19,15 @@ public sealed class PecasDevService : IPecasService
         lock (_trinco) return Task.FromResult(Montar(refPeca));
     }
 
+    public Task<IReadOnlyList<PecaNoLugar>> PecasNoLugarAsync(string local, CancellationToken ct = default)
+    {
+        var texto = LogicaFichaPeca.TextoLugar(local);
+        lock (_trinco)
+            return Task.FromResult<IReadOnlyList<PecaNoLugar>>(_lugares.Where(x => x.Lugar.Qtt > 0 && x.Lugar.Texto == texto)
+                .OrderByDescending(x => x.Lugar.Qtt)
+                .Select(x => new PecaNoLugar(x.Ref, _pecas.FirstOrDefault(p => p.Ref == x.Ref)?.Design ?? x.Ref, x.Lugar.Qtt)).ToList());
+    }
+
     // Aceita LOC-A-01-1-01 ou A-01-1-01 (quatro partes).
     public Task<LocalizacoesPeca> ArrumarAsync(string refPeca, string local, decimal qtt, CancellationToken ct = default)
     {

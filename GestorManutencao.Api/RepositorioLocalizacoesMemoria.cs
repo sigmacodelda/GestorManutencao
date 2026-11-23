@@ -38,6 +38,14 @@ public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IR
 
     public Task<string> VerificarTabelaAsync(CancellationToken ct) => Task.FromResult("");
 
+    public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string corredor, string estante, int nivel, int posicao, CancellationToken ct)
+    {
+        lock (_trinco)
+            return Task.FromResult<IReadOnlyList<(string Ref, decimal Qtt)>>(_lugares
+                .Where(x => x.Lugar.Qtt > 0 && Igual(x.Lugar.Corredor, corredor) && Igual(x.Lugar.Estante, estante) && x.Lugar.Nivel == nivel && x.Lugar.Posicao == posicao)
+                .OrderByDescending(x => x.Lugar.Qtt).ThenBy(x => x.Ref).Select(x => (x.Ref, x.Lugar.Qtt)).ToList());
+    }
+
     private ResultadoMovimento Somar(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt)
     {
         lock (_trinco)

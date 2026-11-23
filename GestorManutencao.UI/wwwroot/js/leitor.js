@@ -17,6 +17,8 @@ export function iniciar(campo, ref) {
             var porTab = saiuPorTab;
             saiuPorTab = false;
             if (porTab || !campo.isConnected) return;
+            // Com um modal de escolha aberto o foco é dele (botões por toque); o leitor retoma-o quando fechar.
+            if (document.querySelector('[aria-modal="true"]')) return;
             if (eCampoDeTexto(document.activeElement, campo)) return;
             if (document.activeElement !== campo) campo.focus({ preventScroll: true });
         }, 0);

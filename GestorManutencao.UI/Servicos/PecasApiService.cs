@@ -34,6 +34,13 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
         return await r.Content.ReadFromJsonAsync<LocalizacoesPeca>(ct);
     }
 
+    public async Task<IReadOnlyList<PecaNoLugar>> PecasNoLugarAsync(string local, CancellationToken ct = default)
+    {
+        using var r = await EnviarAsync(HttpMethod.Get, $"pecas/no-lugar?local={Uri.EscapeDataString(local ?? "")}", null, ct);
+        await VerificarAsync(r, ct);
+        return await r.Content.ReadFromJsonAsync<List<PecaNoLugar>>(ct) ?? throw new HttpRequestException();
+    }
+
     public async Task<LocalizacoesPeca> ArrumarAsync(string refPeca, string local, decimal qtt, CancellationToken ct = default)
     {
         using var r = await EnviarAsync(HttpMethod.Post, "pecas/localizacoes", new { @ref = refPeca, local, qtt }, ct);

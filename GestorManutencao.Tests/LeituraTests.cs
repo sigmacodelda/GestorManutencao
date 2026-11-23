@@ -12,6 +12,15 @@ public class LeituraTests
         Assert.Equal("RL 6204", LogicaLeitura.NormalizarCodigo("​RL 6204﻿\n"));
     }
 
+    [Theory]
+    [InlineData("U8:PE%C3%87A1", "PEÇA1")]
+    [InlineData("U8:PE%C3%87A1\r\n", "PEÇA1")]
+    [InlineData("U8:RL-6204%2F2RS", "RL-6204/2RS")]
+    [InlineData("PEÇA1", "PEÇA1")]
+    [InlineData("U8:", "")]
+    public void NormalizarCodigo_descodifica_o_prefixo_U8(string lido, string esperado) =>
+        Assert.Equal(esperado, LogicaLeitura.NormalizarCodigo(lido));
+
     [Fact]
     public void NormalizarCodigo_null_e_vazio()
     {
