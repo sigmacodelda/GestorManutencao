@@ -208,9 +208,9 @@
                                     <span class="campo-aviso" role="status">@aviso</span>
                                 }
                             </span>
-                            @if (m.FaltaLugar)
+                            @if (m.FaltaLugar || (!string.IsNullOrEmpty(m.Ref) && !ClassificacaoErros.IdLocal(m.Id) && _d is { PodeEditar: true }))
                             {
-                                <button type="button" class="btn-texto" aria-label="Escolher o lugar de @m.Design" disabled="@_a_gravar" @onclick="() => PedirLugarAsync(m)">Escolher o lugar</button>
+                                <button type="button" class="btn-texto" aria-label="@(m.SaidaDada ? "Mudar" : "Escolher") o lugar de @m.Design" disabled="@_a_gravar" @onclick="() => PedirLugarAsync(m)">@(m.SaidaDada ? "Mudar o lugar" : "Escolher o lugar")</button>
                             }
                             @if (!string.IsNullOrEmpty(m.Ref) && !m.SaidaDada && !m.FaltaLugar && !ClassificacaoErros.IdLocal(m.Id) && _d is { PodeEditar: true })
                             {
@@ -284,7 +284,7 @@
                         @* Só uma pesquisa/leitor de cada vez: com a edição aberta, a de juntar fica de fora. *@
                         @if (_matEditId is null)
                         {
-                            <PecaLugar @ref="_plAdd" IdCampo="peca-texto" OnMudou="AoMudarJuntarAsync" SemBotaoCamara="BarraCamara" />
+                            <PecaLugar @ref="_plAdd" IdCampo="peca-texto" OnMudou="AoMudarJuntarAsync" SemBotaoCamara="BarraCamara" MaterialDaFicha="_materiais" OnLinhaEscolhida="AoEscolherLinhaAsync" />
                         }
                     </div>
                     <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
@@ -377,7 +377,8 @@
     // Avisos da API ao gravar (a lista lida da base não os traz) por material, e o último aviso solto (apagar).
     private readonly Dictionary<string, string> _avisosMat = [];
     private string? _avisoMaterial;
-    private sealed record EscolhaItem(string MaterialId, bool NaFila, IReadOnlyList<Lugar> Lugares);
+    // Trocar: material com saída já dada, o lugar muda-se pela edição (repõe no antigo e tira do novo).
+    private sealed record EscolhaItem(string MaterialId, bool NaFila, IReadOnlyList<Lugar> Lugares, bool Trocar = false);
     private EscolhaItem? _escolhaItem;
     private AreaAssinatura? _area;
     private string _nomeAssinante = "";
@@ -655,7 +656,7 @@
         {
             var lugares = LogicaFichaPeca.ComStock(await Pecas.LugaresAsync(m.Ref));
             if (lugares.Count == 0) { _erroMaterial = "Esta peça já não tem lugar com stock. Tire o material e junte-o sem lugar."; return; }
-            _escolhaItem = new(m.Id, true, lugares);
+            _escolhaItem = new(m.Id, m.FaltaLugar, lugares, m.SaidaDada);
         }
         catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível ver os lugares da peça. Tente outra vez."); }
     }
@@ -663,6 +664,7 @@
     private async Task EscolherLugarItemAsync(Material m, Lugar l)
     {
         if (_escolhaItem is not { } escolha) return;
+        if (escolha.Trocar) { await TrocarLugarAsync(m, l); return; }
         if (!escolha.NaFila) { await RepetirSaidaAsync(m, LogicaFichaPeca.EtiquetaDe(l)); return; }
         _a_gravar = true; _erroMaterial = "";
         try
@@ -672,6 +674,24 @@
             await CarregarMateriaisAsync();
         }
         catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível guardar o lugar. Tente outra vez."); }
+        finally { _a_gravar = false; }
+    }
+
+    // "É este": a linha do material já tem a peça; picou-se o lugar de onde saiu, dá-se a saída aí.
+    private async Task AoEscolherLinhaAsync((Material Linha, string Local) e) => await RepetirSaidaAsync(e.Linha, e.Local);
+
+    private async Task TrocarLugarAsync(Material m, Lugar l)
+    {
+        _a_gravar = true; _erroMaterial = "";
+        try
+        {
+            var guardado = await Intervencoes.EditarMaterialAsync(Id, m.Id, m.Design, m.Qtt, m.Epv, m.Ref, LogicaFichaPeca.EtiquetaDe(l));
+            if (!string.IsNullOrWhiteSpace(guardado.AvisoStock)) _avisosMat[guardado.Id] = guardado.AvisoStock;
+            _escolhaItem = null;
+            await RecarregarAsync();
+        }
+        catch (EscolhaLugarException ex) { _erroMaterial = ex.Message; }
+        catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível mudar o lugar. Tente outra vez."); await RecarregarMateriaisSeguroAsync(); }
         finally { _a_gravar = false; }
     }
 
@@ -760,7 +780,12 @@
             // espera e aplica-se depois da limpeza, em vez de ser apagada por ela.
             async Task<bool> Gravar(EscolhaPecaLugar esc)
             {
-                var criado = await Intervencoes.AdicionarMaterialAsync(Id, _material.Trim(), _qtt!.Value, _epv ?? 0, esc.Ref ?? "", esc.Local ?? "");
+                // Peça que já está no material: soma à linha existente em vez de a repetir.
+                var existente = LogicaFichaPeca.LinhaDaPeca(_materiais, esc.Ref);
+                var criado = existente is null
+                    ? await Intervencoes.AdicionarMaterialAsync(Id, _material.Trim(), _qtt!.Value, _epv ?? 0, esc.Ref ?? "", esc.Local ?? "")
+                    : await Intervencoes.EditarMaterialAsync(Id, existente.Id, existente.Design, existente.Qtt + _qtt!.Value, existente.Epv, existente.Ref, esc.Local ?? "");
+                if (existente is not null) _avisoMaterial = $"{existente.Design} já estava no material: somou-se a quantidade à linha existente.";
                 if (!string.IsNullOrWhiteSpace(criado.AvisoStock)) _avisosMat[criado.Id] = criado.AvisoStock;
                 _material = ""; _qtt = _epv = null; _avisoStock = null; _esc = null;
                 return true;

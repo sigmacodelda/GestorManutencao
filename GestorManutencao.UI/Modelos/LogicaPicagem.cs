@@ -1,3 +1,4 @@
+using GestorManutencao.UI.Offline;
 using GestorManutencao.UI.Servicos;
 
 namespace GestorManutencao.UI.Modelos;
@@ -70,6 +71,15 @@ public static class LogicaFichaPeca
         if (partes.Count > 0 && partes[0] == "LOC") partes.RemoveAt(0);
         return string.Join("-", partes);
     }
+
+    // Material já na ficha que um lugar picado pode resolver: peça ligada, saída por dar e já gravado no servidor.
+    public static IReadOnlyList<Material> CandidatosDoLugar(IEnumerable<Material> materiais) =>
+        materiais.Where(m => m.Ref != "" && !m.SaidaDada && !m.FaltaLugar && !ClassificacaoErros.IdLocal(m.Id)).ToList();
+
+    // Linha do material com a mesma peça (para somar em vez de repetir). Só linhas já gravadas no servidor.
+    public static Material? LinhaDaPeca(IEnumerable<Material> materiais, string? pecaRef) =>
+        string.IsNullOrWhiteSpace(pecaRef) ? null
+        : materiais.FirstOrDefault(m => !ClassificacaoErros.IdLocal(m.Id) && string.Equals(m.Ref, pecaRef.Trim(), StringComparison.OrdinalIgnoreCase));
 
     public static string MensagemEscolherLugar(string design) => $"Escolha primeiro o lugar do material {design}.";
 

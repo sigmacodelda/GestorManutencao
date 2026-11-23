@@ -278,4 +278,23 @@ public class PicagemTests
         Assert.Equal("novo", r.Aviso);
         Assert.Null(r.Mensagem);
     }
+
+    private static Material Mat(string id, string r, bool saida = false, bool falta = false) =>
+        new(id, "Peça " + id, 1, 1, 1, r, saida, null, null, falta);
+
+    [Fact]
+    public void Candidatos_do_lugar_sao_so_pecas_ligadas_por_dar_e_gravadas()
+    {
+        var lista = new[] { Mat("1", "P1"), Mat("2", ""), Mat("3", "P3", saida: true), Mat("4", "P4", falta: true) };
+        Assert.Equal(["1"], LogicaFichaPeca.CandidatosDoLugar(lista).Select(m => m.Id));
+    }
+
+    [Fact]
+    public void Linha_da_peca_encontra_pela_ref_sem_distinguir_maiusculas()
+    {
+        var lista = new[] { Mat("1", "P1"), Mat("2", "ABC") };
+        Assert.Equal("2", LogicaFichaPeca.LinhaDaPeca(lista, " abc ")?.Id);
+        Assert.Null(LogicaFichaPeca.LinhaDaPeca(lista, "XYZ"));
+        Assert.Null(LogicaFichaPeca.LinhaDaPeca(lista, null));
+    }
 }

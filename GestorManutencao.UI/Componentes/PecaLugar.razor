@@ -44,10 +44,26 @@
             </ul>
         </ModalEscolha>
     }
-    @if (_pecasLugar.Count > 0)
+    @if (_pecasLugar.Count > 0 || _linhas.Count > 0)
     {
-        @* Etiqueta de lugar picada sem peça: escolha obrigatória da peça que lá está (uma só escolhe-se sozinha). *@
-        <ModalEscolha IdBase="@(IdCampo + "-pecas")" Titulo="@($"Que peça está em {LogicaFichaPeca.TextoLugar(_estado.Local)}?")" TextoDescartar="Descartar leitura" Descartar="DescartarLugarAsync">
+        @* Etiqueta de lugar picada sem peça: escolha obrigatória do artigo. Primeiro o material que a ficha já tem
+           (peças por dar: "É este" dá a saída deste lugar), depois as peças que o lugar tem (uma só escolhe-se sozinha sem material). *@
+        <ModalEscolha IdBase="@(IdCampo + "-pecas")" Titulo="@($"Que artigo é em {LogicaFichaPeca.TextoLugar(_estado.Local)}?")" TextoDescartar="Descartar leitura" Descartar="DescartarLugarAsync">
+            @if (_linhas.Count > 0)
+            {
+                <p class="campo-aviso" role="status">Material já na intervenção</p>
+                <ul class="lista-intervencoes">
+                    @foreach (var m in _linhas)
+                    {
+                        <li>
+                            <button type="button" class="intervencao" @onclick="() => EscolherLinhaAsync(m)">
+                                <span class="intervencao-titulo">É este: @m.Design</span>
+                                <span class="intervencao-desc">Peça @m.Ref · @LogicaPicagem.TextoQuantidade(m.Qtt) unidades</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
             <ul class="lista-intervencoes">
                 @foreach (var x in _pecasLugar)
                 {
@@ -75,6 +91,26 @@
     [Parameter] public bool SemBotaoCamara { get; set; }
     // Edição de um material que já tem peça: picar só o lugar corrige o lugar, sem perguntar pela peça.
     [Parameter] public bool PecaJaLigada { get; set; }
+    // Material que a ficha já tem: ao picar só o lugar, as peças por dar são candidatas ("É este").
+    [Parameter] public IReadOnlyList<Material> MaterialDaFicha { get; set; } = [];
+    [Parameter] public EventCallback<(Material Linha, string Local)> OnLinhaEscolhida { get; set; }
+    private IReadOnlyList<Material> _linhas = [];
+
+    private async Task EscolherLinhaAsync(Material m)
+    {
+        string local;
+        await _fila.WaitAsync();
+        try
+        {
+            local = _estado.Local ?? "";
+            _linhas = [];
+            _pecasLugar = [];
+            _sel = _sel.LimparLocal();
+        }
+        finally { _fila.Release(); }
+        await OnLinhaEscolhida.InvokeAsync((m, local));
+        await NotificarAsync(refocar: true);
+    }
 
     public Task PicarComCameraAsync() => _leitor?.PicarComCameraAsync() ?? Task.CompletedTask;
 
@@ -141,6 +177,7 @@
         _lug = null;
         _lugares = [];
         _pecasLugar = [];
+        _linhas = [];
         _erro = "";
     }
 
@@ -151,6 +188,7 @@
         {
             _erro = "";
             _pecasLugar = [];
+            _linhas = [];
             if (LogicaPicagem.Classificar(codigo) == TipoLeitura.Local)
             {
                 _sel = _sel.PicarLocal(codigo);
@@ -177,8 +215,10 @@
     {
         try
         {
+            _linhas = LogicaFichaPeca.CandidatosDoLugar(MaterialDaFicha);
             var pecas = await Pecas.PecasNoLugarAsync(local);
-            if (pecas.Count == 1)
+            if (_linhas.Count > 0) _pecasLugar = pecas;
+            else if (pecas.Count == 1)
             {
                 if (await Pecas.ObterPorCodigoAsync(pecas[0].Ref) is { } unica) await CarregarPecaAsync(unica);
                 else _erro = LogicaEcraPecas.MensagemSemResultado(pecas[0].Ref);
@@ -211,6 +251,7 @@
         try
         {
             _pecasLugar = [];
+            _linhas = [];
             _sel = _sel.LimparLocal();
         }
         finally { _fila.Release(); }
