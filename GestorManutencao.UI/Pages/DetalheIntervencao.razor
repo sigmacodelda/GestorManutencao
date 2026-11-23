@@ -9,6 +9,7 @@
 @inject IDetetorLeitor Detetor
 @inject SessaoService Sessao
 @inject ToastService Toast
+@inject IJSRuntime JS
 
 <PageTitle>Intervenção · Gestor de Manutenção</PageTitle>
 
@@ -28,6 +29,16 @@
     }
     else
     {
+        @if (BarraCamara)
+        {
+            @* Botão da câmara sempre à mão no topo (a peça pica-se de qualquer ponto da ficha); ao picar, a página desce até à peça e à quantidade. *@
+            <div class="picar-topo">
+                <button type="button" id="picar-camara" class="btn btn-secundario" disabled="@_a_gravar" @onclick="PicarComCameraAsync">
+                    <Icone Nome="camera" /><span>Picar com a câmara</span>
+                </button>
+            </div>
+        }
+
         @if (_i.Estado == EstadoIntervencao.EmCurso && !string.IsNullOrWhiteSpace(_i.Motivo))
         {
             <div class="alerta alerta-devolvida" role="alert">
@@ -239,7 +250,7 @@
                 {
                     @* A escolha de peça e lugar (com a pesquisa) fica fora do form de guardar para o Enter não gravar. *@
                     <div class="formulario">
-                        <PecaLugar @ref="_plEdit" IdCampo="e-peca-texto" OnMudou="AoMudarEdicaoAsync" />
+                        <PecaLugar @ref="_plEdit" IdCampo="e-peca-texto" OnMudou="AoMudarEdicaoAsync" SemBotaoCamara="BarraCamara" PecaJaLigada="@(_eRef != "")" />
                         @if (_eRef != "" && _escEdit?.Peca is null)
                         {
                             <p class="campo-aviso">Peça @_eRef</p>
@@ -273,7 +284,7 @@
                         @* Só uma pesquisa/leitor de cada vez: com a edição aberta, a de juntar fica de fora. *@
                         @if (_matEditId is null)
                         {
-                            <PecaLugar @ref="_plAdd" IdCampo="peca-texto" OnMudou="AoMudarJuntarAsync" />
+                            <PecaLugar @ref="_plAdd" IdCampo="peca-texto" OnMudou="AoMudarJuntarAsync" SemBotaoCamara="BarraCamara" />
                         }
                     </div>
                     <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
@@ -362,6 +373,7 @@
     private PecaLugar? _plAdd, _plEdit;
     private EscolhaPecaLugar? _esc, _escEdit;
     private ElementReference _qttCampo, _eQttCampo;
+    private IJSObjectReference? _rolar;
     // Avisos da API ao gravar (a lista lida da base não os traz) por material, e o último aviso solto (apagar).
     private readonly Dictionary<string, string> _avisosMat = [];
     private string? _avisoMaterial;
@@ -518,6 +530,25 @@
 
     private static string Cortar35(string texto) => texto.Length > 35 ? texto[..35] : texto;
 
+    // Só com a câmara há botão (no leitor industrial a picada vem do campo escondido). A barra serve a juntar e a edição.
+    private bool BarraCamara => _i is not null && (_matEditId is not null || _i.Estado == EstadoIntervencao.EmCurso)
+        && LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial) == ModoLeitura.Camara;
+
+    private Task PicarComCameraAsync() =>
+        (_matEditId is not null ? _plEdit : _plAdd)?.PicarComCameraAsync() ?? Task.CompletedTask;
+
+    // Depois de picar, a página desce até onde falta decidir: a quantidade (peça e lugar escolhidos) ou o lugar a escolher.
+    private async Task RolarParaAsync(string id)
+    {
+        try
+        {
+            _rolar ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GestorManutencao.UI/js/rolar.js");
+            await Task.Yield();
+            await _rolar.InvokeVoidAsync("para", id);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or ObjectDisposedException or InvalidOperationException) { }
+    }
+
     // Mudou a escolha de peça/lugar do "juntar": nome e preço da peça nova, aviso de stock disponível e, com tudo escolhido, foco na quantidade.
     private async Task AoMudarJuntarAsync(EscolhaPecaLugar e)
     {
@@ -528,6 +559,7 @@
         RecalcularAviso();
         StateHasChanged();
         if (e.Peca is not null && e.PodeIrParaQuantidade && (pecaNova || !podiaAvancar)) await FocarQuantidadeAsync(_qttCampo);
+        if (e.Peca is not null && (pecaNova || (e.PodeIrParaQuantidade && !podiaAvancar))) await RolarParaAsync(e.PodeIrParaQuantidade ? "qtt" : "peca-texto-bloco");
     }
 
     private async Task AoMudarEdicaoAsync(EscolhaPecaLugar e)
@@ -539,6 +571,7 @@
         RecalcularAvisoEditado();
         StateHasChanged();
         if (e.Peca is not null && e.PodeIrParaQuantidade && (pecaNova || !podiaAvancar)) await FocarQuantidadeAsync(_eQttCampo);
+        if (e.Peca is not null && (pecaNova || (e.PodeIrParaQuantidade && !podiaAvancar))) await RolarParaAsync(e.PodeIrParaQuantidade ? "e-qtt" : "e-peca-texto-bloco");
     }
 
     // Em modo Leitor o foco fica no campo escondido do leitor (sem teclado virtual); senão avança para a quantidade.

@@ -99,6 +99,27 @@ ORDER BY q DESC, corredor, estante, nivel, posicao",
         return new LocalizacoesPecaDto(refPeca, stock, localizado, RegrasLocalizacao.Calcular(stock, localizado), lugares);
     }
 
+    public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string corredor, string estante, int nivel, int posicao, CancellationToken ct)
+        => Executar<IReadOnlyList<(string Ref, decimal Qtt)>>(async conn =>
+        {
+            var l = new List<(string Ref, decimal Qtt)>();
+            if (await VerificarAsync(conn, ct) != "") return l;
+            await using var cmd = Cmd(conn, null, $@"
+SELECT r, SUM(q) AS q FROM (
+    SELECT LTRIM(RTRIM(ISNULL(ref, ''))) AS r, {Qtd("qtt")} AS q
+    FROM u_pecaloc WITH (NOLOCK)
+    WHERE armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po
+) t
+WHERE r <> ''
+GROUP BY r
+HAVING SUM(q) > 0
+ORDER BY SUM(q) DESC, r",
+                ("@a", RegrasPecas.Armazem), ("@c", corredor.Trim().ToUpperInvariant()), ("@e", estante.Trim().ToUpperInvariant()), ("@n", nivel), ("@po", posicao));
+            await using var rd = await cmd.ExecuteReaderAsync(ct);
+            while (await rd.ReadAsync(ct)) l.Add((rd.GetString(0), rd.GetDecimal(1)));
+            return l;
+        });
+
     public Task<ResultadoMovimento> ArrumarAsync(string refPeca, string corredor, int estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
         => SomarAsync(refPeca, corredor, RegrasLocalizacao.NormalizarEstante(corredor, estante), nivel, posicao, qtt, iniciais, ct);
 

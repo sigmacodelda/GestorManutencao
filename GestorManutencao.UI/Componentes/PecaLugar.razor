@@ -3,8 +3,8 @@
 @* Escolha da peça e do lugar na ficha, por qualquer ordem (peça e depois local, ou local e depois peça).
    A pesquisa de peça vive fora de qualquer <form> (o Enter tem de pesquisar, nunca gravar o material) e cada instância
    precisa do seu IdCampo. PDA: campo escondido à escuta; sem PDA: botão "Picar com a câmara". O EstadoPicagem é a fonte única. *@
-<div class="peca-lugar">
-    <LeitorEtiquetas @ref="_leitor" Id="@(IdCampo + "-leitor")" OnLido="LerAsync" TextoCamara="Picar com a câmara" />
+<div class="peca-lugar" id="@(IdCampo + "-bloco")">
+    <LeitorEtiquetas @ref="_leitor" Id="@(IdCampo + "-leitor")" OnLido="LerAsync" TextoCamara="Picar com a câmara" SemBotao="SemBotaoCamara" />
     <p class="campo-erro" role="alert">@_erro</p>
 
     @if (_estado.Peca is null || _peca is null)
@@ -29,18 +29,37 @@
     }
     else if (_lugares.Count > 0)
     {
-        <p class="campo-aviso" role="status">Esta peça está em vários lugares. Escolha de onde a tirou ou pique a etiqueta do lugar.</p>
-        <ul class="lista-intervencoes">
-            @foreach (var l in _lugares)
-            {
-                <li>
-                    <button type="button" class="intervencao" @onclick="() => EscolherLugarAsync(l)">
-                        <span class="intervencao-titulo">@l.Texto</span>
-                        <span class="intervencao-desc">@LogicaPicagem.TextoQuantidade(l.Qtt) unidades</span>
-                    </button>
-                </li>
-            }
-        </ul>
+        @* Peça em vários lugares: escolha obrigatória do lugar de onde saiu (um só lugar escolhe-se sozinho). *@
+        <ModalEscolha IdBase="@(IdCampo + "-lugares")" Titulo="@(_peca is null ? "Em que lugar está?" : $"De que lugar saiu {_peca.Design}?")" TextoDescartar="Descartar leitura" Descartar="LimparPeca">
+            <ul class="lista-intervencoes">
+                @foreach (var l in _lugares)
+                {
+                    <li>
+                        <button type="button" class="intervencao" @onclick="() => EscolherLugarAsync(l)">
+                            <span class="intervencao-titulo">@l.Texto</span>
+                            <span class="intervencao-desc">@LogicaPicagem.TextoQuantidade(l.Qtt) unidades</span>
+                        </button>
+                    </li>
+                }
+            </ul>
+        </ModalEscolha>
+    }
+    @if (_pecasLugar.Count > 0)
+    {
+        @* Etiqueta de lugar picada sem peça: escolha obrigatória da peça que lá está (uma só escolhe-se sozinha). *@
+        <ModalEscolha IdBase="@(IdCampo + "-pecas")" Titulo="@($"Que peça está em {LogicaFichaPeca.TextoLugar(_estado.Local)}?")" TextoDescartar="Descartar leitura" Descartar="DescartarLugarAsync">
+            <ul class="lista-intervencoes">
+                @foreach (var x in _pecasLugar)
+                {
+                    <li>
+                        <button type="button" class="intervencao" @onclick="() => EscolherPecaDoLugarAsync(x)">
+                            <span class="intervencao-titulo">@x.Ref @x.Design</span>
+                            <span class="intervencao-desc">@LogicaPicagem.TextoQuantidade(x.Qtt) unidades neste lugar</span>
+                        </button>
+                    </li>
+                }
+            </ul>
+        </ModalEscolha>
     }
     @if (_estado.Completo)
     {
@@ -52,6 +71,12 @@
     // Notificado a cada mudança; o ecrã preenche o nome e o preço e avança para a quantidade.
     [Parameter] public EventCallback<EscolhaPecaLugar> OnMudou { get; set; }
     [Parameter] public string IdCampo { get; set; } = "ficha-peca";
+    // O ecrã põe o botão da câmara numa barra fixa e chama PicarComCameraAsync.
+    [Parameter] public bool SemBotaoCamara { get; set; }
+    // Edição de um material que já tem peça: picar só o lugar corrige o lugar, sem perguntar pela peça.
+    [Parameter] public bool PecaJaLigada { get; set; }
+
+    public Task PicarComCameraAsync() => _leitor?.PicarComCameraAsync() ?? Task.CompletedTask;
 
     // Peça e lugar com a origem do lugar (picado à mão ou derivado da peça): ao mudar de peça só sai o derivado.
     private SelecaoPecaLugar _sel = SelecaoPecaLugar.Vazia;
@@ -60,6 +85,8 @@
     private LocalizacoesPeca? _lug;
     // Lugares com stock para escolher: os da peça, ou os que a API devolveu em 409 escolha_o_lugar.
     private IReadOnlyList<Lugar> _lugares = [];
+    // Peças do lugar picado quando ainda não há peça (mais de uma: escolha obrigatória).
+    private IReadOnlyList<PecaNoLugar> _pecasLugar = [];
     private string _erro = "";
     private LeitorEtiquetas? _leitor;
     private PecaPesquisa? _pesquisa;
@@ -113,6 +140,7 @@
         _peca = null;
         _lug = null;
         _lugares = [];
+        _pecasLugar = [];
         _erro = "";
     }
 
@@ -122,7 +150,13 @@
         try
         {
             _erro = "";
-            if (LogicaPicagem.Classificar(codigo) == TipoLeitura.Local) _sel = _sel.PicarLocal(codigo);
+            _pecasLugar = [];
+            if (LogicaPicagem.Classificar(codigo) == TipoLeitura.Local)
+            {
+                _sel = _sel.PicarLocal(codigo);
+                // Sem peça escolhida: o lugar diz que peça é (uma só escolhe-se; várias, a pessoa decide num modal).
+                if (_estado.Peca is null && !PecaJaLigada) await ProporPecasDoLugarAsync(codigo);
+            }
             else
             {
                 try
@@ -136,6 +170,51 @@
         finally { _fila.Release(); }
         StateHasChanged();
         await NotificarAsync();
+    }
+
+    // Dentro da fila. Sem rede ou sem a tabela, o lugar fica picado e a pessoa continua pela pesquisa.
+    private async Task ProporPecasDoLugarAsync(string local)
+    {
+        try
+        {
+            var pecas = await Pecas.PecasNoLugarAsync(local);
+            if (pecas.Count == 1)
+            {
+                if (await Pecas.ObterPorCodigoAsync(pecas[0].Ref) is { } unica) await CarregarPecaAsync(unica);
+                else _erro = LogicaEcraPecas.MensagemSemResultado(pecas[0].Ref);
+            }
+            else if (pecas.Count > 1) _pecasLugar = pecas;
+            else _erro = "Não há peças com quantidade neste lugar. Pesquise a peça.";
+        }
+        catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível ver as peças deste lugar. Pesquise a peça."); }
+    }
+
+    private async Task EscolherPecaDoLugarAsync(PecaNoLugar escolhida)
+    {
+        await _fila.WaitAsync();
+        try
+        {
+            _erro = "";
+            // O modal só fecha com a peça carregada: se a rede falhar, a pessoa pode tentar outra vez.
+            if (await Pecas.ObterPorCodigoAsync(escolhida.Ref) is { } p) { _pecasLugar = []; await CarregarPecaAsync(p); }
+            else { _pecasLugar = []; _erro = LogicaEcraPecas.MensagemSemResultado(escolhida.Ref); }
+        }
+        catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível ler a peça. Tente outra vez."); }
+        finally { _fila.Release(); }
+        await NotificarAsync(refocar: true);
+    }
+
+    // Descartar a leitura do lugar: sem a peça não há com que ficar.
+    private async Task DescartarLugarAsync()
+    {
+        await _fila.WaitAsync();
+        try
+        {
+            _pecasLugar = [];
+            _sel = _sel.LimparLocal();
+        }
+        finally { _fila.Release(); }
+        await NotificarAsync(refocar: true);
     }
 
     private async Task EscolherAsync(Peca p)
@@ -192,6 +271,7 @@
         try
         {
             _sel = _sel.LimparLocal();
+            _pecasLugar = [];
             // Voltar a escolher: se a peça tem vários lugares a lista reaparece.
             if (_lug is not null && LogicaFichaPeca.ComStock(_lug).Count > 1) _lugares = LogicaFichaPeca.ComStock(_lug);
         }

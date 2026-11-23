@@ -11,6 +11,9 @@ public sealed record LugarDto(string Corredor, string Estante, int Nivel, int Po
 
 public sealed record LocalizacoesPecaDto(string Ref, decimal Stock, decimal Localizado, decimal PorArrumar, IReadOnlyList<LugarDto> Lugares);
 
+// Peça arrumada num lugar, com a quantidade que lá está.
+public sealed record PecaNoLugarDto(string Ref, string Design, decimal Qtt);
+
 // Local = texto da etiqueta (LOC-A-02-1-01) ou o texto do lugar (A-02-1-01).
 public sealed record PedidoArrumar(string? Ref, string? Local, decimal? Qtt);
 
@@ -68,6 +71,8 @@ public interface IRepositorioLocalizacoes
     Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct);
     // "" se a tabela está pronta, senão o que falta.
     Task<string> VerificarTabelaAsync(CancellationToken ct);
+    // Peças com quantidade (> 0) num lugar, por quantidade desc. Só leitura; sem tabela devolve vazio.
+    Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string corredor, string estante, int nivel, int posicao, CancellationToken ct);
 }
 
 public static class EndpointsLocalizacoes
@@ -88,6 +93,20 @@ public static class EndpointsLocalizacoes
                     await pecas.ObterPorCodigoAsync(refPeca.Trim(), ct) is { } p
                         ? Results.Ok(await repo.ListarAsync(p.Ref, ct))
                         : Results.NotFound()));
+
+        // Que peças estão num lugar: ao picar a etiqueta do lugar na ficha, a pessoa escolhe a peça.
+        g.MapGet("/no-lugar", (string? local, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas pecas, IRepositorioLocalizacoes repo, CancellationToken ct) =>
+        {
+            if (RegrasLocalizacao.LerLugar(local) is not { } lugar)
+                return Task.FromResult(EndpointsIntervencoes.PedidoInvalido("Indique o local completo (corredor, estante, nível e posição), por exemplo A-02-1-01."));
+            return EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (_, _) =>
+            {
+                var lista = new List<PecaNoLugarDto>();
+                foreach (var (refPeca, qtt) in await repo.ListarPecasDoLugarAsync(lugar.Corredor, lugar.Estante, lugar.Nivel, lugar.Posicao, ct))
+                    lista.Add(new PecaNoLugarDto(refPeca, (await pecas.ObterPorCodigoAsync(refPeca, ct))?.Design ?? refPeca, qtt));
+                return Results.Ok(lista);
+            });
+        });
 
         g.MapPost("/localizacoes", (PedidoArrumar p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas pecas, IRepositorioLocalizacoes repo, CancellationToken ct) =>
         {

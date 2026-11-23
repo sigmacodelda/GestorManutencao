@@ -1056,6 +1056,8 @@ public class FichaConferenciaApiTests : IDisposable
         public Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct) =>
             FalharRepor ? Task.FromResult(ResultadoMovimento.Falha("Não foi possível repor.")) : interno.ReporAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
         public Task<string> VerificarTabelaAsync(CancellationToken ct) { Verificar(); return interno.VerificarTabelaAsync(ct); }
+        public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string corredor, string estante, int nivel, int posicao, CancellationToken ct) =>
+            interno.ListarPecasDoLugarAsync(corredor, estante, nivel, posicao, ct);
     }
 
     // Faz o repositório de fichas recusar a edição e a remoção de material (a ficha mudou entretanto); o resto é o de memória.

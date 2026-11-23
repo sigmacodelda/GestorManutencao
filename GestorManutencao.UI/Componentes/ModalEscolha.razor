@@ -1,0 +1,25 @@
+@* Escolha obrigatória: não fecha ao tocar fora nem com Escape; só se sai escolhendo uma opção ou descartando a leitura. *@
+<div class="dialogo-fundo">
+    <div class="dialogo" role="dialog" aria-modal="true" aria-labelledby="@(IdBase + "-titulo")" tabindex="-1" @ref="_caixa">
+        <h2 id="@(IdBase + "-titulo")">@Titulo</h2>
+        @ChildContent
+        <button type="button" class="btn-texto" @onclick="() => Descartar.InvokeAsync()">@TextoDescartar</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Titulo { get; set; } = "";
+    [Parameter] public string TextoDescartar { get; set; } = "Descartar leitura";
+    [Parameter] public string IdBase { get; set; } = "modal-escolha";
+    [Parameter] public EventCallback Descartar { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ElementReference _caixa;
+
+    protected override async Task OnAfterRenderAsync(bool primeira)
+    {
+        if (!primeira) return;
+        try { await _caixa.FocusAsync(); }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException or InvalidOperationException) { }
+    }
+}
