@@ -1,10 +1,11 @@
 namespace GestorManutencao.UI.Offline;
 
-public enum TipoOperacao { RegistarAvaria, Iniciar, Concluir, AdicionarMaterial, ApagarMaterial, AdicionarFoto, ApagarFoto, Pausar, Retomar }
+public enum TipoOperacao { RegistarAvaria, Iniciar, Concluir, AdicionarMaterial, ApagarMaterial, AdicionarFoto, ApagarFoto, Pausar, Retomar, Validar, Devolver, ConcluirQualidade, AssinarExterna }
 
 // Pendente: por enviar. Incerta: pode já ter chegado ao servidor (material e foto); verifica-se antes de reenviar.
 // Conflito: o servidor recusou; já não se envia e fica a aguardar que o técnico veja o aviso.
-public enum EstadoOperacao { Pendente, Incerta, Conflito }
+// PorEscolherLugar: material cuja peça está em vários lugares; não se envia nem se descarta até o técnico escolher o lugar (conta como pendente).
+public enum EstadoOperacao { Pendente, Incerta, Conflito, PorEscolherLugar }
 
 // FichaId pode ser um id local ("L-..."), até a avaria ser criada no servidor. Payload é JSON. Nunca leva segredos.
 public sealed record OperacaoSaida(
@@ -14,7 +15,12 @@ public sealed record OperacaoSaida(
 public sealed record TextoDoTecnico(string Rotulo, string Texto);
 
 // O que o técnico escreveu fica aqui para o copiar; só desaparece quando ele o descarta.
-public sealed record AvisoConflito(string Id, string Dono, string FichaId, string Equipamento, string Mensagem, IReadOnlyList<TextoDoTecnico> Textos, DateTimeOffset Quando);
+// Acao (opcional): o que a pessoa pode fazer a partir do aviso. RepetirValidar = a validação ficou feita mas a conferência
+// das peças não confirmou; repete-se a validação (idempotente na API). Avisos antigos, sem Acao, só se leem e descartam.
+public sealed record AvisoConflito(string Id, string Dono, string FichaId, string Equipamento, string Mensagem, IReadOnlyList<TextoDoTecnico> Textos, DateTimeOffset Quando, string? Acao = null)
+{
+    public const string RepetirValidar = "repetir-validar";
+}
 
 // Fila de operações por enviar, por dono, por ordem de criação. Sobrevive à troca de utilizador e à limpeza da cache.
 public interface IFilaSaida

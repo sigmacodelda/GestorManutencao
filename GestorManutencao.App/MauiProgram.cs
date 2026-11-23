@@ -1,6 +1,9 @@
 using GestorManutencao.Armazenamento;
 using GestorManutencao.UI.Offline;
 using GestorManutencao.UI.Servicos;
+#if ANDROID
+using ZXing.Net.Maui.Controls;
+#endif
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -26,6 +29,9 @@ public static class MauiProgram
 	{
 		var builder = MauiApp.CreateBuilder();
 		builder.UseMauiApp<App>();
+#if ANDROID
+		builder.UseBarcodeReader();
+#endif
 
 		// Endereço (https, ou http numa rede interna) da GestorManutencao.Api deste cliente, em Resources/Raw/appsettings.json ("ApiUrl"). Vazio só serve em Debug (utilizadores fictícios).
 		using (var ficheiro = FileSystem.OpenAppPackageFileAsync("appsettings.json").GetAwaiter().GetResult())
@@ -34,13 +40,17 @@ public static class MauiProgram
 		builder.Services.AddMauiBlazorWebView();
 		builder.Services.AddManutencaoUI(TemaCliente);
 		builder.Services.AddSingleton<IArmazemSessao, ArmazemSessaoSeguro>();
+		builder.Services.AddSingleton<IPreferenciasLeitura, PreferenciasLeituraMaui>();
 		builder.Services.AddSingleton<IArmazemAvisos, ArmazemAvisosFicheiro>();
 #if ANDROID
 		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaAndroid>();
 		builder.Services.AddSingleton<IServicoSegundoPlano, ServicoSegundoPlanoAndroid>();
 		builder.Services.AddSingleton<IAvisoEmCurso, AvisoEmCursoAndroid>();
+		builder.Services.AddSingleton<IPushToken, PushTokenAndroid>();
 		builder.Services.AddSingleton<IDitado, DitadoAndroid>();
 		builder.Services.AddSingleton<ICamara, CamaraAndroid>();
+		builder.Services.AddSingleton<IDetetorLeitor, DetetorLeitorAndroid>();
+		builder.Services.AddSingleton<ILeitorCamara, LeitorCamaraMaui>();
 #elif WINDOWS
 		builder.Services.AddSingleton<IAvisoSistema, AvisoSistemaWindows>();
 		builder.Services.AddSingleton<IDitado, DitadoWindows>();
@@ -90,8 +100,12 @@ public static class MauiProgram
 				ServerCertificateCustomValidationCallback = (pedido, _, _, erros) => erros == System.Net.Security.SslPolicyErrors.None || pedido.RequestUri?.IsLoopback == true
 			})));
 			builder.Services.AddSingleton<IEquipaService>(new EquipaApiService(http));
+			builder.Services.AddSingleton<IAssinaturaService>(new AssinaturaApiService(http));
+			// Peças: só online (pesquisa e leitor), sem fila de saída.
+			builder.Services.AddScoped<IPecasService>(sp => new PecasApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IntervencoesApiService>(sp => new IntervencoesApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IIntervencoesRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());
+			builder.Services.AddScoped<IDispositivosRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());
 			// Gestão (só supervisor): sempre online, nunca na fila de saída; sem rede recusa com uma mensagem clara.
 			builder.Services.AddScoped(sp => new GestaoApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IGestaoService>(sp => new GestaoSoOnlineService(sp.GetRequiredService<GestaoApiService>(), sp.GetRequiredService<IRedeEstado>(),
@@ -111,7 +125,10 @@ public static class MauiProgram
 #if DEBUG
 			builder.Services.AddSingleton<IAutenticacaoService, DevAutenticacaoService>();
 			builder.Services.AddSingleton<IEquipaService, DevEquipaService>();
+			builder.Services.AddSingleton<IAssinaturaService, DevAssinaturaService>();
 			builder.Services.AddSingleton<IGestaoService, GestaoDevService>();
+			builder.Services.AddSingleton<IPecasService, PecasDevService>();
+			builder.Services.AddSingleton<IRedeEstado, RedeEstadoManual>();
 			builder.Services.AddSingleton<IArmazemGeracaoDiaria, ArmazemGeracaoDiariaMemoria>();
 			builder.Services.AddSingleton<GeracaoDiaria>(sp => new GeracaoDiaria(sp.GetRequiredService<IArmazemGeracaoDiaria>(), TimeProvider.System));
 			builder.Services.AddSingleton<DevIntervencoesService>();

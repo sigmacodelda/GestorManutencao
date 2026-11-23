@@ -11,6 +11,10 @@
     "HorasValidade": 336
   },
   "Seguranca": { "PermitirHttp": false },
+  "Push": {
+    "CaminhoChaveFirebase": "segredos/firebase-adminsdk.json",
+    "FicheiroDispositivos": ""
+  },
   "Pin": {
     "Pepper": "<o mesmo pepper com que foram criados os PINs em u_manutil; se mudar, ninguém entra>",
     "Dev": ""

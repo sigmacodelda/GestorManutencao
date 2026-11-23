@@ -24,6 +24,7 @@ param(
   [switch]$CriarUtilizadores,  # cria 1 supervisor e 1 técnico de teste (e2e.sup4/e2e.tec4, PINs de 4 números aleatórios) em u_manutil e apaga-os no fim; dispensa PIN_TECNICO/PIN_SUPERVISOR
   [string]$Circuito = 'circuito.mjs',  # o .mjs a correr com a app (p. ex. circuitos-funcionais.mjs)
 
+  [switch]$ProxyRede,   # a app fala com a API por um proxy (porta 7258) que o circuito offline-modos.mjs corta e liga
   [string]$BaseEsperada = 'testes_land2',
   [int]$PortaApi = 7257,
   [int]$PortaCdp = 9222
@@ -53,6 +54,7 @@ if ($Memoria) {
   $env:ConnectionStrings__PHCConn = ' '
   if (-not $env:PIN_TECNICO) { $env:PIN_TECNICO = '4829' }
   if (-not $env:PIN_SUPERVISOR) { $env:PIN_SUPERVISOR = '7953' }
+  if (-not $env:PIN_QUALIDADE) { $env:PIN_QUALIDADE = '3197' }
   # Chaves só para esta execução (o desenvolvimento gera-as sozinho; o pepper tem de ser definido de forma estável).
   Remove-Item Env:\Pin__Pepper -ErrorAction SilentlyContinue
 } else {
@@ -139,7 +141,7 @@ try {
   $dados = Join-Path $env:TEMP "gm-webview2-$PID"
   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$PortaCdp"
   $env:WEBVIEW2_USER_DATA_FOLDER = $dados
-  $env:GESTOR_API_URL = $apiUrl
+  $env:GESTOR_API_URL = if ($ProxyRede) { "https://localhost:7258" } else { $apiUrl }
   $processos += Start-Process $exe -PassThru
   $cdp = $false
   for ($i = 0; $i -lt 60 -and -not $cdp; $i++) {

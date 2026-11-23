@@ -59,6 +59,21 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<EmissorToken>();
 builder.Services.AddSingleton<PinHasher>();
 
+// Push "acordar a app": tokens num ficheiro JSON (por omissão em dados/ ao lado da API) e só o caminho da chave Firebase na configuração.
+var ficheiroDispositivos = builder.Configuration["Push:FicheiroDispositivos"];
+ficheiroDispositivos = string.IsNullOrWhiteSpace(ficheiroDispositivos)
+    ? Path.Combine(builder.Environment.ContentRootPath, "dados", "dispositivos.json")
+    : Path.GetFullPath(ficheiroDispositivos, builder.Environment.ContentRootPath);
+builder.Services.AddSingleton<IRepositorioDispositivos>(sp => new RepositorioDispositivosFicheiro(ficheiroDispositivos, sp.GetRequiredService<TimeProvider>(),
+    sp.GetRequiredService<ILogger<RepositorioDispositivosFicheiro>>()));
+var chaveFirebase = builder.Configuration["Push:CaminhoChaveFirebase"];
+if (string.IsNullOrWhiteSpace(chaveFirebase)) builder.Services.AddSingleton<IEnviadorPush, EnviadorPushNulo>();
+else builder.Services.AddSingleton<IEnviadorPush>(sp => new EnviadorPushFirebase(Path.GetFullPath(chaveFirebase, builder.Environment.ContentRootPath),sp.GetRequiredService<IRepositorioDispositivos>(), sp.GetRequiredService<ILogger<EnviadorPushFirebase>>()));
+builder.Services.AddSingleton(sp => new NotificadorPush(sp.GetRequiredService<IRepositorioDispositivos>(), sp.GetRequiredService<IEnviadorPush>(),
+    sp.GetRequiredService<ILogger<NotificadorPush>>()));
+builder.Services.AddSingleton<INotificadorPush>(sp => sp.GetRequiredService<NotificadorPush>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<NotificadorPush>());
+
 // Sem cadeia de ligação só se aceita em desenvolvimento, e com utilizadores em memória.
 if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn")))
 {
@@ -66,14 +81,19 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn
     builder.Services.AddSingleton<IRepositorioUtilizadores>(sp => new RepositorioUtilizadoresMemoria(
     [
         (new UtilizadorApp("ana", "Ana Silva", Perfil.Operador, true, false, Tecno: 101), sp.GetRequiredService<PinHasher>().Hash("4829")),
-        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("7953"))
+        (new UtilizadorApp("chefe", "Chefe de Turno", Perfil.Supervisor, true, false, Tecno: 100), sp.GetRequiredService<PinHasher>().Hash("7953")),
+        (new UtilizadorApp("qualidade", "Qualidade", Perfil.Qualidade, true, false), sp.GetRequiredService<PinHasher>().Hash("3197"))
     ]));
     builder.Services.AddSingleton<IRepositorioIntervencoes, RepositorioIntervencoesMemoria>();
+    builder.Services.AddSingleton<IRepositorioPecas, RepositorioPecasMemoria>();
+    builder.Services.AddSingleton<IRepositorioLocalizacoes, RepositorioLocalizacoesMemoria>();
 }
 else
 {
     builder.Services.AddSingleton<IRepositorioUtilizadores, SqlRepositorioUtilizadores>();
     builder.Services.AddSingleton<IRepositorioIntervencoes, SqlRepositorioIntervencoes>();
+    builder.Services.AddSingleton<IRepositorioPecas, SqlRepositorioPecas>();
+    builder.Services.AddSingleton<IRepositorioLocalizacoes, SqlRepositorioLocalizacoes>();
 }
 // O mesmo repositório (SQL ou memória) serve a gestão: cancelar planeadas e gerar a seguinte usam a mesma numeração e as mesmas regras.
 builder.Services.AddSingleton<IRepositorioGestao>(sp => (IRepositorioGestao)sp.GetRequiredService<IRepositorioIntervencoes>());
@@ -133,6 +153,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("GestaoUtilizadores", p => p.RequireAssertion(c =>
         !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1")
         && (c.User.IsInRole(nameof(Perfil.Supervisor)) || c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1"))))
+    .AddPolicy("Qualidade", p => p.RequireRole(nameof(Perfil.Qualidade)).RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1") && !c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1")))
     .AddPolicy("Supervisor", p => p.RequireRole(nameof(Perfil.Supervisor)).RequireAssertion(c => !c.User.HasClaim(EmissorToken.ClaimPinProvisorio, "1") && !c.User.HasClaim(EmissorToken.ClaimConfiguracao, "1")));
 
 // Como o PIN identifica a pessoa, adivinhá-lo não se trava por utilizador: trava-se por endereço e no total.
@@ -217,7 +238,10 @@ static IResult RegistarPinEmUso(ILogger log, HttpContext http)
 }
 
 app.MapHub<AvisosHub>(AvisosHub.Rota).RequireAuthorization();
+app.MapDispositivos();
 app.MapIntervencoes();
+app.MapPecas();
+app.MapLocalizacoes();
 app.MapGestao();
 
 app.MapGet("/saude", () => Results.Ok(new { estado = "ok" }));
@@ -283,6 +307,24 @@ app.MapPost("/auth/pin", async (PedidoMudarPin pedido, ClaimsPrincipal eu, IRepo
     }
 }).WithMetadata(new LimitaPin()).RequireAuthorization("Autenticado");
 
+// A assinatura é só da própria pessoa: lê e escreve a sua, nunca a de outra.
+app.MapGet("/auth/assinatura", async (ClaimsPrincipal eu, IRepositorioUtilizadores repo, HttpContext http, CancellationToken ct) =>
+{
+    http.Response.Headers.CacheControl = "no-store";
+    if (Codigo(eu) is not { } codigo) return Results.Unauthorized();
+    try { return Results.Ok(new PedidoAssinatura((await repo.ObterAssinaturaAsync(codigo, ct))?.Trim() ?? "")); }
+    catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
+}).RequireAuthorization("Autenticado");
+
+app.MapPut("/auth/assinatura", async (PedidoAssinatura pedido, ClaimsPrincipal eu, IRepositorioUtilizadores repo, CancellationToken ct) =>
+{
+    var texto = (pedido.Assinatura ?? "").Trim();
+    if (!RegrasAssinatura.Valida(texto)) return Erro(400, texto.Length == 0 ? "assinatura_vazia" : "assinatura_invalida");
+    if (Codigo(eu) is not { } codigo) return Results.Unauthorized();
+    try { return await repo.DefinirAssinaturaAsync(codigo, texto, ct) == ResultadoPin.Ok ? Results.NoContent() : Erro(404, "nao_existe"); }
+    catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
+}).RequireAuthorization("Autenticado");
+
 app.MapGet("/auth/eu", (ClaimsPrincipal utilizador) => Results.Ok(new
 {
     utilizador = Codigo(utilizador),
@@ -317,9 +359,8 @@ equipa.MapPost("/", async (PedidoNovoUtilizador pedido, ClaimsPrincipal eu, IRep
         var tecno = pedido.Tecno ?? 0;
         if (tecno is < 0 or > 99999) return Erro(400, "pedido_invalido");
 
-        // Só o PIN de configuração cria supervisores (é assim que se cria o primeiro); um supervisor só cria operadores.
+        // Um supervisor cria qualquer perfil, também outros supervisores (o primeiro cria-se com o PIN de configuração).
         var perfil = pedido.Perfil ?? Perfil.Operador;
-        if (perfil == Perfil.Supervisor && !eu.HasClaim(EmissorToken.ClaimConfiguracao, "1")) return Results.Forbid();
 
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {
@@ -353,6 +394,27 @@ equipa.MapPut("/{codigo}/tecno", async (string codigo, PedidoTecno pedido, Claim
     catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
 });
 
+// Inativar ou reativar (nunca se apaga): só um supervisor; nunca a própria conta nem outro supervisor.
+equipa.MapPut("/{codigo}/ativo", async (string codigo, PedidoAtivo pedido, ClaimsPrincipal eu, IRepositorioUtilizadores repo, ILogger<Program> log, CancellationToken ct) =>
+{
+    if (!RegrasUtilizador.CodigoOk(codigo)) return Erro(400, "pedido_invalido");
+
+    try
+    {
+        if (await SupervisorAtual(eu, repo, ct) is not { } supervisor) return Results.Forbid();
+        if (string.Equals(supervisor.Codigo, codigo, StringComparison.OrdinalIgnoreCase)) return Erro(409, "propria_conta");
+        var resultado = await repo.DefinirAtivoAsync(codigo, pedido.Ativo, supervisor.Codigo, ct);
+        if (resultado == ResultadoPin.Ok) log.LogInformation("Utilizador {Codigo} {Estado} por {Supervisor}.", codigo, pedido.Ativo ? "reativado" : "inativado", supervisor.Codigo);
+        return resultado switch
+        {
+            ResultadoPin.Ok => Results.NoContent(),
+            ResultadoPin.Protegido => Erro(403, "supervisor_protegido"),
+            _ => Erro(404, "nao_existe")
+        };
+    }
+    catch (RepositorioIndisponivelException) { return Erro(503, "indisponivel"); }
+});
+
 equipa.MapPost("/{codigo}/pin", async (string codigo, ClaimsPrincipal eu, IRepositorioUtilizadores repo, PinHasher hasher,
     HttpContext http, CancellationToken ct) =>
 {
@@ -365,7 +427,7 @@ equipa.MapPost("/{codigo}/pin", async (string codigo, ClaimsPrincipal eu, IRepos
 
         // Só se repõe o PIN a operadores: repor o de outro supervisor permitia fazer-se passar por ele.
         if (await repo.ObterAsync(codigo, ct) is not { } alvo) return Erro(404, "nao_existe");
-        if (alvo.Perfil != Perfil.Operador) return Results.Forbid();
+        if (alvo.Perfil == Perfil.Supervisor) return Results.Forbid();
 
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {

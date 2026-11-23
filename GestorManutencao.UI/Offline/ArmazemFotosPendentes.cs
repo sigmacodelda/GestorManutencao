@@ -31,8 +31,13 @@ public sealed class ArmazemFotosPendentesMemoria : IArmazemFotosPendentes
 // Conteúdo (JSON) das operações da fila.
 internal sealed record CargaAvaria(string EquipamentoId, string Anomalia);
 internal sealed record CargaConclusao(string Feito, TimeOnly Inicio, TimeOnly Fim);
-internal sealed record CargaMaterial(string MaterialId, string Design, decimal Qtt, decimal Epv);
+// Local = lugar da peça (etiqueta LOC-... ou A-02-1-01); fila antiga sem o campo lê-se como "" (a API decide ou pede o lugar).
+internal sealed record CargaMaterial(string MaterialId, string Design, decimal Qtt, decimal Epv, string Ref = "", string Local = "");
 internal sealed record CargaApagar(string ItemId);
+// Validar, Devolver (Texto = motivo) e ConcluirQualidade (Texto = quem higienizou); o equipamento serve ao aviso de conflito.
+internal sealed record CargaDecisao(string Equipamento, string? Texto);
+// Assinatura da empresa externa: PNG em data URL (até ~200 KB) e nome de quem assinou; a fila guarda-os em JSON sem limite de tamanho.
+internal sealed record CargaAssinatura(string Nome, string Assinatura);
 internal sealed record CargaFoto(string FotoId, string Nome, int Bytes);
 
 internal static class CargasFila

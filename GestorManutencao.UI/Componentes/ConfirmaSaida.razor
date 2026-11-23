@@ -7,7 +7,7 @@
             else { <text>Tem @(Pendentes == 1 ? "1 registo" : $"{Pendentes} registos") por enviar. Se sair agora, ficam guardados neste telemóvel até voltar a entrar com a mesma conta.</text> }
         </p>
         <div class="dialogo-acoes">
-            <button type="button" class="btn btn-primario" @ref="_ficar" @onclick="() => Ficar.InvokeAsync()">Ficar</button>
+            <button type="button" class="btn btn-primario" @ref="_ficar" @onclick="() => Ficar.InvokeAsync()">@(TextoFicar ?? "Ficar")</button>
             <button type="button" class="btn btn-secundario" @ref="_sair" @onclick="() => Sair.InvokeAsync()">@(TextoSair ?? "Sair mesmo assim")</button>
         </div>
     </div>
@@ -21,6 +21,7 @@
     [Parameter] public string? Titulo { get; set; }
     [Parameter] public string? Texto { get; set; }
     [Parameter] public string? TextoSair { get; set; }
+    [Parameter] public string? TextoFicar { get; set; }
     [Parameter] public EventCallback Sair { get; set; }
     [Parameter] public EventCallback Ficar { get; set; }
 

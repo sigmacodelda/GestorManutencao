@@ -1,0 +1,123 @@
+@implements IAsyncDisposable
+@inject IPreferenciasLeitura Preferencias
+@inject IDetetorLeitor Detetor
+@inject ILeitorCamara Camara
+@inject IJSRuntime JS
+
+@if (Efetivo == ModoLeitura.Leitor)
+{
+    <input @ref="_campo" id="@Id" class="leitor-escondido" type="text" inputmode="none" autocomplete="off" autocapitalize="off"
+           spellcheck="false" tabindex="-1" aria-label="Leitor de etiquetas" />
+}
+else
+{
+    <button type="button" id="@Id" class="btn btn-secundario" disabled="@_a_ler" @onclick="LerComCameraAsync">
+        <Icone Nome="camera" /><span>@TextoCamara</span>
+    </button>
+}
+@if (_erro.Length > 0)
+{
+    <p class="campo-erro" role="alert">@_erro</p>
+}
+
+@code {
+    [Parameter] public EventCallback<string> OnLido { get; set; }
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string TextoCamara { get; set; } = "Picar com a câmara";
+
+    private ElementReference _campo;
+    private IJSObjectReference? _modulo, _ligacao;
+    private DotNetObjectReference<LeitorEtiquetas>? _ref;
+    private bool _a_ler, _a_iniciar;
+    private ModoLeitura? _modoVisto;
+    private string _erro = "";
+
+    private ModoLeitura Efetivo => LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial);
+
+    protected override async Task OnAfterRenderAsync(bool primeira)
+    {
+        var modo = Efetivo;
+        var mudou = primeira || _modoVisto != modo;
+        _modoVisto = modo;
+        try
+        {
+            if (modo == ModoLeitura.Leitor)
+            {
+                if (_ligacao is null)
+                {
+                    // Duas renders seguidas não podem ligar duas vezes (a segunda perderia a ligação da primeira).
+                    if (_a_iniciar) return;
+                    _a_iniciar = true;
+                    try
+                    {
+                        _modulo ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/GestorManutencao.UI/js/leitor.js");
+                        _ref = DotNetObjectReference.Create(this);
+                        _ligacao = await _modulo.InvokeAsync<IJSObjectReference>("iniciar", _campo, _ref);
+                    }
+                    catch
+                    {
+                        _ref?.Dispose();
+                        _ref = null;
+                        throw;
+                    }
+                    finally { _a_iniciar = false; }
+                }
+                else if (mudou) await _ligacao.InvokeVoidAsync("refocar");
+            }
+            else await PararAsync();
+        }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException or InvalidOperationException) { }
+    }
+
+    // Devolve o foco ao campo escondido (PDA); sem leitor ligado não faz nada.
+    public async Task FocarAsync()
+    {
+        if (_ligacao is null) return;
+        try { await _ligacao.InvokeVoidAsync("refocar"); }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException) { }
+    }
+
+    [JSInvokable]
+    public async Task AoLer(string valor)
+    {
+        var codigo = LogicaLeitura.NormalizarCodigo(valor);
+        if (codigo.Length == 0) return;
+        if (_erro.Length > 0) { _erro = ""; StateHasChanged(); }
+        await OnLido.InvokeAsync(codigo);
+    }
+
+    private async Task LerComCameraAsync()
+    {
+        if (_a_ler) return;
+        _a_ler = true;
+        _erro = "";
+        string? lido = null;
+        try { lido = await Camara.LerAsync(); }
+        catch (InvalidOperationException e) { _erro = e.Message; }
+        catch (Exception) { _erro = "Não foi possível ler com a câmara. Tente outra vez."; }
+        finally { _a_ler = false; }
+        // Fora do try: um erro de quem recebe o código não é um erro da câmara.
+        if (lido is not null) await AoLer(lido);
+    }
+
+    private async Task PararAsync()
+    {
+        if (_ligacao is null) return;
+        var ligacao = _ligacao;
+        _ligacao = null;
+        _ref?.Dispose();
+        _ref = null;
+        await ligacao.InvokeVoidAsync("parar");
+        await ligacao.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await PararAsync();
+            if (_modulo is not null) await _modulo.DisposeAsync();
+        }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException or InvalidOperationException) { }
+    }
+}

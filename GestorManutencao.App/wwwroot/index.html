@@ -19,6 +19,34 @@
             }
         };
         document.documentElement.setAttribute("data-modo", window.gmModo.obter());
+
+        // Área de desenho da assinatura: traço a azul-escuro sobre fundo branco, exportado em PNG (data URL).
+        window.gmAssinatura = (function () {
+            var estados = {};
+            function pos(c, e) { var r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * c.width / r.width, y: (e.clientY - r.top) * c.height / r.height }; }
+            function fundo(c) { var g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height); /* PNG com fundo transparente; o fundo branco é só do CSS */ g.strokeStyle = "#1A1731"; g.lineWidth = 3; g.lineCap = "round"; g.lineJoin = "round"; }
+            return {
+                iniciar: function (id, ref) {
+                    var c = document.getElementById(id); if (!c) return;
+                    var est = estados[id] = { ref: ref, desenha: false, traco: false, ultimo: null };
+                    fundo(c);
+                    c.style.touchAction = "none";
+                    function avisar() { try { est.ref.invokeMethodAsync("AoMudar", est.traco); } catch (e) { } }
+                    c.onpointerdown = function (e) { c.setPointerCapture(e.pointerId); est.desenha = true; est.ultimo = pos(c, e); var g = c.getContext("2d"); g.beginPath(); g.moveTo(est.ultimo.x, est.ultimo.y); g.lineTo(est.ultimo.x + 0.01, est.ultimo.y); g.stroke(); if (!est.traco) { est.traco = true; avisar(); } e.preventDefault(); };
+                    c.onpointermove = function (e) { if (!est.desenha) return; var p = pos(c, e), g = c.getContext("2d"); g.beginPath(); g.moveTo(est.ultimo.x, est.ultimo.y); g.lineTo(p.x, p.y); g.stroke(); est.ultimo = p; e.preventDefault(); };
+                    c.onpointerup = c.onpointercancel = function () { est.desenha = false; };
+                },
+                carregar: function (id, url) {
+                    var c = document.getElementById(id), est = estados[id]; if (!c || !est) return;
+                    var img = new Image();
+                    img.onload = function () { c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); est.traco = true; try { est.ref.invokeMethodAsync("AoMudar", true); } catch (e) { } };
+                    img.src = url;
+                },
+                limpar: function (id) { var c = document.getElementById(id), est = estados[id]; if (!c || !est) return; fundo(c); est.traco = false; try { est.ref.invokeMethodAsync("AoMudar", false); } catch (e) { } },
+                exportar: function (id) { var c = document.getElementById(id); return c ? c.toDataURL("image/png") : ""; },
+                parar: function (id) { delete estados[id]; }
+            };
+        })();
     </script>
 </head>
 

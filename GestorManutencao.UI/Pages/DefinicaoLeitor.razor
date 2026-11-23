@@ -1,0 +1,56 @@
+@page "/leitor"
+@inject IPreferenciasLeitura Preferencias
+@inject IDetetorLeitor Detetor
+
+<PageTitle>Leitor · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="/"><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Leitor de etiquetas</h1>
+        <p class="login-sub">Escolha como este aparelho lê códigos de barras e QR.</p>
+    </div>
+
+    <div class="segmentos" role="group" aria-label="Modo de leitura">
+        @foreach (var (modo, rotulo) in Opcoes)
+        {
+            <button type="button" class="segmento" aria-pressed="@(Preferencias.Modo == modo ? "true" : "false")"
+                    disabled="@(modo == ModoLeitura.Camara && !Detetor.TemCamara)" @onclick="() => Escolher(modo)">
+                <span>@rotulo</span>
+            </button>
+        }
+    </div>
+
+    <p class="estado-lista" role="status">
+        Modo em uso: <strong>@(Efetivo == ModoLeitura.Leitor ? "Leitor" : "Câmara")</strong>.
+        Detetado: @Detetor.Descricao.
+    </p>
+
+    @if (!Detetor.TemCamara)
+    {
+        <p class="estado-lista" role="status">Neste computador não há câmara; a opção Câmara só existe no telemóvel.</p>
+    }
+
+    <div class="campo">
+        <label for="teste-leitura">Teste de leitura</label>
+        <LeitorEtiquetas Id="teste-leitura" OnLido="Lido" />
+        <p class="leitor-teste" role="status">@(_ultimo.Length > 0 ? _ultimo : "Ainda nada lido.")</p>
+    </div>
+</section>
+
+@code {
+    private static readonly (ModoLeitura, string)[] Opcoes =
+    [
+        (ModoLeitura.Automatico, "Automático"),
+        (ModoLeitura.Camara, "Câmara"),
+        (ModoLeitura.Leitor, "Leitor")
+    ];
+
+    private string _ultimo = "";
+
+    private ModoLeitura Efetivo => LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial);
+
+    private void Escolher(ModoLeitura modo) => Preferencias.Modo = modo;
+
+    private void Lido(string codigo) => _ultimo = codigo;
+}

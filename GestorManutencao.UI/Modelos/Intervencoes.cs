@@ -29,7 +29,8 @@ public sealed record Intervencao(
     bool Pendente = false,
     IReadOnlyList<TecnicoFicha>? Adicionais = null,
     int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false,
-    bool EmPausa = false, bool PodePausar = false)
+    bool EmPausa = false, bool PodePausar = false,
+    bool Externa = false, bool TemAssinaturaExterna = false, string? AvisoStock = null)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
@@ -103,7 +104,10 @@ public static class RegrasPesquisa
     public static bool TextoValido(string? texto) => (texto ?? "").Trim() is { Length: 0 } or { Length: >= 2 and <= MaxTexto };
 }
 
-public sealed record Material(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo);
+// Local = lugar de onde saiu a peça (A-02-1-01). AvisoStock só vem na resposta de gravar. FaltaLugar: material na fila que o
+// servidor não aceitou sem lugar (a peça está em vários); só se calcula no telemóvel, nunca vem da API.
+public sealed record Material(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo, string Ref = "", bool SaidaDada = false,
+    string? Local = null, string? AvisoStock = null, bool FaltaLugar = false);
 
 public sealed record Foto(string Id, string Nome, int Bytes);
 
@@ -133,6 +137,15 @@ public static class RegrasIntervencao
 {
     // Limites das colunas da ficha de intervenção no PHC.
     public const int MaxAnomalia = 200, MaxFeito = 254;
+
+    // Assinatura da empresa externa: nome de quem assina (2 a 60 letras), como no servidor.
+    public const int MinNomeAssinante = 2, MaxNomeAssinante = 60;
+
+    public static string? ValidarAssinaturaExterna(string? nome, string? assinatura) =>
+        (nome ?? "").Trim().Length < MinNomeAssinante ? "Escreva o nome de quem assina."
+        : nome!.Trim().Length > MaxNomeAssinante ? $"Escreva menos: no máximo {MaxNomeAssinante} letras."
+        : !Servicos.RegrasAssinatura.EImagem(assinatura) ? "A assinatura é obrigatória. Peça à empresa para assinar."
+        : null;
 
     public static string? ValidarAvaria(string? equipamento, string? anomalia) =>
         string.IsNullOrWhiteSpace(equipamento) ? "Escolha o equipamento."

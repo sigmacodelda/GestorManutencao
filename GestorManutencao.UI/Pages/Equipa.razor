@@ -30,7 +30,7 @@
         }
 
         <form class="formulario" @onsubmit="CriarAsync" novalidate>
-            <h2 class="titulo-grupo">@(Sessao.Utilizador?.Configuracao == true ? "Novo utilizador" : "Novo operador")</h2>
+            <h2 class="titulo-grupo">Novo utilizador</h2>
             <div class="campo">
                 <label for="nome">Nome</label>
                 <input id="nome" type="text" autocomplete="off" @bind="_nome" @bind:event="oninput" />
@@ -43,12 +43,22 @@
                 <label for="tecno">Número do utilizador no PHC</label>
                 <input id="tecno" type="text" inputmode="numeric" autocomplete="off" @bind="_tecno" @bind:event="oninput" />
             </div>
-            @if (Sessao.Utilizador?.Configuracao == true)
-            {
-                <div class="campo">
-                    <label><input type="checkbox" @bind="_supervisor" /> Criar como supervisor</label>
+            <div class="campo">
+                <span id="perfil-rotulo" class="campo-rotulo">Perfil</span>
+                <div class="segmentos" role="group" aria-labelledby="perfil-rotulo" style="grid-template-columns: repeat(3, 1fr); max-width: none;">
+                    <button type="button" class="segmento" aria-pressed="@(_perfil == Perfil.Operador ? "true" : "false")" @onclick="() => _perfil = Perfil.Operador"><span>Operador</span></button>
+                    <button type="button" class="segmento" aria-pressed="@(_perfil == Perfil.Qualidade ? "true" : "false")" @onclick="() => _perfil = Perfil.Qualidade"><span>Qualidade</span></button>
+                    <button type="button" class="segmento" aria-pressed="@(_perfil == Perfil.Supervisor ? "true" : "false")" @onclick="() => _perfil = Perfil.Supervisor"><span>Supervisor</span></button>
                 </div>
-            }
+                @if (_perfil == Perfil.Supervisor)
+                {
+                    <small class="campo-ajuda">Vê e decide tudo na manutenção e pode criar outros utilizadores.</small>
+                }
+                @if (_perfil == Perfil.Qualidade)
+                {
+                    <small class="campo-ajuda">Conclui as intervenções validadas e regista quem fez a higienização.</small>
+                }
+            </div>
             <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@_ocupado"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Feito")</span></button>
         </form>
 
@@ -65,10 +75,29 @@
                 {
                     <li class="intervencao">
                         <span class="intervencao-titulo">@m.Nome</span>
-                        <span class="intervencao-desc">@(m.Perfil == Perfil.Supervisor ? "Supervisor" : "Operador")@(m.PinProvisorio ? " · PIN por escolher" : "")@(m.Ativo ? "" : " · Inativo")@(m.Tecno > 0 ? $" · PHC {m.Tecno}" : " · sem número do PHC")</span>
-                        @if (m.Perfil == Perfil.Operador && m.Ativo)
+                        <span class="intervencao-desc">@(m.Perfil == Perfil.Supervisor ? "Supervisor" : m.Perfil == Perfil.Qualidade ? "Qualidade" : "Operador")@(m.PinProvisorio ? " · PIN por escolher" : "")@(m.Ativo ? "" : " · Inativo")@(m.Tecno > 0 ? $" · PHC {m.Tecno}" : " · sem número do PHC")</span>
+                        @if (m.Perfil != Perfil.Supervisor && m.Ativo)
                         {
                             <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => NovoPinAsync(m)">Novo PIN</button>
+                        }
+                        @if (m.Perfil != Perfil.Supervisor)
+                        {
+                            @if (m.Ativo && _aInativar == m.Codigo)
+                            {
+                                <p class="ficha-texto">Inativar <strong>@m.Nome</strong>? Deixa de entrar na app. As fichas já feitas ficam e pode reativar quando quiser.</p>
+                                <div class="ficha-acoes">
+                                    <button type="button" class="btn" disabled="@_ocupado" @onclick="() => DefinirAtivoAsync(m, false)"><Icone Nome="x" /><span>Inativar</span></button>
+                                    <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aInativar = null">Cancelar</button>
+                                </div>
+                            }
+                            else if (m.Ativo)
+                            {
+                                <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => _aInativar = m.Codigo">Inativar utilizador</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => DefinirAtivoAsync(m, true)">Reativar utilizador</button>
+                            }
                         }
                         @if (_aEditar == m.Codigo)
                         {
@@ -91,9 +120,10 @@
 @code {
     private IReadOnlyList<MembroEquipa> _membros = [];
     private string _nome = "", _codigo = "", _tecno = "", _tecnoEditado = "", _erro = "", _pinDe = "";
-    private string? _aEditar;
+    private string? _aEditar, _aInativar;
     private string? _pinNovo;
-    private bool _a_carregar = true, _ocupado, _supervisor;
+    private bool _a_carregar = true, _ocupado;
+    private Perfil _perfil = Perfil.Operador;
 
     protected override async Task OnInitializedAsync()
     {
@@ -121,8 +151,8 @@
         _ocupado = true;
         try
         {
-            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim(), tecno, _supervisor && Sessao.Utilizador?.Configuracao == true);
-            if (Tratar(r, _nome.Trim())) { _nome = _codigo = _tecno = ""; _supervisor = false; await CarregarAsync(); }
+            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim(), tecno, _perfil == Perfil.Supervisor, qualidade: _perfil == Perfil.Qualidade);
+            if (Tratar(r, _nome.Trim())) { _nome = _codigo = _tecno = ""; _perfil = Perfil.Operador; await CarregarAsync(); }
         }
         finally { _ocupado = false; }
     }
@@ -157,6 +187,20 @@
         try
         {
             if (Tratar(await ServicoEquipa.NovoPinAsync(Sessao.Utilizador?.Token, m.Codigo), m.Nome)) await CarregarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    private async Task DefinirAtivoAsync(MembroEquipa m, bool ativo)
+    {
+        _erro = "";
+        _ocupado = true;
+        try
+        {
+            var r = await ServicoEquipa.DefinirAtivoAsync(Sessao.Utilizador?.Token, m.Codigo, ativo);
+            _aInativar = null;
+            if (r.Resultado == ResultadoEquipa.Ok) await CarregarAsync();
+            else _erro = r.Resultado == ResultadoEquipa.SemPermissao ? "Não pode alterar este utilizador." : "Não foi possível ligar ao servidor. Tente outra vez.";
         }
         finally { _ocupado = false; }
     }

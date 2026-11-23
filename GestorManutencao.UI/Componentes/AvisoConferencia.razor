@@ -1,0 +1,21 @@
+@* Aviso da conferência de peças ("Conferência por confirmar" ao validar, "Conferência por cancelar" ao cancelar).
+   A ficha já mudou de estado; o supervisor repete a confirmação até a API a dar por feita (a chamada é idempotente). *@
+@if (!string.IsNullOrWhiteSpace(Aviso))
+{
+    <div class="alerta alerta-devolvida" role="alert">
+        <Icone Nome="triangle-alert" />
+        <div>
+            @if (!string.IsNullOrWhiteSpace(Titulo)) { <strong>@Titulo</strong> }
+            <p>@Aviso</p>
+            <button type="button" class="btn btn-secundario" disabled="@Ocupado" @onclick="OnRepetir"><Icone Nome="refresh-cw" /><span>@(Ocupado ? "A confirmar…" : Texto)</span></button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Aviso { get; set; }
+    [Parameter] public string? Titulo { get; set; }
+    [Parameter] public string Texto { get; set; } = "Repetir confirmação";
+    [Parameter] public bool Ocupado { get; set; }
+    [Parameter] public EventCallback OnRepetir { get; set; }
+}

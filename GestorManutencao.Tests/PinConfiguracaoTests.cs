@@ -119,14 +119,15 @@ public class PinConfiguracaoTests : IDisposable
     }
 
     [Fact]
-    public async Task Um_supervisor_normal_continua_sem_poder_criar_supervisores()
+    public async Task Um_supervisor_normal_tambem_cria_supervisores()
     {
         var c = Cliente(PinDev);
         Assert.NotNull(await EntrarAsync(c, "795316")); // sigma-ok: PIN de teste fictício
 
         var r = await c.PostAsJsonAsync("/utilizadores", new { utilizador = "outro", nome = "Outro Chefe", perfil = "Supervisor" });
-        Assert.Equal(HttpStatusCode.Forbidden, r.StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/utilizadores", new { utilizador = "outro", nome = "Outro Operador" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var pin = (await r.Content.ReadFromJsonAsync<RespostaPin>())!.Pin;
+        Assert.Equal(Perfil.Supervisor, (await EntrarAsync(Cliente(PinDev), pin))!.Perfil);
     }
 
     [Fact]

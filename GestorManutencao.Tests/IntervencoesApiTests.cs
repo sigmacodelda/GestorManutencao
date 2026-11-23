@@ -210,7 +210,11 @@ public class IntervencoesApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
         Assert.Equal(EstadoIntervencao.Validada, (await ok.Content.ReadFromJsonAsync<IntervencaoDto>())!.Estado);
         Assert.Empty(await Lista(c, "/validacao"));
-        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync("/validacao/F3", null)).StatusCode);
+        // Repetir não valida outra vez: só tenta confirmar a conferência das peças (aqui não há nada por confirmar).
+        var segunda = await c.PostAsync("/validacao/F3", null);
+        Assert.Equal(HttpStatusCode.OK, segunda.StatusCode);
+        Assert.Null(System.Text.Json.JsonDocument.Parse(await segunda.Content.ReadAsStringAsync()).RootElement.GetProperty("avisoStock").GetString());
+        Assert.Empty(await Lista(c, "/validacao"));
     }
 
     [Fact]

@@ -1,0 +1,40 @@
+@* Sinal de ligação à API no topo: verde = ligado, amarelo = a sincronizar, cinzento com um x vermelho = sem ligação.
+   Os valores vêm do layout por parâmetros (um componente sem parâmetros não volta a desenhar-se sozinho). *@
+@if (Conflitos > 0)
+{
+    <a class="ligacao @Classe" href="por-rever" title="@Texto" aria-label="@Texto">
+        <Icone Nome="wifi" />
+        @if (Estado == EstadoLigacaoApi.Sem) { <span class="ligacao-x" aria-hidden="true"><Icone Nome="x" /></span> }
+        <span class="ligacao-rever" aria-hidden="true">@Conflitos</span>
+    </a>
+}
+else
+{
+    <span class="ligacao @Classe" role="img" title="@Texto" aria-label="@Texto">
+        <Icone Nome="wifi" />
+        @if (Estado == EstadoLigacaoApi.Sem) { <span class="ligacao-x" aria-hidden="true"><Icone Nome="x" /></span> }
+    </span>
+}
+
+@code {
+    public enum EstadoLigacaoApi { Ligado, Sincronizando, Sem }
+
+    [Parameter] public EstadoLigacaoApi Estado { get; set; }
+    [Parameter] public int Pendentes { get; set; }
+    [Parameter] public int Conflitos { get; set; }
+
+    // Sem rede (ou sem dados do servidor) = cinzento; a enviar = amarelo; senão verde. Partilhado pelo topo, pelo canto e pelo Início.
+    public static EstadoLigacaoApi De(GestorManutencao.UI.Offline.IGestorOffline offline) =>
+        offline.SemLigacao || offline.TextoDados is not null ? EstadoLigacaoApi.Sem
+        : offline.Estado == GestorManutencao.UI.Offline.EstadoSincronizacao.ASincronizar ? EstadoLigacaoApi.Sincronizando
+        : EstadoLigacaoApi.Ligado;
+
+    private string Classe => Estado switch { EstadoLigacaoApi.Sincronizando => "ligacao-sinc", EstadoLigacaoApi.Sem => "ligacao-sem", _ => "ligacao-ok" };
+
+    private string Texto => Estado switch
+    {
+        EstadoLigacaoApi.Sem => "Sem ligação. Pode continuar a trabalhar." + (Pendentes > 0 ? $" {Pendentes} por enviar." : "") + (Conflitos > 0 ? $" {Conflitos} por rever." : ""),
+        EstadoLigacaoApi.Sincronizando => "A sincronizar…" + (Conflitos > 0 ? $" {Conflitos} por rever." : ""),
+        _ => "Ligado" + (Pendentes > 0 ? $". {Pendentes} por enviar." : "") + (Conflitos > 0 ? $" {Conflitos} por rever." : "")
+    };
+}

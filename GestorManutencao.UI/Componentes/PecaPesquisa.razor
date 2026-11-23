@@ -1,0 +1,133 @@
+@inject IPecasService Pecas
+@inject IPreferenciasLeitura Preferencias
+@inject IDetetorLeitor Detetor
+
+<form class="pesquisa" role="search" @onsubmit="PesquisarAsync" novalidate>
+    <div class="pesquisa-linha">
+        <div class="campo">
+            <label for="@IdCampo">Peça</label>
+            <input id="@IdCampo" type="search" autocomplete="off" maxlength="60" placeholder="Referência, nome ou código de barras"
+                   aria-describedby="@IdErro" @ref="_campo" @bind="_texto" @bind:event="oninput" />
+        </div>
+        <button type="submit" class="btn btn-secundario" disabled="@_a_pesquisar" aria-label="Pesquisar peça"><Icone Nome="search" /></button>
+    </div>
+</form>
+@if (!SemLeitor)
+{
+    <LeitorEtiquetas OnLido="LerCodigoAsync" />
+}
+<p id="@IdErro" class="campo-erro" role="alert">@_erro</p>
+
+@if (_resultado is { CampoExiste: false })
+{
+    <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>Falta criar o campo u_manut na stobs do PHC.</span></p>
+}
+else if (_resultado is not null)
+{
+    @if (_resultado.Pecas.Count > 0)
+    {
+        <ul class="lista-intervencoes">
+            @foreach (var p in _resultado.Pecas.Take(MaxVisiveis))
+            {
+                <li>
+                    <button type="button" class="intervencao @(p.AbaixoDoMinimo ? "atrasada" : "")" @onclick="() => EscolherAsync(p)">
+                        <span class="intervencao-titulo">@p.Ref @p.Design</span>
+                        <span class="intervencao-desc">Stock @p.Stock.ToString("0.###") · @(p.Local.Length > 0 ? p.Local : "Sem local")</span>
+                    </button>
+                </li>
+            }
+        </ul>
+        @if (_resultado.HaMais)
+        {
+            <p class="estado-lista" role="status">Há mais resultados, escreva mais para os filtrar.</p>
+        }
+        else if (_resultado.Pecas.Count > MaxVisiveis)
+        {
+            <p class="estado-lista" role="status">+@(_resultado.Pecas.Count - MaxVisiveis), escreva mais</p>
+        }
+    }
+}
+
+@code {
+    private const int MaxVisiveis = 6;
+
+    [Parameter] public EventCallback<Peca> OnEscolher { get; set; }
+    // Com mais de uma pesquisa na mesma página os ids têm de ser diferentes.
+    // A página já tem o seu leitor e entrega as leituras por LerCodigoAsync.
+    [Parameter] public bool SemLeitor { get; set; }
+    [Parameter] public string IdCampo { get; set; } = "peca-texto";
+
+    private string IdErro => IdCampo + "-erro";
+
+    private string _texto = "", _erro = "";
+    private string? _pendente;
+    private bool _a_pesquisar;
+    private ResultadoPecas? _resultado;
+    private ElementReference _campo;
+
+    // Com leitor (PDA) o scan vai ao campo escondido; focar este abriria o teclado virtual.
+    public async Task FocarAsync()
+    {
+        if (LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial) == ModoLeitura.Leitor) return;
+        try { await _campo.FocusAsync(); }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or ObjectDisposedException) { }
+    }
+
+    // Ponto de ligação do leitor (câmara/PDA): quem ler uma etiqueta chama isto com o código lido.
+    // Durante uma pesquisa em curso guarda-se o último código lido e corre-se quando ela acabar.
+    public async Task LerCodigoAsync(string codigo)
+    {
+        if (LogicaLeitura.EEtiquetaLocal(codigo)) { _erro = "Isto é uma etiqueta de local; pique uma peça."; return; }
+        if (_a_pesquisar) { _pendente = codigo; return; }
+        _texto = codigo;
+        await PesquisarAsync();
+        StateHasChanged();
+    }
+
+    private async Task PesquisarAsync()
+    {
+        await PesquisarUmaVezAsync();
+        while (_pendente is { } codigo)
+        {
+            _pendente = null;
+            _texto = codigo;
+            await PesquisarUmaVezAsync();
+        }
+    }
+
+    // Enter com só dígitos (leitor tipo teclado) vai direto à peça; se não existir, cai na pesquisa por texto.
+    private async Task PesquisarUmaVezAsync()
+    {
+        if (_a_pesquisar) return;
+        _erro = "";
+        var texto = _texto.Trim();
+        if (texto.Length == 0) { _resultado = null; return; }
+        // Também o scan que cai no campo visível (PDA com o foco aqui).
+        if (LogicaLeitura.EEtiquetaLocal(texto)) { _erro = "Isto é uma etiqueta de local; pique uma peça."; _resultado = null; return; }
+        _a_pesquisar = true;
+        try
+        {
+            if (LogicaEcraPecas.PareceCodigoDeBarras(texto) && await Pecas.ObterPorCodigoAsync(texto) is { } peca)
+            {
+                await EscolherAsync(peca);
+                return;
+            }
+            _resultado = await Pecas.PesquisarAsync(texto);
+            // Sem nenhuma peça: diz-se e o texto fica no campo para corrigir.
+            if (_resultado is { CampoExiste: true, Pecas.Count: 0 })
+            {
+                _erro = LogicaEcraPecas.MensagemSemResultado(texto);
+                _resultado = null;
+            }
+        }
+        catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível pesquisar. Tente outra vez."); }
+        finally { _a_pesquisar = false; }
+    }
+
+    private async Task EscolherAsync(Peca p)
+    {
+        _texto = "";
+        _resultado = null;
+        await OnEscolher.InvokeAsync(p);
+    }
+}

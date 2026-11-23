@@ -26,7 +26,7 @@
     }
     else
     {
-        <p class="estado-lista">Estes registos feitos sem rede não foram aceites. O que escreveu fica aqui para o poder copiar. Quando já não precisar, carregue em "Percebi".</p>
+        <p class="estado-lista">Estes registos feitos sem rede não foram aceites. O que escreveu fica aqui para o poder copiar. Quando já não precisar, carregue em "Percebi". Nas validações com a conferência das peças por confirmar, use "Repetir confirmação".</p>
         <ul class="rever">
             @foreach (var a in _avisos)
             {
@@ -48,18 +48,22 @@
                         </div>
                     }
                     <div class="rever-acoes">
+                        @if (a.Acao == AvisoConflito.RepetirValidar)
+                        {
+                            <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => RepetirAsync(a)"><Icone Nome="refresh-cw" /><span>@(_ocupado ? "A confirmar…" : "Repetir confirmação")</span></button>
+                        }
                         <button type="button" class="btn btn-primario" @onclick="() => PercebiAsync(a)"><Icone Nome="check" /><span>Percebi</span></button>
                     </div>
                 </li>
             }
         </ul>
-        <p class="@(_copiavel ? "campo-ok" : "campo-erro")" role="status">@_mensagem</p>
     }
+    <p class="@(_copiavel ? "campo-ok" : "campo-erro")" role="status">@_mensagem</p>
 </section>
 
 @code {
     private IReadOnlyList<AvisoConflito> _avisos = [];
-    private bool _a_carregar = true, _copiavel = true;
+    private bool _a_carregar = true, _copiavel = true, _ocupado;
     private string _mensagem = "";
 
     protected override async Task OnInitializedAsync()
@@ -82,6 +86,22 @@
         _mensagem = "";
         try { await Offline.DescartarConflitoAsync(a.Id); }
         catch (Exception) { _mensagem = "Não foi possível guardar. Tente outra vez."; }
+        await CarregarAsync();
+    }
+
+    // Repetir é seguro: a API só volta a tentar a confirmação das peças. O aviso só sai quando a API confirma.
+    private async Task RepetirAsync(AvisoConflito a)
+    {
+        _mensagem = "";
+        _ocupado = true;
+        try
+        {
+            var ainda = await Offline.RepetirConfirmacaoAsync(a.Id);
+            _mensagem = ainda is null ? $"Conferência confirmada: {a.Equipamento}." : $"Ainda por confirmar: {ainda}";
+        }
+        catch (InvalidOperationException ex) { _mensagem = ex.Message; }
+        catch (Exception) { _mensagem = "Não foi possível confirmar. Tente outra vez."; }
+        finally { _ocupado = false; }
         await CarregarAsync();
     }
 

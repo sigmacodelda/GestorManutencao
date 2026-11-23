@@ -547,4 +547,30 @@ public class OfflineTests
         Assert.Single(await c.Svc.ListarMinhasAsync());
         Assert.Empty(await c.Cache.ListarFichasAsync());
     }
+
+    // Caso real: o técnico nunca pesquisou nada com rede; a lista de equipamentos tem de estar na cache só por a app ter atualizado.
+    [Fact]
+    public async Task Avaria_sem_rede_encontra_equipamentos_que_o_tecnico_nunca_pesquisou()
+    {
+        var c = new Cenario();
+        c.Semear(Ficha("T1", "Compressor de ar 02", EstadoIntervencao.Planeada));
+        await c.Svc.ListarMinhasAsync();
+        Assert.True(await c.Atualizador.AtualizarCacheAsync());
+
+        c.Remoto.Rede = false;
+        c.Rede.Definir(false);
+
+        var todos = await c.Svc.PesquisarAsync("");
+        Assert.Contains(todos, e => e.Id == "E2");
+        Assert.DoesNotContain(todos, e => e.Obsoleto);
+        Assert.Contains(await c.Svc.PesquisarAsync("camara"), e => e.Id == "E2");
+
+        var avaria = await c.Svc.RegistarAvariaAsync("E2", "Não arrefece");
+        Assert.True(avaria.Pendente);
+
+        c.Remoto.Rede = true;
+        c.Rede.Definir(true);
+        await c.Sinc.SincronizarAsync();
+        Assert.Contains(c.Remoto.Fichas.Values, f => f.Equipamento == "Câmara de frio 01" && f.Anomalia == "Não arrefece");
+    }
 }

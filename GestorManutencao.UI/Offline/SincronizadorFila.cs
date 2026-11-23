@@ -8,6 +8,8 @@ public enum EstadoSincronizacao { Sincronizado, ASincronizar, PorEnviar, ComConf
 
 // Envia a fila do dono atual para o servidor, por ordem e por ficha. O servidor ganha sempre: uma recusa permanente
 // (400, 404, 409, 413, 422) passa a operação e as dependentes da mesma ficha a Conflito, com um aviso que guarda o texto do técnico.
+// Material cuja peça está em vários lugares (409 escolha_o_lugar) não é uma recusa: fica PorEscolherLugar (pendente e visível, nunca descartado)
+// e as operações seguintes da mesma ficha esperam por ele; as outras fichas seguem.
 // Falha de rede ou 401: pára sem perder nada e retoma depois. Qualquer outra falha (403, 5xx, foto ilegível, dados corrompidos)
 // bloqueia só essa ficha nesta passagem, as outras continuam; à 5.ª tentativa falhada a operação passa a Conflito com aviso.
 // A app chama SincronizarAsync quando a rede volta, no arranque, depois de uma escrita online com sucesso e a cada 60 s enquanto houver pendentes.
@@ -79,7 +81,7 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
         while (!ct.IsCancellationRequested && mc.EDono(dono))
         {
             var operacoes = await fila.ListarAsync(dono);
-            var operacao = operacoes.FirstOrDefault(o => o.Estado != EstadoOperacao.Conflito && !bloqueadas.Contains(o.FichaId));
+            var operacao = ProximaOperacao(operacoes, bloqueadas);
             if (operacao is null) return;
             try
             {
@@ -95,6 +97,10 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
             {
                 await RegistarFalhaAsync(operacao, dono, e.GetType().Name, contar: false);
                 return;
+            }
+            catch (EscolhaLugarException e)
+            {
+                await MarcarPorEscolherLugarAsync(operacao, dono, e.Message);
             }
             catch (Exception e) when (e is not OperationCanceledException && Recusa(e))
             {
@@ -115,6 +121,52 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
             }
             await AtualizarContagensAsync();
         }
+    }
+
+    // A primeira operação enviável: sem Conflito, sem PorEscolherLugar, sem ficha bloqueada e sem um material à espera de lugar antes dela na mesma ficha.
+    private static OperacaoSaida? ProximaOperacao(IReadOnlyList<OperacaoSaida> operacoes, HashSet<string> bloqueadas)
+    {
+        var esperam = new HashSet<string>();
+        foreach (var o in operacoes)
+        {
+            if (o.Estado == EstadoOperacao.Conflito) continue;
+            if (o.Estado == EstadoOperacao.PorEscolherLugar) { esperam.Add(o.FichaId); continue; }
+            if (!bloqueadas.Contains(o.FichaId) && !esperam.Contains(o.FichaId)) return o;
+        }
+        return null;
+    }
+
+    // Dentro do trinco e relendo a operação: se entretanto foi apagada (cancelar a adição), não se recria.
+    private Task MarcarPorEscolherLugarAsync(OperacaoSaida operacao, string dono, string motivo) => mc.ComTrincoAsync(async () =>
+    {
+        var atual = (await fila.ListarAsync(dono)).FirstOrDefault(o => o.Id == operacao.Id);
+        if (atual is null || atual.Estado == EstadoOperacao.Conflito) return;
+        await fila.AtualizarAsync(atual with { Estado = EstadoOperacao.PorEscolherLugar, UltimoErro = motivo });
+    });
+
+    // A validação ficou feita mas a conferência não confirmou: o supervisor não estava a olhar, por isso fica um aviso com a ação
+    // "Repetir confirmação" (ecrã Por rever). O id deriva da operação: repetir o envio não duplica o aviso.
+    private async Task AvisarConferenciaAsync(OperacaoSaida operacao, string dono, string aviso)
+    {
+        var id = "conf-" + operacao.Id;
+        if ((await fila.ListarAvisosAsync(dono)).Any(a => a.Id == id)) return;
+        await fila.AdicionarAvisoAsync(new AvisoConflito(id, dono, operacao.FichaId, EquipamentoDaDecisao(operacao),
+            $"Validada, mas: {aviso}. Escolha Repetir confirmação.", [], tempo.GetUtcNow(), AvisoConflito.RepetirValidar));
+    }
+
+    // Repete a validação de um aviso de conferência: a API só volta a tentar a confirmação das peças. Devolve null se confirmou
+    // (o aviso desaparece) ou o texto que a API ainda mostra. Sem rede, nada muda e o aviso fica.
+    public async Task<string?> RepetirConfirmacaoAsync(string avisoId, CancellationToken ct = default)
+    {
+        if (donoDados.Dono is not { } dono) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+        var aviso = (await fila.ListarAvisosAsync(dono)).FirstOrDefault(a => a.Id == avisoId && a.Acao == AvisoConflito.RepetirValidar)
+            ?? throw new InvalidOperationException(MensagensIntervencao.Mudou);
+        Intervencao r;
+        try { r = await remoto.ValidarAsync(aviso.FichaId, ct); }
+        catch (Exception e) when (FalhaDeRede(e, ct)) { throw new InvalidOperationException(MensagensIntervencao.SemRede); }
+        if (!string.IsNullOrWhiteSpace(r.AvisoStock)) return r.AvisoStock;
+        await DescartarConflitoAsync(avisoId);
+        return null;
     }
 
     // Relê a operação: o envio pode tê-la marcado Incerta e essa marca não se perde. Só as falhas que não são de rede contam para as 5 tentativas.
@@ -166,6 +218,22 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
                 var conclusao = CargasFila.Ler<CargaConclusao>(operacao.Payload);
                 servidor[fichaId] = await remoto.ConcluirAsync(fichaId, conclusao.Feito, conclusao.Inicio, conclusao.Fim, ct);
                 break;
+            case TipoOperacao.AssinarExterna:
+                var assinatura = CargasFila.Ler<CargaAssinatura>(operacao.Payload);
+                servidor[fichaId] = await remoto.AssinarExternaAsync(fichaId, assinatura.Nome, assinatura.Assinatura, ct);
+                break;
+            case TipoOperacao.Validar:
+                var validada = await remoto.ValidarAsync(fichaId, ct);
+                // A operação sai da fila antes do aviso: se a remoção falhasse, o reenvio não criaria um segundo aviso (o id também é fixo).
+                await fila.RemoverAsync(operacao.Id);
+                if (!string.IsNullOrWhiteSpace(validada.AvisoStock)) await AvisarConferenciaAsync(operacao, dono, validada.AvisoStock);
+                break;
+            case TipoOperacao.Devolver:
+                await remoto.DevolverAsync(fichaId, CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? "", ct);
+                break;
+            case TipoOperacao.ConcluirQualidade:
+                await remoto.ConcluirQualidadeAsync(fichaId, CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? "", ct);
+                break;
             case TipoOperacao.AdicionarMaterial:
                 await EnviarMaterialAsync(operacao, dono, ct);
                 break;
@@ -211,7 +279,7 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
             material = (await remoto.ListarMateriaisAsync(operacao.FichaId, ct))
                 .FirstOrDefault(m => !conhecidos.Contains(m.Id) && m.Design.Trim() == carga.Design.Trim() && m.Qtt == carga.Qtt && m.Epv == carga.Epv);
         }
-        material ??= await remoto.AdicionarMaterialAsync(operacao.FichaId, carga.Design, carga.Qtt, carga.Epv, ct);
+        material ??= await remoto.AdicionarMaterialAsync(operacao.FichaId, carga.Design, carga.Qtt, carga.Epv, carga.Ref, carga.Local, ct);
 
         await NoDonoAsync(dono, async () =>
         {
@@ -271,12 +339,14 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
         foreach (var a in afetadas)
             try { if (TextoDe(a) is { } t) textos.Add(t); }
             catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException) { }
-        var equipamento = mc.EDono(dono) ? (await Cache.ObterFichaAsync(operacao.FichaId))?.Equipamento ?? "" : "";
+        var decisao = operacao.Tipo is TipoOperacao.Validar or TipoOperacao.Devolver or TipoOperacao.ConcluirQualidade;
+        var equipamento = decisao ? EquipamentoDaDecisao(operacao) : mc.EDono(dono) ? (await Cache.ObterFichaAsync(operacao.FichaId))?.Equipamento ?? "" : "";
         var aviso = new AvisoConflito(Guid.NewGuid().ToString("N"), dono, operacao.FichaId, equipamento,
             mensagem ?? $"Não foi possível enviar o que registou sem rede. {motivo}", textos, tempo.GetUtcNow());
         await fila.AdicionarAvisoAsync(aviso);
         foreach (var a in afetadas) await fila.AtualizarAsync(a with { Estado = EstadoOperacao.Conflito, AvisoId = aviso.Id, UltimoErro = motivo ?? NaoAceitou });
-        await RefrescarDoServidorAsync(operacao.FichaId, dono, ct);
+        // As decisões do supervisor e da Qualidade não mexem nas fichas do técnico guardadas no telemóvel: a lista atualiza-se na próxima atualização da cache.
+        if (!decisao) await RefrescarDoServidorAsync(operacao.FichaId, dono, ct);
     }
 
     // Só a pausa da ficha volta ao que o servidor diz (sem mexer no resto da ficha, que pode ter operações por enviar).
@@ -303,8 +373,17 @@ public sealed class SincronizadorFila(IIntervencoesRemoto remoto, ManutencaoCach
         TipoOperacao.RegistarAvaria => new("Descrição da avaria", CargasFila.Ler<CargaAvaria>(operacao.Payload).Anomalia),
         TipoOperacao.Concluir => new("O que foi feito", CargasFila.Ler<CargaConclusao>(operacao.Payload).Feito),
         TipoOperacao.AdicionarMaterial => new("Material", CargasFila.Ler<CargaMaterial>(operacao.Payload).Design),
+        TipoOperacao.AssinarExterna => new("Nome de quem assinou pela empresa externa", CargasFila.Ler<CargaAssinatura>(operacao.Payload).Nome),
+        TipoOperacao.Devolver => new("Motivo da devolução", CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? ""),
+        TipoOperacao.ConcluirQualidade => new("Quem fez a higienização", CargasFila.Ler<CargaDecisao>(operacao.Payload).Texto ?? ""),
         _ => null
     };
+
+    private static string EquipamentoDaDecisao(OperacaoSaida operacao)
+    {
+        try { return CargasFila.Ler<CargaDecisao>(operacao.Payload).Equipamento; }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException) { return ""; }
+    }
 
     // A ficha passa a mostrar o estado do servidor. Se não for possível agora, a próxima atualização da cache corrige-a.
     private async Task RefrescarDoServidorAsync(string fichaId, string dono, CancellationToken ct)

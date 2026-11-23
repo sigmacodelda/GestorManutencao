@@ -11,17 +11,19 @@
 @if (Sessao.TemSessao)
 {
     var supervisor = Sessao.Modo == ModoTrabalho.Supervisor;
+    var qualidade = Sessao.EQualidade;
     <section class="conteudo">
         <div class="boas-vindas hero">
             <Engrenagem Classe="engr-hero" />
             <div class="hero-acoes">
+                <span class="hero-ligacao"><EstadoLigacao Estado="EstadoLigacao.De(Offline)" Pendentes="Offline.Pendentes" Conflitos="Offline.Conflitos" /></span>
                 <ModoVisual />
                 <button type="button" class="btn-icone" aria-label="Terminar sessão" @onclick="Sair">
                     <Icone Nome="log-out" />
                 </button>
             </div>
             <div class="hero-texto">
-                <p class="sobretitulo">@(supervisor ? "Supervisor" : "Operador")</p>
+                <p class="sobretitulo">@(supervisor ? "Supervisor" : qualidade ? "Qualidade" : "Operador")</p>
                 <h1 class="hero-nome">
                     <span class="avatar" aria-hidden="true">@Sessao.Utilizador!.Iniciais</span>
                     <span>@Sessao.Utilizador.Nome</span>
@@ -36,7 +38,7 @@
                 @foreach (var c in Contadores())
                 {
                     <li>
-                        <a class="contador @(c.Alerta && c.Valor > 0 ? "alerta-led" : "")" href="@c.Href">
+                        <a class="contador @(c.Valor == 0 ? "contador-zero" : c.Alerta ? "alerta-led" : "contador-vivo")" href="@c.Href">
                             <span class="led" aria-hidden="true"></span>
                             <span class="contador-num">@c.Valor</span>
                             <span class="contador-rot">@c.Rotulo</span>
@@ -61,7 +63,11 @@
         }
 
         <ul class="mosaicos">
-            @if (supervisor)
+            @if (qualidade)
+            {
+                <Mosaico Icone="shield-check" Titulo="Qualidade" Href="qualidade" Descricao="Intervenções validadas à espera de conclusão" Contagem="_porConcluir" RotuloContagem="por concluir" />
+            }
+            else if (supervisor)
             {
                 <Mosaico Icone="calendar" Titulo="Planeadas" Href="planeadas" Descricao="Intervenções por atribuir e em atraso" Contagem="_menu?.PlaneadasAtrasadas ?? 0" RotuloContagem="em atraso" />
                 <Mosaico Icone="shield-check" Titulo="Validação" Href="validacao" Descricao="Fichas concluídas a validar" Contagem="_menu?.PorValidar ?? 0" RotuloContagem="por validar" />
@@ -69,6 +75,8 @@
                 <Mosaico Icone="factory" Titulo="Equipamentos" Href="equipamentos" Descricao="Fichas, histórico e instruções de cada equipamento" />
                 <Mosaico Icone="plus" Titulo="Novo equipamento" Href="equipamentos/novo" Descricao="Registar um equipamento novo" />
                 <Mosaico Icone="clock" Titulo="Periodicidades" Href="periodicidades" Descricao="Unidade, intervalo e aviso" />
+                <Mosaico Icone="package" Titulo="Arrumação" Href="pecas/arrumar" Descricao="Pôr as peças nos seus lugares do armazém" />
+                <Mosaico Icone="camera" Titulo="Leitor" Href="leitor" Descricao="Câmara ou leitor de etiquetas" />
                 <Mosaico Icone="list" Titulo="Todas as fichas" Href="fichas" Descricao="Pesquisar fichas de qualquer estado" />
                 <Mosaico Icone="users" Titulo="Equipa" Href="equipa" Descricao="Utilizadores e PINs" />
                 <Mosaico Icone="settings" Titulo="Configuração" Href="configuracao" Descricao="Regras da manutenção" />
@@ -78,7 +86,10 @@
                 <Mosaico Icone="clipboard-list" Titulo="As minhas intervenções" Href="intervencoes" Descricao="O que tenho para fazer hoje" />
                 <Mosaico Icone="triangle-alert" Titulo="Registar avaria" Href="avaria" Descricao="Avisar de um problema no equipamento" />
                 <Mosaico Icone="factory" Titulo="Equipamentos" Href="equipamentos" Descricao="Consultar fichas e histórico" />
+                <Mosaico Icone="package" Titulo="Arrumação" Href="pecas/arrumar" Descricao="Pôr as peças nos seus lugares do armazém" />
+                <Mosaico Icone="camera" Titulo="Leitor" Href="leitor" Descricao="Câmara ou leitor de etiquetas" />
             }
+            <Mosaico Icone="pen-line" Titulo="A minha assinatura" Href="assinatura" Descricao="Escrever a assinatura do meu utilizador" />
             <Mosaico Icone="bell" Titulo="Notificações" Href="notificacoes" Contagem="Notificacoes.NaoLidas"
                      Descricao="@(Notificacoes.NaoLidas > 0 ? "Tem avisos novos" : "Sem avisos novos")" />
         </ul>
@@ -93,7 +104,7 @@
     private sealed record Contador(string Rotulo, int Valor, string Href, bool Alerta = false);
     private List<Contador>? _contadores;
     private ContadoresMenu? _menu;
-    private int _pendentesSaida;
+    private int _pendentesSaida, _porConcluir;
 
     protected override async Task OnInitializedAsync()
     {
@@ -146,7 +157,13 @@
         {
             var hoje = DateOnly.FromDateTime(DateTime.Now);
             _menu = null;
-            if (Sessao.Modo == ModoTrabalho.Supervisor)
+            if (Sessao.EQualidade)
+            {
+                var porConcluir = await Intervencoes.ListarPorConcluirAsync();
+                _porConcluir = porConcluir.Count;
+                _contadores = [new("Por concluir", _porConcluir, "qualidade")];
+            }
+            else if (Sessao.Modo == ModoTrabalho.Supervisor)
             {
                 // Endpoint leve; sem rede ou com erro, o resumo simplesmente não aparece.
                 _menu = await Intervencoes.ObterContadoresAsync();

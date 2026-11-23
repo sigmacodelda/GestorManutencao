@@ -218,8 +218,30 @@ async function entrarApp(page, pin) {
   for (const d of pin) await clicar(page.locator('.teclado button.tecla', { hasText: new RegExp(`^${d}$`) }), `tecla ${d}`);
   // Com 4 números a app entra sozinha; se não entrar, carrega-se em Entrar.
   const hero = page.locator('.hero-texto');
-  if (!(await hero.waitFor({ timeout: 4000 }).then(() => true, () => false))) await clicar(botao(page, 'Entrar'), 'Entrar');
+  const ass = page.locator('#assinatura-tela');
+  const aguardar = (ms) => Promise.race([hero.waitFor({ timeout: ms }).then(() => false), ass.waitFor({ timeout: ms }).then(() => true)]);
+  let pede;
+  try { pede = await aguardar(5000); } catch { await clicar(botao(page, 'Entrar'), 'Entrar'); pede = await aguardar(30000); }
+  if (!pede) pede = await ass.waitFor({ timeout: 3500 }).then(() => true).catch(() => false);
+  if (pede) await assinar(page);
   await hero.waitFor({ timeout: 30000 });
+}
+// Sem assinatura a app pede-a antes de continuar: desenha-se um traço com o rato e guarda-se.
+async function assinar(page) {
+  const c = page.locator('#assinatura-tela');
+  const guardar = botao(page, 'Guardar');
+  await c.waitFor({ timeout: 15000 });
+  // O canvas só ouve o rato depois de o Blazor o iniciar: desenha-se até o Guardar ficar ativo.
+  for (let tentativa = 0; tentativa < 4 && await guardar.isDisabled(); tentativa++) {
+    await page.waitForTimeout(500);
+    await c.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
+    const b = await c.boundingBox();
+    await page.mouse.move(b.x + b.width * 0.15, b.y + b.height * 0.6); await page.mouse.down();
+    for (let i = 1; i <= 12; i++) await page.mouse.move(b.x + b.width * (0.15 + 0.06 * i), b.y + b.height * (0.6 - 0.25 * Math.sin(i / 2)), { steps: 3 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+  }
+  await guardar.click();
 }
 async function sairApp(page) {
   await clicar(page.locator('header.topo button[aria-label="Terminar sessão"]'), 'Terminar sessão');
@@ -233,7 +255,8 @@ async function paraInicio(page) {
     if (await page.locator('.hero-texto').isVisible().catch(() => false)) return;
     const voltar = page.locator('a.voltar').first();
     if (!(await voltar.isVisible().catch(() => false))) break;
-    await voltar.click();
+    // A página pode já estar a mudar (a seta some entre ver e clicar): se falhar, volta-se a olhar.
+    if (!(await voltar.click({ timeout: 5000 }).then(() => true, () => false))) continue;
     await page.locator('.hero-texto, a.voltar').first().waitFor({ timeout: 15000 });
   }
   await page.locator('.hero-texto').waitFor({ timeout: 15000 });
@@ -259,7 +282,9 @@ async function pistaApp(ctx) {
     await s.send('Emulation.setFocusEmulationEnabled', { enabled: true });
     await page.waitForLoadState('domcontentloaded');
     // Pode haver uma sessão antiga (a app guarda-a): termina-a para começar limpo.
-    await ate(async () => (await page.locator('.teclado').isVisible()) || (await page.locator('.hero-texto').isVisible()), 40000, 'a app mostrar o login ou o início');
+    await ate(async () => (await page.locator('.teclado').isVisible()) || (await page.locator('.hero-texto').isVisible()) || (await page.locator('#assinatura-tela').isVisible()), 40000, 'a app mostrar o login, o início ou a assinatura');
+    // Sessão antiga sem assinatura: a app pede-a; assina-se para poder sair.
+    if (await page.locator('#assinatura-tela').isVisible()) { await assinar(page); await page.locator('.hero-texto').waitFor({ timeout: 20000 }); }
     if (await page.locator('.hero-texto').isVisible()) await sairApp(page);
   });
   if (!ligou) { abortarSinais('sem ligação à app'); return; }
@@ -276,6 +301,24 @@ async function pistaApp(ctx) {
     for (const t of ['Registar avaria', 'As minhas intervenções', 'Equipamentos', 'Notificações']) await unico(mosaico(page, t), `mosaico ${t}`);
     afirma((await page.locator('a.mosaico-link .mosaico-titulo', { hasText: /^(Validação|Planeadas|Equipa|Configuração)$/ }).count()) === 0, 'o técnico vê áreas do supervisor');
     await semErroBlazor(page);
+  });
+
+  // Sem câmara no Windows, a picagem simula-se como um PDA: o leitor escreve o código no campo escondido e envia Enter.
+  await passo(P, 'Técnico: o leitor de etiquetas recebe uma peça e um local picados', async () => {
+    await page.evaluate(() => window.Blazor.navigateTo('/leitor'));
+    await page.locator('h1', { hasText: 'Leitor de etiquetas' }).waitFor({ timeout: 15000 });
+    await clicar(page.getByRole('button', { name: 'Leitor', exact: true }), 'modo Leitor');
+    const campo = page.locator('#teste-leitura');
+    await campo.waitFor({ state: 'attached', timeout: 10000 });
+    for (const codigo of ['5601234567890', 'LOC-A-02-1-01']) {
+      await campo.focus();
+      await page.keyboard.type(codigo);
+      await page.keyboard.press('Enter');
+      await ate(async () => (await page.locator('.leitor-teste').innerText()).includes(codigo), 8000, `o leitor mostrar ${codigo}`);
+    }
+    await clicar(page.getByRole('button', { name: 'Automático', exact: true }), 'modo Automático');
+    await semErroBlazor(page);
+    await paraInicio(page);
   });
 
   await passo(P, 'Técnico: a ficha completa (nova-ficha) está fechada e leva à avaria', async () => {
