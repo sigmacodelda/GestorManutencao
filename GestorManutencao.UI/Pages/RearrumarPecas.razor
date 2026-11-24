@@ -1,0 +1,248 @@
+@page "/pecas/rearrumar"
+@inject IPecasService Pecas
+@inject SessaoService Sessao
+@inject ToastService Toast
+@inject IPreferenciasLeitura Preferencias
+@inject IDetetorLeitor Detetor
+@inject IJSRuntime JS
+
+<PageTitle>Rearrumar · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href=""><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Rearrumar</h1>
+    </div>
+
+    @if (Sessao.EQualidade)
+    {
+        <p class="estado-lista" role="status">Esta área é para operadores e supervisores.</p>
+    }
+    else
+    {
+        @if (BarraCamara)
+        {
+            <div class="picar-topo">
+                <button type="button" id="picar-camara" class="btn btn-secundario" disabled="@_a_gravar" @onclick="PicarComCameraAsync">
+                    <Icone Nome="camera" /><span>Picar com a câmara</span>
+                </button>
+            </div>
+        }
+        <p class="passo-atual" role="status">Passo @Passo de 3 · @TextoPasso</p>
+
+        @* Mesma escolha da Arrumação (picar ou pesquisar); aqui o lugar picado é o destino. *@
+        <PecaLugar @ref="_pl" IdCampo="rearrumar-peca" LugarDestino="true" OnMudou="AoMudarAsync" SemBotaoCamara="BarraCamara" />
+        <p class="campo-erro" role="alert">@_erro</p>
+
+        @if (_esc?.Lugares is { } lug && _esc.Ref is not null)
+        {
+            @if (_origem is null)
+            {
+                @if (lug.Lugares.Count == 0)
+                {
+                    <p class="estado-lista" role="status">Esta peça ainda não tem lugares. Arrume-a primeiro em Arrumação.</p>
+                }
+                else
+                {
+                    <h2 class="ficha-texto">De que lugar sai?</h2>
+                    <ul class="lista-intervencoes">
+                        @foreach (var l in lug.Lugares)
+                        {
+                            <li>
+                                <button type="button" class="intervencao" disabled="@_a_gravar" @onclick="() => EscolherOrigem(l)">
+                                    <span class="intervencao-titulo">@l.Texto</span>
+                                    <span class="intervencao-desc">@(l.Qtt > 0 ? LogicaPicagem.TextoUnidades(l.Qtt) : "Quantidade não indicada")</span>
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+            else
+            {
+                <div class="intervencao">
+                    <span class="intervencao-titulo">Sai de <span class="lugar-codigo">@_origem.Texto</span></span>
+                    <span class="intervencao-desc">@(_origem.Qtt > 0 ? LogicaPicagem.TextoUnidades(_origem.Qtt) : "Quantidade não indicada")</span>
+                    <button type="button" class="btn-texto" disabled="@_a_gravar" @onclick="LimparOrigem"><Icone Nome="x" /><span>Mudar de origem</span></button>
+                </div>
+            }
+        }
+
+        @* Destino por seleção, ou picando a etiqueta (o PecaLugar mostra então o lugar escolhido). *@
+        @if (Passo == 3 && _esc?.Local is null)
+        {
+            <EscolhaLugar Id="rearrumar" Estrutura="_estrutura" Falhou="_estruturaFalhou" Desativado="_a_gravar" TextoBotao="Usar este destino" OnEscolhido="UsarDestinoAsync" />
+        }
+
+        @if (Passo == 3)
+        {
+            <form class="formulario" @onsubmit="MoverAsync" novalidate>
+                @if (_origem!.Qtt > 0)
+                {
+                    <div class="campo">
+                        <label for="rearrumar-qtt">Quantidade a mudar</label>
+                        <input id="rearrumar-qtt" type="text" inputmode="decimal" autocomplete="off" maxlength="12" @bind="_qttTexto" @bind:event="oninput" />
+                    </div>
+                }
+                else
+                {
+                    <p class="intervencao-desc" role="status">Quantidade não indicada neste lugar: muda-se o lugar todo.</p>
+                }
+                @* Sempre presente (vazio ou não): o botão não sobe nem desce enquanto se escreve a quantidade. *@
+                <p class="campo-erro" role="alert">@(LogicaPicagem.LerQuantidade(_qttTexto, out var proposta) && _origem.Qtt > 0 && proposta > _origem.Qtt ? $"Só há {LogicaPicagem.TextoQuantidade(_origem.Qtt)} nesse lugar." : "")</p>
+                <button type="submit" id="rearrumar-mudar" class="btn btn-primario btn-grande" disabled="@(_a_gravar || _esc?.Local is null)"><Icone Nome="check" /><span>@(_a_gravar ? "A gravar…" : "Mudar de sítio")</span></button>
+            </form>
+        }
+
+        @if (_ultimo is not null && _esc?.Ref is null)
+        {
+            <h2 class="ficha-texto">Lugares atualizados · @_ultimo.Ref</h2>
+            <ul class="lista-intervencoes">
+                @foreach (var l in _ultimo.Lugares)
+                {
+                    <li class="intervencao">
+                        <span class="intervencao-titulo">@l.Texto</span>
+                        <span class="intervencao-desc">@(l.Qtt > 0 ? LogicaPicagem.TextoUnidades(l.Qtt) : "Quantidade não indicada")</span>
+                    </li>
+                }
+            </ul>
+        }
+    }
+</section>
+
+@code {
+    private PecaLugar? _pl;
+    private EscolhaPecaLugar? _esc;
+    private LocalizacoesPeca? _ultimo;
+    private Lugar? _origem;
+    private string _erro = "", _qttTexto = "";
+    private bool _a_gravar, _irParaQtt, _estruturaFalhou;
+    private IReadOnlyList<EstanteArmazem>? _estrutura;
+
+    // Sem lugares carregados fica a mensagem e a picada da etiqueta de destino continua a servir.
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sessao.EQualidade) return;
+        try
+        {
+            var e = await Pecas.EstruturaArmazemAsync();
+            if (e.Count == 0) _estruturaFalhou = true;
+            else _estrutura = e;
+        }
+        catch (Exception) { _estruturaFalhou = true; }
+    }
+
+    // Ao chegar ao passo 3 o formulário abre mais abaixo: leva-se o ecrã e o foco à quantidade.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_irParaQtt || Passo != 3) return;
+        _irParaQtt = false;
+        try { await JS.InvokeVoidAsync("gmIr", _origem?.Qtt > 0 ? "rearrumar-qtt" : "rearrumar-mudar", true); } catch (Exception) { /* sem scroll: o utilizador desce à mão */ }
+    }
+
+    private int Passo => _esc?.Ref is null ? 1 : _origem is null ? 2 : 3;
+    private string TextoPasso => Passo switch
+    {
+        1 => "pique a etiqueta da peça ou procure-a",
+        2 => "toque no lugar de onde sai",
+        _ => "escolha o destino e a quantidade"
+    };
+
+    private bool BarraCamara => !Sessao.EQualidade && LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial) == ModoLeitura.Camara;
+
+    private Task PicarComCameraAsync() => _pl?.PicarComCameraAsync() ?? Task.CompletedTask;
+
+    // Peça nova (ou sem peça) recomeça a origem e a quantidade.
+    private Task AoMudarAsync(EscolhaPecaLugar e)
+    {
+        if (e.Ref is null || e.Ref != _esc?.Ref)
+        {
+            _origem = null;
+            _qttTexto = "";
+            if (e.Ref is not null) { _erro = ""; _ultimo = null; }
+        }
+        _esc = e;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void EscolherOrigem(Lugar l)
+    {
+        _erro = "";
+        _origem = l;
+        _qttTexto = l.Qtt > 0 ? LogicaPicagem.TextoQuantidade(l.Qtt) : "";
+        _irParaQtt = true;
+    }
+
+    private void LimparOrigem()
+    {
+        _erro = "";
+        _origem = null;
+        _qttTexto = "";
+    }
+
+    private async Task UsarDestinoAsync(string etiqueta)
+    {
+        _erro = "";
+        if (_pl is not null) await _pl.UsarLocalAsync(etiqueta);
+    }
+
+    // A gravação corre na fila das leituras do componente (como na Arrumação): uma picada durante o envio espera e aplica-se depois da limpeza.
+    private async Task MoverAsync()
+    {
+        if (_a_gravar || _pl is null || _origem is null || _esc is not { Ref: not null, Local: not null }) return;
+        _erro = "";
+        var refPeca = _esc.Ref;
+        var origem = _origem;
+        _a_gravar = true;
+        try
+        {
+            await _pl.GravarAsync(async esc =>
+            {
+                var destino = LogicaFichaPeca.TextoNormalDoLugar(esc.Local);
+                if (destino is null)
+                {
+                    _erro = "Escolha o lugar de destino completo (corredor, estante, nível e posição).";
+                    return false;
+                }
+                if (destino == LogicaFichaPeca.TextoNormalDoLugar(origem.Texto))
+                {
+                    _erro = "A origem e o destino são o mesmo lugar.";
+                    return false;
+                }
+                // Origem sem quantidade indicada: muda-se a linha toda (o servidor ignora o número).
+                decimal qtt = 1;
+                if (origem.Qtt > 0)
+                {
+                    if (!LogicaPicagem.LerQuantidade(_qttTexto, out qtt))
+                    {
+                        _erro = "Quantidade inválida: use um número positivo, com vírgula ou ponto e no máximo 3 casas decimais.";
+                        return false;
+                    }
+                    if (qtt > origem.Qtt)
+                    {
+                        _erro = $"Só há {LogicaPicagem.TextoQuantidade(origem.Qtt)} nesse lugar.";
+                        return false;
+                    }
+                }
+                _ultimo = await Pecas.MoverAsync(esc.Ref!, origem.Texto, destino, qtt);
+                Toast.Sucesso($"Mudado: {(origem.Qtt > 0 ? LogicaPicagem.TextoQuantidade(qtt) : "tudo")} de {esc.Ref} para {destino}");
+                _qttTexto = "";
+                return true;
+            });
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized })
+        {
+            _erro = MensagensGestao.Para(e, "Não foi possível mudar de sítio. Tente outra vez.");
+        }
+        catch
+        {
+            // Falha sem resposta clara (rede, tempo, 503): o POST pode ter gravado; não se repete às cegas.
+            // Mostra o que está realmente no armazém e obriga a voltar a escolher.
+            _erro = "Confirme os lugares antes de repetir.";
+            try { _ultimo = await Pecas.LugaresAsync(refPeca!) ?? _ultimo; } catch { }
+            await _pl.LimparAsync();
+        }
+        finally { _a_gravar = false; }
+    }
+}

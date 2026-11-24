@@ -21,6 +21,12 @@
     var gestao = d.PodeEditarGestao;
     var supervisor = Sessao.PodeSerSupervisor;
 
+    @* As ações ficam no fim de uma ficha longa: um atalho no topo leva lá (cancelar, validar, devolver). *@
+    @if (d.PodeCancelar || SeccoesFicha.PodeValidarOuDevolver(d, supervisor))
+    {
+        <button type="button" class="btn btn-secundario" onclick="gmIr('fc-acoes')"><Icone Nome="shield-check" /><span>Cancelar ou validar a ficha</span></button>
+    }
+
     @if (d.Antiga)
     {
         <p class="alerta alerta-pin" role="status"><Icone Nome="clock" /><span>@SeccoesFicha.TextoSituacao(d)@(d.Supervisao ? " · supervisionada" : " · por supervisionar").</span></p>
@@ -185,21 +191,21 @@
         }
 
         <p class="campo-erro" role="alert">@_erroForm</p>
-        @if (_conflito)
-        {
-            <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="RecarregarAsync"><Icone Nome="refresh-cw" /><span>Recarregar a ficha</span></button>
-        }
         @if (editar)
         {
+            <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@(_ocupado || !TemAlteracoes)"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Guardar alterações")</span></button>
             @if (TemAlteracoes)
             {
                 <p class="alerta alerta-pendente" role="status"><Icone Nome="clock" /><span>Alterações por guardar</span></p>
             }
-            <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@(_ocupado || !TemAlteracoes)"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Guardar alterações")</span></button>
-            @if (TemAlteracoes)
-            {
-                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="Descartar">Descartar alterações</button>
-            }
+        }
+        @if (_conflito)
+        {
+            <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="RecarregarAsync"><Icone Nome="refresh-cw" /><span>Recarregar a ficha</span></button>
+        }
+        @if (editar && TemAlteracoes)
+        {
+            <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="Descartar">Descartar alterações</button>
         }
     </form>
 

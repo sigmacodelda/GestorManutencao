@@ -85,8 +85,15 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn
         (new UtilizadorApp("qualidade", "Qualidade", Perfil.Qualidade, true, false), sp.GetRequiredService<PinHasher>().Hash("3197"))
     ]));
     builder.Services.AddSingleton<IRepositorioIntervencoes, RepositorioIntervencoesMemoria>();
-    builder.Services.AddSingleton<IRepositorioPecas, RepositorioPecasMemoria>();
+    builder.Services.AddSingleton<IRepositorioPecas>(_ => new RepositorioPecasMemoria());
     builder.Services.AddSingleton<IRepositorioLocalizacoes, RepositorioLocalizacoesMemoria>();
+    builder.Services.AddSingleton<IRepositorioEstrutura>(_ => new RepositorioEstruturaMemoria()); // DI daria uma lista vazia ao parâmetro opcional
+    builder.Services.AddSingleton<IRepositorioInventarios>(sp =>
+    {
+        var repo = new RepositorioInventariosMemoria(sp.GetRequiredService<IRepositorioPecas>(), [(100, "Chefe de Turno"), (101, "Ana Silva")]);
+        repo.Criar(101, "Inventário de teste");
+        return repo;
+    });
 }
 else
 {
@@ -94,6 +101,8 @@ else
     builder.Services.AddSingleton<IRepositorioIntervencoes, SqlRepositorioIntervencoes>();
     builder.Services.AddSingleton<IRepositorioPecas, SqlRepositorioPecas>();
     builder.Services.AddSingleton<IRepositorioLocalizacoes, SqlRepositorioLocalizacoes>();
+    builder.Services.AddSingleton<IRepositorioEstrutura, SqlRepositorioEstrutura>();
+    builder.Services.AddSingleton<IRepositorioInventarios, SqlRepositorioInventarios>();
 }
 // O mesmo repositório (SQL ou memória) serve a gestão: cancelar planeadas e gerar a seguinte usam a mesma numeração e as mesmas regras.
 builder.Services.AddSingleton<IRepositorioGestao>(sp => (IRepositorioGestao)sp.GetRequiredService<IRepositorioIntervencoes>());
@@ -242,6 +251,8 @@ app.MapDispositivos();
 app.MapIntervencoes();
 app.MapPecas();
 app.MapLocalizacoes();
+app.MapEstruturaArmazem();
+app.MapInventarios();
 app.MapGestao();
 
 app.MapGet("/saude", () => Results.Ok(new { estado = "ok" }));
@@ -362,6 +373,10 @@ equipa.MapPost("/", async (PedidoNovoUtilizador pedido, ClaimsPrincipal eu, IRep
         // Um supervisor cria qualquer perfil, também outros supervisores (o primeiro cria-se com o PIN de configuração).
         var perfil = pedido.Perfil ?? Perfil.Operador;
 
+        // Um operador sem número recebe o seguinte automaticamente (ninguém tem de o escrever). Supervisor e qualidade
+        // ficam sem número, salvo se for indicado: com número entram nas listas de técnicos das fichas.
+        if (tecno == 0 && perfil == Perfil.Operador) tecno = RegrasUtilizador.TecnoAutomatico;
+
         for (var tentativa = 0; tentativa < 10; tentativa++)
         {
             var pin = PinNovo(hasher);
@@ -370,6 +385,7 @@ equipa.MapPost("/", async (PedidoNovoUtilizador pedido, ClaimsPrincipal eu, IRep
                 case ResultadoPin.Ok: return Results.Json(new RespostaPin(pin), statusCode: StatusCodes.Status201Created);
                 case ResultadoPin.JaExiste: return Erro(409, "ja_existe");
                 case ResultadoPin.TecnoEmUso: return Erro(409, "tecno_em_uso");
+                case ResultadoPin.TecnoEsgotado: return Erro(409, "tecno_esgotado");
             }
         }
         return Erro(503, "indisponivel");

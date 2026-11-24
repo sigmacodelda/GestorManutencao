@@ -48,6 +48,20 @@ public sealed class PecasApiService(HttpClient http, SessaoService sessao) : IPe
         return await r.Content.ReadFromJsonAsync<LocalizacoesPeca>(ct) ?? throw new HttpRequestException();
     }
 
+    public async Task<LocalizacoesPeca> MoverAsync(string refPeca, string origem, string destino, decimal qtt, CancellationToken ct = default)
+    {
+        using var r = await EnviarAsync(HttpMethod.Post, $"pecas/{Uri.EscapeDataString(refPeca)}/mover", new { origem, destino, qtt }, ct);
+        await VerificarAsync(r, ct);
+        return await r.Content.ReadFromJsonAsync<LocalizacoesPeca>(ct) ?? throw new HttpRequestException();
+    }
+
+    public async Task<IReadOnlyList<EstanteArmazem>> EstruturaArmazemAsync(CancellationToken ct = default)
+    {
+        using var r = await EnviarAsync(HttpMethod.Get, "pecas/estrutura-armazem", null, ct);
+        await VerificarAsync(r, ct);
+        return await r.Content.ReadFromJsonAsync<List<EstanteArmazem>>(ct) ?? throw new HttpRequestException();
+    }
+
     // 400 traz {erro:"pedido_invalido", mensagem}; 409 traz {erro:"texto"} já escrito para o utilizador.
     private static async Task VerificarAsync(HttpResponseMessage r, CancellationToken ct)
     {

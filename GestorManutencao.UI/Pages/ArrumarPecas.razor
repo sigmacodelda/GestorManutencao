@@ -4,6 +4,7 @@
 @inject ToastService Toast
 @inject IPreferenciasLeitura Preferencias
 @inject IDetetorLeitor Detetor
+@inject IJSRuntime JS
 
 <PageTitle>Arrumação · Gestor de Manutenção</PageTitle>
 
@@ -50,12 +51,19 @@
                         <li>
                             <button type="button" class="intervencao" @onclick="() => EscolherLugarAsync(l)">
                                 <span class="intervencao-titulo">@l.Texto</span>
-                                <span class="intervencao-desc">@l.Qtt.ToString("0.###") unidades</span>
+                                <span class="intervencao-desc">@LogicaPicagem.TextoUnidades(l.Qtt)</span>
                             </button>
                         </li>
                     }
                 </ul>
             }
+        }
+
+        @* Lugar por seleção (corredor, estante, nível, posição), por qualquer ordem: antes ou depois de escolher a peça.
+           Os quatro campos e o botão estão sempre presentes (só ficam ativos por passos): nada sobe nem desce ao escolher. *@
+        @if (_esc?.Local is null && !(_esc?.Lugares is { PorArrumar: <= 0 }))
+        {
+            <EscolhaLugar Id="arrumar" Estrutura="_estrutura" Falhou="_estruturaFalhou" Desativado="_a_gravar" OnEscolhido="UsarLugarEscolhidoAsync" />
         }
 
         @if (Passo == 3 && _esc?.Lugares is { PorArrumar: > 0 } pa)
@@ -65,10 +73,8 @@
                     <label for="arrumar-qtt">Quantidade a arrumar</label>
                     <input id="arrumar-qtt" type="text" inputmode="decimal" autocomplete="off" maxlength="12" @bind="_qttTexto" @bind:event="oninput" />
                 </div>
-                @if (LogicaPicagem.LerQuantidade(_qttTexto, out var proposta) && proposta > pa.PorArrumar)
-                {
-                    <p class="campo-erro" role="alert">Só pode arrumar o que está à espera de arrumar (@pa.PorArrumar.ToString("0.###")).</p>
-                }
+                @* Sempre presente (vazio ou não): o botão não sobe nem desce enquanto se escreve a quantidade. *@
+                <p class="campo-erro" role="alert">@(LogicaPicagem.LerQuantidade(_qttTexto, out var proposta) && proposta > pa.PorArrumar ? $"Só pode arrumar o que está à espera de arrumar ({pa.PorArrumar:0.###})." : "")</p>
                 <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_gravar"><Icone Nome="check" /><span>@(_a_gravar ? "A gravar…" : "Arrumar")</span></button>
             </form>
         }
@@ -81,7 +87,7 @@
                 {
                     <li class="intervencao">
                         <span class="intervencao-titulo">@l.Texto</span>
-                        <span class="intervencao-desc">@l.Qtt.ToString("0.###") unidades</span>
+                        <span class="intervencao-desc">@LogicaPicagem.TextoUnidades(l.Qtt)</span>
                     </li>
                 }
             </ul>
@@ -95,13 +101,35 @@
     private EscolhaPecaLugar? _esc;
     private LocalizacoesPeca? _ultimo;
     private string _erro = "", _qttTexto = "";
-    private bool _a_gravar;
+    private bool _a_gravar, _irParaQtt, _estruturaFalhou;
+    private IReadOnlyList<EstanteArmazem>? _estrutura;
+
+    // Sem lugares carregados fica a mensagem e a picada da etiqueta (e a lista de lugares da peça) continua a servir.
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sessao.EQualidade) return;
+        try
+        {
+            var e = await Pecas.EstruturaArmazemAsync();
+            if (e.Count == 0) _estruturaFalhou = true;
+            else _estrutura = e;
+        }
+        catch (Exception) { _estruturaFalhou = true; }
+    }
+
+    // Ao chegar ao passo 3 o formulário abre mais abaixo: leva-se o ecrã e o foco à quantidade.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_irParaQtt || Passo != 3) return;
+        _irParaQtt = false;
+        try { await JS.InvokeVoidAsync("gmIr", "arrumar-qtt", true); } catch (Exception) { /* sem scroll: o utilizador desce à mão */ }
+    }
 
     private int Passo => _esc?.Ref is null ? 1 : _esc.Local is null ? 2 : 3;
     private string TextoPasso => Passo switch
     {
         1 => "pique a etiqueta da peça ou procure-a",
-        2 => "pique a etiqueta do lugar de destino",
+        2 => "pique a etiqueta ou escolha o lugar de destino",
         _ => "indique a quantidade"
     };
 
@@ -114,7 +142,9 @@
     private Task AoMudarAsync(EscolhaPecaLugar e)
     {
         var pecaNova = e.Ref is not null && e.Ref != _esc?.Ref;
+        var eraPasso3 = Passo == 3;
         _esc = e;
+        if (!eraPasso3 && Passo == 3) _irParaQtt = true;
         if (pecaNova)
         {
             _erro = "";
@@ -126,6 +156,12 @@
     }
 
     private Task EscolherLugarAsync(Lugar l) => _pl?.DefinirLugarAsync(l) ?? Task.CompletedTask;
+
+    private async Task UsarLugarEscolhidoAsync(string etiqueta)
+    {
+        _erro = "";
+        if (_pl is not null) await _pl.UsarLocalAsync(etiqueta);
+    }
 
     // A gravação corre na fila das leituras do componente: uma picada que chegue durante o envio
     // espera e aplica-se depois da limpeza, em vez de ser apagada por ela.

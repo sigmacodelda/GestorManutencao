@@ -7,7 +7,7 @@ namespace GestorManutencao.UI.Servicos;
 
 public sealed record MembroEquipa(string Codigo, string Nome, Perfil Perfil, bool Ativo, bool PinProvisorio, long Versao = 0, int Tecno = 0);
 
-public enum ResultadoEquipa { Ok, JaExiste, SemPermissao, Rede, TecnoEmUso }
+public enum ResultadoEquipa { Ok, JaExiste, SemPermissao, Rede, TecnoEmUso, TecnoEsgotado }
 
 public sealed record RespostaEquipa(ResultadoEquipa Resultado, string? Pin = null);
 
@@ -64,7 +64,10 @@ public sealed class EquipaApiService(HttpClient http) : IEquipaService
                 if (resposta.StatusCode == HttpStatusCode.Conflict && (await resposta.Content.ReadAsStringAsync(ct)).Contains("propria_conta")) return new(ResultadoEquipa.SemPermissao);
                 if (resposta.StatusCode == HttpStatusCode.NotFound && pedido.Method == HttpMethod.Delete) return new(ResultadoEquipa.Ok);
                 if (resposta.StatusCode == HttpStatusCode.Conflict)
-                    return new((await resposta.Content.ReadAsStringAsync(ct)).Contains("tecno_em_uso") ? ResultadoEquipa.TecnoEmUso : ResultadoEquipa.JaExiste);
+                {
+                    var conflito = await resposta.Content.ReadAsStringAsync(ct);
+                    return new(conflito.Contains("tecno_esgotado") ? ResultadoEquipa.TecnoEsgotado : conflito.Contains("tecno_em_uso") ? ResultadoEquipa.TecnoEmUso : ResultadoEquipa.JaExiste);
+                }
                 if (resposta.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized) return new(ResultadoEquipa.SemPermissao);
                 if (!resposta.IsSuccessStatusCode) return new(ResultadoEquipa.Rede);
                 if (resposta.StatusCode == HttpStatusCode.NoContent) return new(ResultadoEquipa.Ok);

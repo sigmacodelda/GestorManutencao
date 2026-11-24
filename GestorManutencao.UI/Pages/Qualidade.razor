@@ -16,7 +16,7 @@
     {
         <p class="estado-lista" role="status">Esta área é só para o perfil Qualidade.</p>
     }
-    else if (_a_carregar)
+    else if (_a_carregar && EstadoRecarga.MostrarSpinner(_temDados))
     {
         <p class="estado-lista" role="status">A carregar…</p>
     }
@@ -87,7 +87,7 @@
 
 @code {
     private List<Intervencao> _fichas = [];
-    private bool _a_carregar = true, _falhou, _ocupado;
+    private bool _a_carregar = true, _falhou, _ocupado, _temDados;
     private string? _aConcluir, _erro;
     private string _higienizacao = "";
 
@@ -110,9 +110,14 @@
 
     private async Task CarregarAsync()
     {
-        _a_carregar = true; _falhou = false; _aConcluir = null;
-        try { _fichas = (await Intervencoes.ListarPorConcluirAsync()).ToList(); }
-        catch (Exception) { _falhou = true; }
+        _a_carregar = true; _falhou = false; _aConcluir = null; _erro = null;
+        try { _fichas = (await Intervencoes.ListarPorConcluirAsync()).ToList(); _temDados = true; }
+        catch (Exception)
+        {
+            // Já havia lista: mantém-se e mostra-se o erro por cima.
+            if (EstadoRecarga.FalhaSubstituiLista(_temDados)) _falhou = true;
+            else _erro = "Não foi possível atualizar a lista. Tente outra vez.";
+        }
         finally { _a_carregar = false; }
     }
 

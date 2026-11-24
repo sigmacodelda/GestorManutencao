@@ -39,6 +39,11 @@ public sealed class RepositorioUtilizadoresMemoria : IRepositorioUtilizadores
         {
             if (_dados.ContainsKey(codigo)) return Task.FromResult(ResultadoPin.JaExiste);
             if (_dados.Values.Any(x => x.Hash == pinHash)) return Task.FromResult(ResultadoPin.PinEmUso);
+            if (tecno == RegrasUtilizador.TecnoAutomatico)
+            {
+                tecno = _dados.Values.Select(x => x.U.Tecno).DefaultIfEmpty(0).Max() + 1;
+                if (tecno > 99999) return Task.FromResult(ResultadoPin.TecnoEsgotado);
+            }
             if (tecno > 0 && _dados.Values.Any(x => x.U.Tecno == tecno)) return Task.FromResult(ResultadoPin.TecnoEmUso);
             _dados[codigo] = (new UtilizadorApp(codigo, nome, perfil, true, true, Tecno: tecno), pinHash);
             return Task.FromResult(ResultadoPin.Ok);
@@ -111,7 +116,11 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         """
         insert into u_manutil (u_manutilstamp, utilizador, nome, perfil, ativo, pinhash, pinmudar,
                                pinalteradopor, pinalteradoem, tecno, ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-        values (@stamp, @codigo, @nome, @perfil, 1, @hash, 1, @por, @agora, @tecno, @por, @dia, @hora, @por, @dia, @hora)
+        values (@stamp, @codigo, @nome, @perfil, 1, @hash, 1, @por, @agora,
+                case when @tecno < 0
+                     then (select case when isnull(max(tecno), 0) >= 99999 then null else isnull(max(tecno), 0) + 1 end from u_manutil with (updlock, holdlock))
+                     else @tecno end,
+                @por, @dia, @hora, @por, @dia, @hora)
         """;
 
     private const string SqlDefinirTecno =
@@ -271,6 +280,11 @@ public sealed class SqlRepositorioUtilizadores(IConfiguration configuracao, Time
         {
             // Duas restrições únicas (utilizador e PIN): vê-se qual falhou perguntando se o utilizador já existe.
             return await ObterAsync(codigo, ct) is null ? ResultadoPin.PinEmUso : ResultadoPin.JaExiste;
+        }
+        catch (SqlException ex) when (ex.Number == 515 && tecno == RegrasUtilizador.TecnoAutomatico)
+        {
+            // O maior número já é 99999: o campo (numeric 5,0) não tem o seguinte. Nada foi gravado.
+            return ResultadoPin.TecnoEsgotado;
         }
     }
 

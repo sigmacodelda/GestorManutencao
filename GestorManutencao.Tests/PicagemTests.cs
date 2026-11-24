@@ -1,3 +1,4 @@
+using GestorManutencao.UI.Servicos;
 using GestorManutencao.UI.Modelos;
 
 namespace GestorManutencao.Tests;
@@ -79,6 +80,9 @@ public class PicagemTests
     {
         Assert.Equal("2,5", LogicaPicagem.TextoQuantidade(2.5m));
         Assert.Equal("3", LogicaPicagem.TextoQuantidade(3m));
+        Assert.Equal("1 unidade", LogicaPicagem.TextoUnidades(1m));
+        Assert.Equal("2 unidades", LogicaPicagem.TextoUnidades(2m));
+        Assert.Equal("0,5 unidades", LogicaPicagem.TextoUnidades(0.5m));
     }
 
     private static LocalizacoesPeca Lugares(params (string Texto, decimal Qtt)[] lugares) =>

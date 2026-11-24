@@ -1,5 +1,8 @@
 namespace GestorManutencao.Api;
 
+// Um dossier 66 (arrumação): origem em bo.lobs, destino em bo.lobs2 e a linha da peça.
+public sealed record MovimentoArrumacao(int Ndos, string Ref, string Origem, string Destino, decimal Qtt, string Iniciais);
+
 // Modo Development e testes: mesmas regras do SQL, sem base. O stock vem da peça do repositório de peças.
 public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IRepositorioLocalizacoes
 {
@@ -8,6 +11,10 @@ public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IR
     private readonly List<(string Ref, LugarDto Lugar)> _lugares = [("P001", new LugarDto("A", "A-02", 1, 1, 3))];
 
     private LugarDto? _buffer;
+    private readonly List<MovimentoArrumacao> _movimentos = [];
+
+    // Dossiers 66 criados (no PHC é o trigger que move o stock; aqui o movimento também ajusta os lugares em memória).
+    public IReadOnlyList<MovimentoArrumacao> Movimentos { get { lock (_trinco) return _movimentos.ToList(); } }
 
     // Sem buffer por defeito (como u_configman.localentrada vazio); os testes definem-no.
     public void DefinirBuffer(string? texto)
@@ -35,6 +42,8 @@ public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IR
             if (RegrasLocalizacao.EBuffer(new LugarDto(corredor.Trim().ToUpperInvariant(), estanteNormal, nivel, posicao, 0), _buffer))
                 return Task.FromResult(ResultadoMovimento.Falha("Escolha um lugar diferente do de entrada (buffer)."));
             var r = Somar(refPeca, corredor, estanteNormal, nivel, posicao, qtt);
+            _movimentos.Add(new(RegrasLocalizacao.NdosArrumacao, refPeca.Trim(), RegrasLocalizacao.TextoLugar(_buffer),
+                RegrasLocalizacao.TextoLugar(new LugarDto(corredor.Trim().ToUpperInvariant(), estanteNormal, nivel, posicao, 0)), qtt, iniciais));
             // Tira do buffer o que passou (nunca abaixo de 0; linha esvaziada apaga-se).
             var b = _lugares.FindIndex(x => Igual(x.Ref, refPeca) && RegrasLocalizacao.EBuffer(x.Lugar, _buffer));
             if (b >= 0)
@@ -57,6 +66,25 @@ public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IR
             var i = _lugares.FindIndex(x => Corresponde(x, refPeca, corredor, estante, nivel, posicao));
             if (i < 0 ||_lugares[i].Lugar.Qtt < qtt) return Task.FromResult(ResultadoMovimento.Falha("Não há quantidade suficiente neste lugar."));
             _lugares[i] = (_lugares[i].Ref, _lugares[i].Lugar with { Qtt = _lugares[i].Lugar.Qtt - qtt });
+            return Task.FromResult(ResultadoMovimento.Sucesso(Guid.NewGuid().ToString("N")[..25]));
+        }
+    }
+
+    public Task<ResultadoMovimento> MoverAsync(string refPeca, LugarDto origem, LugarDto destino, decimal qtt, string iniciais, CancellationToken ct)
+    {
+        lock (_trinco)
+        {
+            if (RegrasLocalizacao.EBuffer(destino, _buffer)) return Task.FromResult(ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverParaBuffer));
+            if (RegrasLocalizacao.EBuffer(origem, _buffer)) return Task.FromResult(ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverDoBuffer));
+            var i = _lugares.FindIndex(x => Corresponde(x, refPeca, origem.Corredor, origem.Estante, origem.Nivel, origem.Posicao));
+            if (i < 0) return Task.FromResult(ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverSemLinha));
+            var atual = _lugares[i].Lugar.Qtt;
+            if (RegrasLocalizacao.ErroQuantidadeMover(atual, qtt) is { } erro) return Task.FromResult(ResultadoMovimento.Falha(erro));
+            var movida = RegrasLocalizacao.QuantidadeMovida(atual, qtt);
+            Somar(refPeca, destino.Corredor, destino.Estante, destino.Nivel, destino.Posicao, movida);
+            _movimentos.Add(new(RegrasLocalizacao.NdosArrumacao, refPeca.Trim(), RegrasLocalizacao.TextoLugar(origem), RegrasLocalizacao.TextoLugar(destino), movida, iniciais));
+            if (atual <= 0 || movida >= atual) _lugares.RemoveAt(i);
+            else _lugares[i] = (_lugares[i].Ref, _lugares[i].Lugar with { Qtt = atual - movida });
             return Task.FromResult(ResultadoMovimento.Sucesso(Guid.NewGuid().ToString("N")[..25]));
         }
     }

@@ -103,6 +103,7 @@ public static class MauiProgram
 			builder.Services.AddSingleton<IAssinaturaService>(new AssinaturaApiService(http));
 			// Peças: só online (pesquisa e leitor), sem fila de saída.
 			builder.Services.AddScoped<IPecasService>(sp => new PecasApiService(http, sp.GetRequiredService<SessaoService>()));
+			builder.Services.AddScoped<IInventarioService>(sp => new InventarioApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IntervencoesApiService>(sp => new IntervencoesApiService(http, sp.GetRequiredService<SessaoService>()));
 			builder.Services.AddScoped<IIntervencoesRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());
 			builder.Services.AddScoped<IDispositivosRemoto>(sp => sp.GetRequiredService<IntervencoesApiService>());
@@ -128,6 +129,7 @@ public static class MauiProgram
 			builder.Services.AddSingleton<IAssinaturaService, DevAssinaturaService>();
 			builder.Services.AddSingleton<IGestaoService, GestaoDevService>();
 			builder.Services.AddSingleton<IPecasService, PecasDevService>();
+			builder.Services.AddSingleton<IInventarioService, InventarioDevService>();
 			builder.Services.AddSingleton<IRedeEstado, RedeEstadoManual>();
 			builder.Services.AddSingleton<IArmazemGeracaoDiaria, ArmazemGeracaoDiariaMemoria>();
 			builder.Services.AddSingleton<GeracaoDiaria>(sp => new GeracaoDiaria(sp.GetRequiredService<IArmazemGeracaoDiaria>(), TimeProvider.System));

@@ -76,7 +76,7 @@ public sealed record PedidoAdicionais(IReadOnlyList<int>? Tecnos);
 
 public sealed record RelatorioGeracao(int Criadas, int JaTinham, int SemPeriodicidade, int Erros, int PorRegularizar = 0);
 
-public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, InstrucaoObsoleta, ExigeAssinatura, NaoExterna, JaAssinada }
+public enum ResultadoIntervencao { Ok, Conflito, NaoExiste, ForaDeOrdem, ExigeDocumento, Propria, LimiteFotos, TecnicoInvalido, SemPermissao, Invalido, PeriodicidadeInvalida, ProblemaLongo, RefDuplicada, PlaneadasMudaram, TarefaComFichas, InstrucaoObsoleta, ExigeAssinatura, NaoExterna, JaAssinada, SemStock }
 
 // O nome vai em tecnome (45); nas colunas de auditoria vai o código (30); a identidade da pessoa nas fichas é o Tecno.
 public sealed record TecnicoAtual(string Codigo, int Tecno, string Nome);
@@ -202,6 +202,8 @@ public interface IRepositorioIntervencoes
     // Com opId, repetir o pedido devolve a ficha já criada em vez de criar outra.
     Task<(ResultadoIntervencao, IntervencaoDto?)> RegistarAvariaAsync(string equipamentoId, string anomalia, TecnicoAtual tecnico, CancellationToken ct, string? opId = null);
     Task<(ResultadoIntervencao, IntervencaoDto?)> IniciarAsync(string id, TecnicoAtual tecnico, CancellationToken ct);
+    // Peças necessárias sem stock no armazém da manutenção ("ref · designação (precisa X, há Y)"); só serve para explicar um SemStock.
+    Task<IReadOnlyList<string>> PecasSemStockAsync(string id, CancellationToken ct);
     Task<(ResultadoIntervencao, IntervencaoDto?)> ConcluirAsync(string id, TecnicoAtual tecnico, string feito, TimeOnly inicio, TimeOnly fim, CancellationToken ct);
     // Assinatura da empresa externa (só fichas externas, em curso ou concluídas por fechar): grava-se uma só vez; repetir o mesmo pedido é idempotente.
     Task<(ResultadoIntervencao, IntervencaoDto?)> AssinarExternaAsync(string id, string nome, string assinatura, TecnicoAtual quem, bool supervisor, CancellationToken ct);
@@ -401,6 +403,8 @@ public static partial class EndpointsIntervencoes
             ComoTecnico(eu, utilizadores, ct, async t =>
             {
                 var r = await repo.IniciarAsync(id, t, ct);
+                if (r.Item1 == ResultadoIntervencao.SemStock)
+                    return Results.Json(new { erro = "sem_stock", pecas = await repo.PecasSemStockAsync(id, ct) }, statusCode: StatusCodes.Status409Conflict);
                 if (r.Item1 == ResultadoIntervencao.Ok) await AbrirConferenciaSeguraAsync(pecas, id, t.Codigo, log);
                 return Resposta(r);
             }));
@@ -919,6 +923,7 @@ public static partial class EndpointsIntervencoes
         ResultadoIntervencao.NaoExterna => Conflito("nao_externa"),
         ResultadoIntervencao.JaAssinada => Conflito("ja_assinada"),
         ResultadoIntervencao.Propria => Conflito("propria"),
+        ResultadoIntervencao.SemStock => Conflito("sem_stock"),
         ResultadoIntervencao.LimiteFotos => Conflito("limite_fotos"),
         ResultadoIntervencao.SemPermissao => Results.Json(new { erro = "sem_permissao" }, statusCode: StatusCodes.Status403Forbidden),
         ResultadoIntervencao.Invalido => Results.Json(new { erro = "pedido_invalido", mensagem = "Algum dos valores indicados não é válido." }, statusCode: StatusCodes.Status400BadRequest),

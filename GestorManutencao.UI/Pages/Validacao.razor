@@ -17,7 +17,7 @@
     {
         <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
     }
-    else if (_a_carregar)
+    else if (_a_carregar && EstadoRecarga.MostrarSpinner(_temDados))
     {
         <p class="estado-lista" role="status">A carregar…</p>
     }
@@ -70,6 +70,25 @@
                             <p class="ficha-texto"><strong>Problema:</strong> @f.Anomalia</p>
                         }
                         <p class="ficha-texto"><strong>Feito:</strong> @(f.Feito ?? "—")@(f.HoraInicio is null || f.HoraFim is null ? "" : $" ({f.HoraInicio:HH\\:mm}–{f.HoraFim:HH\\:mm})")</p>
+                        @if (_materiais.TryGetValue(f.Id, out var mats))
+                        {
+                            <div class="ficha-texto">
+                                <strong>Material:</strong>
+                                @if (mats.Count == 0)
+                                {
+                                    <span> nenhum</span>
+                                }
+                                else
+                                {
+                                    <ul class="lista-material">
+                                        @foreach (var m in mats)
+                                        {
+                                            <li>@m.Design · @LogicaPicagem.TextoUnidades(m.Qtt)@(string.IsNullOrWhiteSpace(m.Local) ? "" : " · " + (LogicaFichaPeca.TextoNormalDoLugar(m.Local) ?? m.Local))@(m.Ref != "" && !m.SaidaDada ? " · saída por dar" : "")</li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                        }
                         @if (!f.PodeValidar)
                         {
                             <p class="ficha-texto">Concluiu esta ficha: tem de ser outra pessoa a validar.</p>
@@ -100,7 +119,7 @@
                         else
                         {
                             <div class="ficha-acoes">
-                                <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => { _aConfirmar = f.Id; _aDevolver = null; }">
+                                <button type="button" class="btn" disabled="@_ocupado" @onclick="() => { _aConfirmar = f.Id; _aDevolver = null; }">
                                     <Icone Nome="shield-check" /><span>Validar</span>
                                 </button>
                                 <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => { _aDevolver = f.Id; _aConfirmar = null; _motivo = string.Empty; }">
@@ -113,7 +132,7 @@
             </ul>
             @if (_fichas.Count > _limite)
             {
-                <button type="button" class="btn btn-secundario" @onclick="() => _limite += PorPagina">Ver mais (@(_fichas.Count - _limite))</button>
+                <button type="button" class="btn btn-secundario" @onclick="VerMaisAsync">Ver mais (@(_fichas.Count - _limite))</button>
             }
         }
     }
@@ -121,11 +140,12 @@
 
 @code {
     private List<Intervencao> _fichas = [];
-    private bool _a_carregar = true, _falhou, _indisponivel, _ocupado;
+    private bool _a_carregar = true, _falhou, _indisponivel, _ocupado, _temDados;
     private string? _aConfirmar, _aDevolver, _aviso, _erro;
     private string _motivo = "";
     private const int PorPagina = 10;
     private int _limite = PorPagina;
+    private readonly Dictionary<string, IReadOnlyList<Material>> _materiais = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -146,11 +166,30 @@
 
     private async Task CarregarAsync()
     {
-        _a_carregar = true; _falhou = false; _indisponivel = false; _aConfirmar = _aDevolver = null;
-        try { _fichas = (await Intervencoes.ListarPorValidarAsync()).ToList(); }
+        _a_carregar = true; _falhou = false; _indisponivel = false; _aConfirmar = _aDevolver = null; _erro = null;
+        try { _fichas = (await Intervencoes.ListarPorValidarAsync()).ToList(); _temDados = true; await CarregarMateriaisAsync(); }
         catch (NotSupportedException) { _indisponivel = true; }
-        catch (Exception) { _falhou = true; }
+        catch (Exception)
+        {
+            // Já havia lista: mantém-se e mostra-se o erro por cima.
+            if (EstadoRecarga.FalhaSubstituiLista(_temDados)) _falhou = true;
+            else _erro = "Não foi possível atualizar a lista. Tente outra vez.";
+        }
         finally { _a_carregar = false; }
+    }
+
+    // O supervisor valida o que o técnico gastou: o material vem com a lista. Uma falha numa ficha só a deixa sem material, não a lista toda.
+    private async Task CarregarMateriaisAsync()
+    {
+        _materiais.Clear();
+        var antes = _fichas.Take(_limite).ToList();
+        var lidos = await Task.WhenAll(antes.Select(async f =>
+        {
+            // O detalhe é o que o supervisor pode ler (a lista de materiais da API é só do técnico da ficha).
+            try { return (f.Id, Lista: (await Intervencoes.ObterDetalheAsync(f.Id))?.ListaMateriais); }
+            catch (Exception) { return (f.Id, Lista: (IReadOnlyList<Material>?)null); }
+        }));
+        foreach (var (id, lista) in lidos) if (lista is not null) _materiais[id] = lista;
     }
 
     private sealed record PorConfirmar(string Id, string Equipamento, string Aviso);
@@ -188,6 +227,8 @@
         catch (Exception) { _erro = "Não foi possível confirmar. Tente outra vez."; }
         finally { _ocupado = false; }
     }
+
+    private async Task VerMaisAsync() { _limite += PorPagina; await CarregarMateriaisAsync(); }
 
     private Task DevolverAsync(Intervencao f) => AgirAsync(f, () => Intervencoes.DevolverAsync(f.Id, _motivo.Trim()), $"Devolvida ao técnico: {f.Equipamento}.");
 

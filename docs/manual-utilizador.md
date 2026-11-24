@@ -185,7 +185,7 @@ Define a unidade, o intervalo e o aviso de cada periodicidade (por exemplo, mens
 
 - **Novo operador:** nome, código curto (sem espaços) e número do utilizador no PHC.
 - **Novo PIN:** repõe o PIN de alguém (volta a ser provisório e tem de ser mudado no primeiro acesso).
-- **Mudar o número do PHC:** liga o técnico ao utilizador PHC correto.
+- **Número do técnico:** os operadores novos recebem-no sozinhos (o seguinte ao maior já usado), não é preciso escrevê-lo. "Mudar o número do técnico" só serve para o ligar a outro número, por exemplo ao do utilizador PHC.
 
 ### 4.11 Configuração
 
@@ -246,3 +246,24 @@ Qualquer estado aberto → Cancelada
 ---
 
 *Nota: as capturas foram feitas automaticamente com o Playwright (`Testes-Circuito/capturar-manual.mjs`) sobre a app Windows real, em modo de demonstração.*
+
+## Inventário do armazém
+
+O inventário é criado no computador (dossier 65 "Inventário Manutenção") e atribuído a um técnico. Na app:
+
+1. Início, Armazém, **Inventários**: aparecem os que lhe foram atribuídos (por contar e os concluídos recentes, só para consulta). O supervisor vê os de todos, mas só o técnico atribuído os conta.
+2. Abra um inventário e conte por passos: pique a etiqueta do **lugar** (por exemplo `LOC-A-03-2-04`; tem de ter corredor, estante, nível e posição), pique ou procure a **peça** e indique a **quantidade contada** (zero é válido, para um lugar vazio). Toque em **Gravar linha**.
+3. Contar outra vez a mesma peça no mesmo lugar **soma** à linha que já existe. Em cada linha pode **alterar a quantidade** ou **apagar**.
+4. Quando terminar, **Concluir inventário** (pede confirmação e mostra quantas linhas tem). Depois de concluído já não se altera; o lançamento para as localizações é feito no computador.
+
+A app não mexe no stock nem nas localizações das peças e não mostra preços. O lugar de cada linha fica gravado em `bi.lobs3`.
+
+## Rearrumar (mudar uma peça de sítio)
+
+Para pôr uma peça noutro lugar do armazém: Início, Armazém, **Rearrumar**. É feito em 3 passos:
+
+1. Pique a etiqueta da peça ou procure-a.
+2. Toque no lugar **de onde sai** (a lista mostra os lugares da peça e a quantidade de cada um).
+3. Escolha o **destino** (corredor, estante, nível e posição, ou pique a etiqueta do lugar), confirme a quantidade (vem preenchida com tudo o que há no lugar de origem) e toque em **Mudar de sítio**.
+
+Se o destino já tiver a peça, a quantidade soma; se mudar tudo, o lugar de origem fica vazio. Só se muda o que já está num lugar: o que está no buffer de entrada arruma-se em **Arrumação**. Rearrumar não altera o stock da peça, só a sua localização.

@@ -26,7 +26,7 @@
     @if (_estado.Local is { } local)
     {
         <div class="intervencao">
-            <span class="intervencao-titulo">Lugar @LogicaFichaPeca.TextoLugar(local)</span>
+            <span class="intervencao-titulo">Lugar <span class="lugar-codigo">@(LogicaFichaPeca.TextoNormalDoLugar(local) ?? LogicaFichaPeca.TextoLugar(local))</span></span>
             <button type="button" class="btn-texto" @onclick="LimparLocal"><Icone Nome="x" /><span>Mudar de lugar</span></button>
         </div>
     }
@@ -40,7 +40,7 @@
                     <li>
                         <button type="button" class="intervencao" @onclick="() => EscolherLugarAsync(l)">
                             <span class="intervencao-titulo">@l.Texto</span>
-                            <span class="intervencao-desc">@LogicaPicagem.TextoQuantidade(l.Qtt) unidades</span>
+                            <span class="intervencao-desc">@LogicaPicagem.TextoUnidades(l.Qtt)</span>
                         </button>
                     </li>
                 }
@@ -61,7 +61,7 @@
                         <li>
                             <button type="button" class="intervencao" @onclick="() => EscolherLinhaAsync(m)">
                                 <span class="intervencao-titulo">É este: @m.Design</span>
-                                <span class="intervencao-desc">Peça @m.Ref · @LogicaPicagem.TextoQuantidade(m.Qtt) unidades</span>
+                                <span class="intervencao-desc">Peça @m.Ref · @LogicaPicagem.TextoUnidades(m.Qtt)</span>
                             </button>
                         </li>
                     }
@@ -73,7 +73,7 @@
                     <li>
                         <button type="button" class="intervencao" @onclick="() => EscolherPecaDoLugarAsync(x)">
                             <span class="intervencao-titulo">@x.Ref @x.Design</span>
-                            <span class="intervencao-desc">@LogicaPicagem.TextoQuantidade(x.Qtt) unidades neste lugar</span>
+                            <span class="intervencao-desc">@LogicaPicagem.TextoUnidades(x.Qtt) neste lugar</span>
                         </button>
                     </li>
                 }
@@ -97,6 +97,9 @@
     // Arrumação: o lugar é o destino da peça, não aquele de onde saiu. Não se deriva lugar da peça nem se propõem
     // peças ao picar um lugar; só se guardam a peça e o lugar picados.
     [Parameter] public bool LugarDestino { get; set; }
+
+    // Lugar escrito à mão no ecrã: entra pela mesma fila e regras de uma picada.
+    public Task UsarLocalAsync(string etiqueta) => LerAsync(etiqueta);
 
     // Atalho da página (lugar da lista da peça).
     public async Task DefinirLugarAsync(Lugar l) => await EscolherLugarAsync(l);

@@ -18,7 +18,7 @@
     {
         @if (_pinNovo is not null)
         {
-            <div class="alerta alerta-pin" role="status">
+            <div class="alerta alerta-pin" role="status" tabindex="-1" @ref="_alertaPin">
                 <Icone Nome="lock" />
                 <div>
                     <p>PIN provisório de <strong>@_pinDe</strong>:</p>
@@ -40,10 +40,6 @@
                 <input id="codigo" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" @bind="_codigo" @bind:event="oninput" />
             </div>
             <div class="campo">
-                <label for="tecno">Número do utilizador no PHC</label>
-                <input id="tecno" type="text" inputmode="numeric" autocomplete="off" @bind="_tecno" @bind:event="oninput" />
-            </div>
-            <div class="campo">
                 <span id="perfil-rotulo" class="campo-rotulo">Perfil</span>
                 <div class="segmentos" role="group" aria-labelledby="perfil-rotulo" style="grid-template-columns: repeat(3, 1fr); max-width: none;">
                     <button type="button" class="segmento" aria-pressed="@(_perfil == Perfil.Operador ? "true" : "false")" @onclick="() => _perfil = Perfil.Operador"><span>Operador</span></button>
@@ -62,7 +58,7 @@
             <button type="submit" class="btn btn-primario btn-grande btn-fixo" disabled="@_ocupado"><Icone Nome="check" /><span>@(_ocupado ? "A guardar…" : "Feito")</span></button>
         </form>
 
-        <p class="campo-erro" role="alert">@_erro</p>
+        <p class="campo-erro" role="alert" tabindex="-1" @ref="_erroRef">@_erro</p>
 
         @if (_a_carregar)
         {
@@ -75,7 +71,7 @@
                 {
                     <li class="intervencao">
                         <span class="intervencao-titulo">@m.Nome</span>
-                        <span class="intervencao-desc">@(m.Perfil == Perfil.Supervisor ? "Supervisor" : m.Perfil == Perfil.Qualidade ? "Qualidade" : "Operador")@(m.PinProvisorio ? " · PIN por escolher" : "")@(m.Ativo ? "" : " · Inativo")@(m.Tecno > 0 ? $" · PHC {m.Tecno}" : " · sem número do PHC")</span>
+                        <span class="intervencao-desc">@(m.Perfil == Perfil.Supervisor ? "Supervisor" : m.Perfil == Perfil.Qualidade ? "Qualidade" : "Operador")@(m.PinProvisorio ? " · PIN por escolher" : "")@(m.Ativo ? "" : " · Inativo")@(m.Tecno > 0 ? $" · Técnico nº {m.Tecno}" : " · sem número de técnico")</span>
                         @if (m.Perfil != Perfil.Supervisor && m.Ativo)
                         {
                             <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => NovoPinAsync(m)">Novo PIN</button>
@@ -102,13 +98,13 @@
                         @if (_aEditar == m.Codigo)
                         {
                             <div class="ficha-acoes">
-                                <input type="text" inputmode="numeric" autocomplete="off" aria-label="Número do utilizador no PHC" @bind="_tecnoEditado" @bind:event="oninput" />
+                                <input type="text" inputmode="numeric" autocomplete="off" aria-label="Número do técnico" @bind="_tecnoEditado" @bind:event="oninput" />
                                 <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => GuardarTecnoAsync(m)">Guardar</button>
                             </div>
                         }
                         else
                         {
-                            <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => Editar(m)">Mudar o número do PHC</button>
+                            <button type="button" class="btn-texto ficha-texto" disabled="@_ocupado" @onclick="() => Editar(m)">Mudar o número do técnico</button>
                         }
                     </li>
                 }
@@ -119,11 +115,29 @@
 
 @code {
     private IReadOnlyList<MembroEquipa> _membros = [];
-    private string _nome = "", _codigo = "", _tecno = "", _tecnoEditado = "", _erro = "", _pinDe = "";
+    private string _nome = "", _codigo = "", _tecnoEditado = "", _erro = "", _pinDe = "";
     private string? _aEditar, _aInativar;
     private string? _pinNovo;
     private bool _a_carregar = true, _ocupado;
     private Perfil _perfil = Perfil.Operador;
+    private ElementReference _alertaPin, _erroRef;
+    private bool _focarPin;
+    private string _erroFocado = "";
+
+    // O PIN novo e os erros aparecem no topo da página: com a lista grande o ecrã tem de subir até eles.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focarPin && _pinNovo is not null)
+        {
+            _focarPin = false;
+            await _alertaPin.FocusAsync();
+        }
+        else if (_erro != _erroFocado)
+        {
+            _erroFocado = _erro;
+            if (_erro != "") await _erroRef.FocusAsync();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -146,13 +160,11 @@
         if (!System.Text.RegularExpressions.Regex.IsMatch(codigo, "^[a-z0-9._-]{2,30}$"))
         { _erro = "O código só pode ter letras, números, ponto, hífen ou sublinhado (2 a 30)."; return; }
 
-        if (!NumeroPhc(_tecno, out var tecno)) { _erro = "O número do PHC tem de ser um número inteiro (ou fica em branco)."; return; }
-
         _ocupado = true;
         try
         {
-            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim(), tecno, _perfil == Perfil.Supervisor, qualidade: _perfil == Perfil.Qualidade);
-            if (Tratar(r, _nome.Trim())) { _nome = _codigo = _tecno = ""; _perfil = Perfil.Operador; await CarregarAsync(); }
+            var r = await ServicoEquipa.CriarAsync(Sessao.Utilizador?.Token, codigo, _nome.Trim(), 0, _perfil == Perfil.Supervisor, qualidade: _perfil == Perfil.Qualidade);
+            if (Tratar(r, _nome.Trim())) { _nome = _codigo = ""; _perfil = Perfil.Operador; await CarregarAsync(); }
         }
         finally { _ocupado = false; }
     }
@@ -169,7 +181,7 @@
     private async Task GuardarTecnoAsync(MembroEquipa m)
     {
         _erro = "";
-        if (!NumeroPhc(_tecnoEditado, out var tecno)) { _erro = "O número do PHC tem de ser um número inteiro (ou fica em branco)."; return; }
+        if (!NumeroPhc(_tecnoEditado, out var tecno)) { _erro = "O número do técnico tem de ser um número inteiro (ou fica em branco)."; return; }
         _ocupado = true;
         try
         {
@@ -209,9 +221,10 @@
     {
         switch (r.Resultado)
         {
-            case ResultadoEquipa.Ok: _pinNovo = r.Pin; _pinDe = nome; return true;
+            case ResultadoEquipa.Ok: _pinNovo = r.Pin; _pinDe = nome; _focarPin = true; return true;
             case ResultadoEquipa.JaExiste: _erro = "Já existe alguém com esse código."; break;
-            case ResultadoEquipa.TecnoEmUso: _erro = "Esse número do PHC já é de outra pessoa."; break;
+            case ResultadoEquipa.TecnoEmUso: _erro = "Esse número de técnico já é de outra pessoa."; break;
+            case ResultadoEquipa.TecnoEsgotado: _erro = "Já não há números de técnico livres (o limite é 99999). Fale com a SigmaCode."; break;
             case ResultadoEquipa.SemPermissao: _erro = "Não tem permissão para isto."; break;
             default: _erro = "Não foi possível ligar ao servidor. Tente outra vez."; break;
         }

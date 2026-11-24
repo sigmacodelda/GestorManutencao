@@ -44,7 +44,7 @@ internal static class ClassificacaoErros
 
     public static string Motivo(Exception e) => e switch
     {
-        InvalidOperationException i when MensagensProprias.Contains(i.Message) => i.Message,
+        InvalidOperationException i when MensagensProprias.Contains(i.Message) || i.Message.StartsWith(MensagensIntervencao.PrefixoSemStock, StringComparison.Ordinal) => i.Message,
         HttpRequestException { StatusCode: HttpStatusCode.RequestEntityTooLarge } => "A foto é demasiado grande.",
         HttpRequestException { StatusCode: HttpStatusCode.NotFound } => MensagensIntervencao.Mudou,
         _ => NaoAceitou

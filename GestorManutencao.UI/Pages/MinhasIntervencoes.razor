@@ -12,7 +12,11 @@
         <h1 tabindex="-1">As minhas intervenções</h1>
     </div>
 
-    @if (_a_carregar)
+    @if (_erroAtualizar)
+    {
+        <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Não foi possível atualizar a lista. Tente outra vez.</span></p>
+    }
+    @if (_a_carregar && EstadoRecarga.MostrarSpinner(_temDados))
     {
         <p class="estado-lista" role="status">A carregar…</p>
     }
@@ -76,7 +80,7 @@
 
 @code {
     private IReadOnlyList<GrupoIntervencoes> _grupos = [];
-    private bool _a_carregar = true, _erro, _indisponivel, _semNumero;
+    private bool _a_carregar = true, _erro, _indisponivel, _semNumero, _temDados, _erroAtualizar;
     private DateOnly _hoje;
     private const int PorPagina = 10;
     private readonly Dictionary<string, int> _limites = [];
@@ -97,15 +101,21 @@
 
     private async Task CarregarAsync()
     {
-        _a_carregar = true; _erro = false; _indisponivel = false; _semNumero = false;
+        _a_carregar = true; _erro = false; _indisponivel = false; _semNumero = false; _erroAtualizar = false;
         _hoje = DateOnly.FromDateTime(DateTime.Today);
         try
         {
             _grupos = AgrupadorIntervencoes.Agrupar(await Intervencoes.ListarMinhasAsync(), _hoje);
+            _temDados = true;
         }
         catch (NotSupportedException) { _indisponivel = true; }
         catch (SemNumeroTecnicoException) { _semNumero = true; }
-        catch (Exception) { _erro = true; }
+        catch (Exception)
+        {
+            // Já havia lista: mantém-se e mostra-se o erro por cima.
+            if (EstadoRecarga.FalhaSubstituiLista(_temDados)) _erro = true;
+            else _erroAtualizar = true;
+        }
         finally { _a_carregar = false; }
     }
 

@@ -17,6 +17,9 @@ public sealed record PecaNoLugarDto(string Ref, string Design, decimal Qtt);
 // Local = texto da etiqueta (LOC-A-02-1-01) ou o texto do lugar (A-02-1-01).
 public sealed record PedidoArrumar(string? Ref, string? Local, decimal? Qtt);
 
+// Origem e destino = texto do lugar completo (A-02-1-01) ou etiqueta (LOC-A-02-1-01).
+public sealed record PedidoMover(string? Origem, string? Destino, decimal? Qtt);
+
 public static class RegrasLocalizacao
 {
     private const string Prefixo = "LOC";
@@ -69,6 +72,24 @@ public static class RegrasLocalizacao
         buffer is not null && string.Equals(lugar.Corredor.Trim(), buffer.Corredor, StringComparison.OrdinalIgnoreCase)
         && string.Equals(lugar.Estante.Trim(), buffer.Estante, StringComparison.OrdinalIgnoreCase) && lugar.Nivel == buffer.Nivel && lugar.Posicao == buffer.Posicao;
 
+    public static bool MesmoLugar(LugarDto a, LugarDto b) => EBuffer(a, b);
+
+    // Dossier de movimentos de arrumação: origem em bo.lobs, destino em bo.lobs2, uma linha bi por peça.
+    public const int NdosArrumacao = 66;
+
+    // Texto do lugar como o PHC o mostra (A-02-1-01); o buffer em texto livre (BUFFER) fica como está; sem lugar, vazio.
+    public static string TextoLugar(LugarDto? l) => l is null ? "" : l.Estante == "" ? l.Corredor : l.Texto;
+
+    // Rearrumar: quantidade existente 0 = "não indicada" na u_pecaloc; só se move o lugar todo e o destino não recebe número inventado.
+    public static string? ErroQuantidadeMover(decimal existente, decimal qtt) =>
+        existente > 0 && qtt > existente ? $"Só há {existente:0.###} nesse lugar." : null;
+
+    public static decimal QuantidadeMovida(decimal existente, decimal qtt) => existente > 0 ? qtt : 0;
+
+    public const string ErroMoverDoBuffer = "O que está no buffer arruma-se em Arrumação, não em Rearrumar.";
+    public const string ErroMoverParaBuffer = "Escolha um lugar diferente do de entrada (buffer).";
+    public const string ErroMoverSemLinha = "Esta peça não tem stock nesse lugar.";
+
     // Só se arruma o que está no buffer (stock do armazém menos o já localizado fora dele).
     public static string? ErroForaDoBuffer(decimal pedida, decimal porArrumar) =>
         porArrumar <= 0 ? "Esta peça não tem nada no buffer para arrumar."
@@ -90,6 +111,9 @@ public interface IRepositorioLocalizacoes
     Task<string> VerificarTabelaAsync(CancellationToken ct);
     // Peças com quantidade (> 0) num lugar, por quantidade desc. Só leitura; sem tabela devolve vazio.
     Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string corredor, string estante, int nivel, int posicao, CancellationToken ct);
+    // Rearrumar: soma ao destino (cria a linha se faltar) e depois tira da origem, que se apaga se ficar vazia; nunca mexe no buffer nem no stock do PHC.
+    // Falha: origem ou destino no buffer, origem sem linha, quantidade acima do que lá está, lugar ocupado.
+    Task<ResultadoMovimento> MoverAsync(string refPeca, LugarDto origem, LugarDto destino, decimal qtt, string iniciais, CancellationToken ct) => throw new NotSupportedException();
 }
 
 public static class EndpointsLocalizacoes
@@ -141,6 +165,28 @@ public static class EndpointsLocalizacoes
                 if (!r.Ok) return r.Erro == RegrasPecas.ErroOcupado
                     ? Results.Json(new { erro = r.Erro }, statusCode: StatusCodes.Status409Conflict)
                     : EndpointsIntervencoes.PedidoInvalido(r.Erro ?? "Não foi possível gravar a localização.");
+                return Results.Ok(await repo.ListarAsync(peca.Ref, ct));
+            });
+        });
+
+        g.MapPost("/{refPeca}/mover", (string refPeca, PedidoMover p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioPecas pecas, IRepositorioLocalizacoes repo, CancellationToken ct) =>
+        {
+            if (!RegrasPecas.ReferenciaValida(refPeca)) return Task.FromResult(Results.NotFound());
+            if (RegrasLocalizacao.LerLugar(p.Origem) is not { } origem || RegrasLocalizacao.LerLugar(p.Destino) is not { } destino)
+                return Task.FromResult(EndpointsIntervencoes.PedidoInvalido("Indique a origem e o destino completos (corredor, estante, nível e posição), por exemplo A-02-1-01."));
+            if (!RegrasPecas.QuantidadeValida(p.Qtt))
+                return Task.FromResult(EndpointsIntervencoes.PedidoInvalido("Indique uma quantidade positiva, com no máximo 3 casas decimais."));
+            if (RegrasLocalizacao.MesmoLugar(origem, destino))
+                return Task.FromResult(EndpointsIntervencoes.PedidoInvalido("A origem e o destino são o mesmo lugar."));
+            return EndpointsIntervencoes.ComoTecnicoOuSupervisor(eu, utilizadores, ct, async (t, _) =>
+            {
+                if (await pecas.ObterPorCodigoAsync(refPeca.Trim(), ct) is not { } peca) return Results.NotFound();
+                var falta = await repo.VerificarTabelaAsync(ct);
+                if (falta != "") return Results.Json(new { erro = falta }, statusCode: StatusCodes.Status409Conflict);
+                var r = await repo.MoverAsync(peca.Ref, origem, destino, p.Qtt!.Value, t.Codigo, ct);
+                if (!r.Ok) return r.Erro == RegrasPecas.ErroOcupado
+                    ? Results.Json(new { erro = r.Erro }, statusCode: StatusCodes.Status409Conflict)
+                    : EndpointsIntervencoes.PedidoInvalido(r.Erro ?? "Não foi possível mudar o lugar.");
                 return Results.Ok(await repo.ListarAsync(peca.Ref, ct));
             });
         });

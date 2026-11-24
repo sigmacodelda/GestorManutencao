@@ -592,23 +592,23 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         // As colunas do Landeiro (início do plano, limite e regularização) podem não existir nesta base: só se leem se existirem.
         if (_camposPlano is null)
         {
-            await using var sonda = new SqlCommand("select col_length('u_configman', 'datainicio'), col_length('u_configman', 'mesesregul'), col_length('u_configman', 'regularizacao')", conn);
+            await using var sonda = new SqlCommand("select col_length('u_configman', 'datainicio'), col_length('u_configman', 'mesesregul'), col_length('u_configman', 'regularizacao'), col_length('u_configman', 'iniciarsemstock')", conn);
             await using var s = await sonda.ExecuteReaderAsync(ct);
             await s.ReadAsync(ct);
-            _camposPlano = (!s.IsDBNull(0), !s.IsDBNull(1), !s.IsDBNull(2));
+            _camposPlano = (!s.IsDBNull(0), !s.IsDBNull(1), !s.IsDBNull(2), !s.IsDBNull(3));
         }
-        var (temInicio, temMeses, temRegul) = _camposPlano.Value;
+        var (temInicio, temMeses, temRegul, temSemStock) = _camposPlano.Value;
         var sql = SqlConfiguracao.Replace("from u_configman",
-            $", {(temInicio ? "datainicio" : "cast(null as datetime)")}, {(temMeses ? "convert(int, isnull(mesesregul, 12))" : "12")}, {(temRegul ? "convert(int, isnull(regularizacao, 0))" : "0")} from u_configman");
+            $", {(temInicio ? "datainicio" : "cast(null as datetime)")}, {(temMeses ? "convert(int, isnull(mesesregul, 12))" : "12")}, {(temRegul ? "convert(int, isnull(regularizacao, 0))" : "0")}, {(temSemStock ? "convert(int, isnull(iniciarsemstock, 0))" : "0")} from u_configman");
         await using var cmd = new SqlCommand(sql, conn);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct)
             ? new ConfigManutencao((int)r.GetDecimal(0), r.GetBoolean(1), r.GetBoolean(2), r.GetBoolean(3), r.GetBoolean(4), r.GetBoolean(5),
-                r.IsDBNull(6) ? default : r.GetDateTime(6).Date, r.GetInt32(7), r.GetInt32(8) != 0)
+                r.IsDBNull(6) ? default : r.GetDateTime(6).Date, r.GetInt32(7), r.GetInt32(8) != 0, r.GetInt32(9) != 0)
             : new ConfigManutencao();
     }
 
-    private static (bool Inicio, bool Meses, bool Regularizacao)? _camposPlano;
+    private static (bool Inicio, bool Meses, bool Regularizacao, bool IniciarSemStock)? _camposPlano;
 
     private static IntervencaoDto Ler(SqlDataReader r, bool podeValidar = true)
     {
@@ -898,6 +898,7 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
         var primeira = (await fila.ExecuteScalarAsync(ct)) as string;
         var foraOrdem = !string.IsNullOrEmpty(primeira) && primeira.Trim() != id.Trim();
         if (foraOrdem && !cfg.AvancaOrdem) return (ResultadoIntervencao.ForaDeOrdem, null);
+        if (!cfg.IniciarSemStock && (await PecasSemStockAsync(conn, id, ct)).Count > 0) return (ResultadoIntervencao.SemStock, null);
 
         var agora = await AgoraAsync(conn, ct);
         await using var cmd = new SqlCommand(SqlIniciar, conn);

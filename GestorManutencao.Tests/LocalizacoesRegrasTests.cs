@@ -93,6 +93,46 @@ public class LocalizacoesRegrasTests
     }
 
     [Fact]
+    public async Task Memoria_arrumar_regista_dossier_66_com_origem_no_buffer_e_destino()
+    {
+        var repo = new RepositorioLocalizacoesMemoria(new RepositorioPecasMemoria([new PecaDto("P001", "Parafuso", "560001", "A-01-1-01", 10, 4, 0.12m)]));
+        repo.DefinirBuffer("B-01-1-01");
+        Assert.True((await repo.ArrumarAsync("P001", "A", 1, 2, 3, 2, "ab", CancellationToken.None)).Ok);
+        var m = Assert.Single(repo.Movimentos);
+        Assert.Equal(new MovimentoArrumacao(66, "P001", "B-01-1-01", "A-01-2-03", 2, "ab"), m);
+    }
+
+    [Fact]
+    public async Task Memoria_arrumar_com_buffer_em_texto_livre_usa_o_texto_como_origem()
+    {
+        var repo = new RepositorioLocalizacoesMemoria(new RepositorioPecasMemoria([new PecaDto("P001", "Parafuso", "560001", "A-01-1-01", 10, 4, 0.12m)]));
+        repo.DefinirBuffer("buffer");
+        await repo.ArrumarAsync("P001", "A", 1, 1, 1, 1, "ab", CancellationToken.None);
+        Assert.Equal("BUFFER", Assert.Single(repo.Movimentos).Origem);
+    }
+
+    [Fact]
+    public async Task Memoria_mover_regista_dossier_66_e_falha_nao_regista()
+    {
+        var repo = new RepositorioLocalizacoesMemoria(new RepositorioPecasMemoria([new PecaDto("P001", "Parafuso", "560001", "A-01-1-01", 10, 4, 0.12m)]));
+        var ct = CancellationToken.None;
+        var origem = new LugarDto("A", "A-02", 1, 1, 0);
+        var destino = new LugarDto("B", "B-01", 2, 3, 0);
+        Assert.False((await repo.MoverAsync("P001", origem, destino, 9, "ab", ct)).Ok); // só há 3
+        Assert.Empty(repo.Movimentos);
+        Assert.True((await repo.MoverAsync("P001", origem, destino, 2, "ab", ct)).Ok);
+        Assert.Equal(new MovimentoArrumacao(66, "P001", "A-02-1-01", "B-01-2-03", 2, "ab"), Assert.Single(repo.Movimentos));
+    }
+
+    [Fact]
+    public void Texto_do_lugar_para_o_dossier()
+    {
+        Assert.Equal("", RegrasLocalizacao.TextoLugar(null));
+        Assert.Equal("BUFFER", RegrasLocalizacao.TextoLugar(RegrasLocalizacao.LerBuffer("buffer")));
+        Assert.Equal("A-03-2-04", RegrasLocalizacao.TextoLugar(RegrasLocalizacao.LerBuffer("A-03-2-04")));
+    }
+
+    [Fact]
     public void Estante_normalizada() => Assert.Equal("A-03", RegrasLocalizacao.NormalizarEstante("a", 3));
 
     [Theory]

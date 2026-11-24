@@ -37,6 +37,9 @@ public static class LogicaPicagem
     }
 
     public static string TextoQuantidade(decimal qtt) => qtt.ToString("0.###", System.Globalization.CultureInfo.GetCultureInfo("pt-PT"));
+
+    // "1 unidade", "2 unidades", "0,5 unidades" (só o um singular).
+    public static string TextoUnidades(decimal qtt) => $"{TextoQuantidade(qtt)} {(qtt == 1 ? "unidade" : "unidades")}";
 }
 
 // Regras puras da escolha de peça e lugar na ficha (material). O estado da escolha é sempre o EstadoPicagem (fonte única).
@@ -70,6 +73,17 @@ public static class LogicaFichaPeca
         var partes = System.Text.RegularExpressions.Regex.Split((local ?? "").Trim().ToUpperInvariant(), @"[^\p{L}\p{N}]+").Where(p => p.Length > 0).ToList();
         if (partes.Count > 0 && partes[0] == "LOC") partes.RemoveAt(0);
         return string.Join("-", partes);
+    }
+
+    // Lugar escolhido (corredor, estante, nível, posição): a mesma etiqueta que a picada devolve (LOC-A-2-1-1).
+    public static string EtiquetaDeLugar(string corredor, int estante, int nivel, int posicao) =>
+        $"LOC-{corredor.Trim().ToUpperInvariant()}-{estante}-{nivel}-{posicao}";
+
+    // "LOC-A-1-1-1" ou "A-01-1-01" viram "A-01-1-01" (o texto dos lugares da API); null se não tiver corredor, estante, nível e posição.
+    public static string? TextoNormalDoLugar(string? local)
+    {
+        var p = TextoLugar(local).Split('-');
+        return p.Length == 4 && p[0].Length > 0 && int.TryParse(p[1], out var e) && int.TryParse(p[2], out var n) && int.TryParse(p[3], out var po) ? $"{p[0]}-{e:00}-{n}-{po:00}" : null;
     }
 
     // Material já na ficha que um lugar picado pode resolver: peça ligada, saída por dar e já gravado no servidor.

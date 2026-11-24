@@ -47,6 +47,34 @@ public sealed class PecasDevService : IPecasService
         }
     }
 
+    public Task<LocalizacoesPeca> MoverAsync(string refPeca, string origem, string destino, decimal qtt, CancellationToken ct = default)
+    {
+        var o = LogicaFichaPeca.TextoNormalDoLugar(origem);
+        var d = LogicaFichaPeca.TextoNormalDoLugar(destino);
+        if (qtt <= 0 || o is null || d is null)
+            throw new InvalidOperationException("Indique a origem e o destino completos (corredor, estante, nível e posição) e uma quantidade positiva.");
+        if (o == d) throw new InvalidOperationException("A origem e o destino são o mesmo lugar.");
+        lock (_trinco)
+        {
+            var i = _lugares.FindIndex(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase) && x.Lugar.Texto == o);
+            if (i < 0) throw new InvalidOperationException("Esta peça não tem stock nesse lugar.");
+            var atual = _lugares[i].Lugar.Qtt;
+            if (atual > 0 && qtt > atual) throw new InvalidOperationException($"Só há {atual:0.###} nesse lugar.");
+            var movida = atual > 0 ? qtt : 0;
+            var p = d!.Split('-');
+            var j = _lugares.FindIndex(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase) && x.Lugar.Texto == d);
+            if (j >= 0) _lugares[j] = (_lugares[j].Ref, _lugares[j].Lugar with { Qtt = _lugares[j].Lugar.Qtt + movida });
+            else _lugares.Add((refPeca, new Lugar(p[0], $"{p[0]}-{p[1]}", int.Parse(p[2]), int.Parse(p[3]), movida, d)));
+            i = _lugares.FindIndex(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase) && x.Lugar.Texto == o);
+            if (atual <= 0 || movida >= atual) _lugares.RemoveAt(i);
+            else _lugares[i] = (_lugares[i].Ref, _lugares[i].Lugar with { Qtt = atual - movida });
+            return Task.FromResult(Montar(refPeca)!);
+        }
+    }
+
+    public Task<IReadOnlyList<EstanteArmazem>> EstruturaArmazemAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<EstanteArmazem>>([new("A", 1, 3, 4), new("A", 2, 4, 6), new("B", 1, 2, 3)]);
+
     private LocalizacoesPeca? Montar(string refPeca)
     {
         if (_pecas.FirstOrDefault(x => x.Ref.Equals(refPeca, StringComparison.OrdinalIgnoreCase)) is not { } peca) return null;

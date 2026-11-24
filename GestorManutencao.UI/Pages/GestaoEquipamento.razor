@@ -4,6 +4,7 @@
 @inject SessaoService Sessao
 @inject NavigationManager Nav
 @inject ToastService Toast
+@inject IJSRuntime JS
 
 <PageTitle>@(Id is null ? "Novo equipamento" : "Editar equipamento") · Gestor de Manutenção</PageTitle>
 
@@ -32,7 +33,7 @@
     }
     else
     {
-        <ol class="passos" aria-label="Passos">
+        <ol class="passos" id="passos-equipamento" aria-label="Passos">
             @for (var i = 0; i < PassosEquipamento.Titulos.Length; i++)
             {
                 var n = i;
@@ -141,7 +142,7 @@
             {
                 @if (_confirmarRecarga)
                 {
-                    <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu neste formulário. Continuar?</span></p>
+                    <p class="alerta alerta-confirma" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu neste formulário. Continuar?</span></p>
                     <button type="button" class="btn btn-primario" disabled="@_a_guardar" @onclick="CarregarAsync">Descartar e recarregar</button>
                     <button type="button" class="btn btn-secundario" disabled="@_a_guardar" @onclick="() => _confirmarRecarga = false">Voltar</button>
                 }
@@ -195,8 +196,16 @@
     private IReadOnlyList<Fornecedor> _fornecedores = [];
     private string _textoFornecedor = "", _erro = "", _destino = "";
     private string? _falhou;
-    private int _passo;
+    private int _passo, _passoVisto;
     private int? _planeadasAConfirmar;
+
+    // Mudou de passo (Seguinte, Anterior, separador ou passo com erro): o ecrã sobe ao topo do passo, porque os botões estão ao fundo.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_passo == _passoVisto) return;
+        _passoVisto = _passo;
+        try { await JS.InvokeVoidAsync("gmIr", "passos-equipamento", false); } catch (Exception) { /* sem scroll: o utilizador sobe à mão */ }
+    }
     private bool _a_carregar = true, _a_guardar, _conflito, _pedirSaida, _guardado, _confirmarRecarga;
 
     // O formulário não se perde sem avisar: com alterações por guardar pede confirmação antes de recarregar.

@@ -1,0 +1,65 @@
+@page "/inventarios"
+@inject IInventarioService Servico
+@inject SessaoService Sessao
+
+<PageTitle>Inventários · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href=""><Icone Nome="arrow-left" /><span>Início</span></a>
+        <h1 tabindex="-1">Inventários</h1>
+    </div>
+
+    @if (Sessao.EQualidade)
+    {
+        <p class="estado-lista" role="status">Esta área é para operadores e supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_erro != "")
+    {
+        <p class="campo-erro" role="alert">@_erro</p>
+        <button type="button" class="btn btn-secundario" @onclick="CarregarAsync"><Icone Nome="refresh-cw" /><span>Tentar outra vez</span></button>
+    }
+    else if (_lista.Count == 0)
+    {
+        <p class="estado-lista" role="status">Não tem inventários atribuídos. Quem gere o armazém cria-os no computador.</p>
+    }
+    else
+    {
+        <ul class="lista-intervencoes">
+            @foreach (var i in _lista)
+            {
+                <li>
+                    <a class="intervencao" href="inventarios/@i.Id">
+                        <span class="intervencao-titulo">Inventário @i.Numero.ToString("0") · @i.Descricao</span>
+                        <span class="intervencao-desc">@i.Data.ToString("dd/MM/yyyy") · @i.Linhas @(i.Linhas == 1 ? "linha" : "linhas") · @i.Estado@(i.Tecnico != "" && !i.PodeEditar ? " · " + i.Tecnico : "")</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<Inventario> _lista = [];
+    private string _erro = "";
+    private bool _a_carregar = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Sessao.EQualidade) await CarregarAsync();
+        else _a_carregar = false;
+    }
+
+    private async Task CarregarAsync()
+    {
+        _a_carregar = true;
+        _erro = "";
+        try { _lista = await Servico.ListarAsync(); }
+        catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível ver os inventários. Tente outra vez."); }
+        finally { _a_carregar = false; }
+    }
+}

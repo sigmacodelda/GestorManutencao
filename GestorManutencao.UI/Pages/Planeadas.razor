@@ -5,6 +5,7 @@
 @inject NotificacaoService Notificacoes
 @inject IEquipaService ServicoEquipa
 @inject GeracaoDiaria GeracaoDiariaServico
+@inject ToastService Toast
 
 <PageTitle>Planeadas · Gestor de Manutenção</PageTitle>
 
@@ -18,7 +19,7 @@
     {
         <p class="estado-lista" role="status">Esta área é só para supervisores.</p>
     }
-    else if (_a_carregar)
+    else if (_a_carregar && EstadoRecarga.MostrarSpinner(_temDados))
     {
         <p class="estado-lista" role="status">A carregar…</p>
     }
@@ -38,10 +39,6 @@
         @if (_avisoGeracao is not null)
         {
             <p class="ficha-texto" role="status">@_avisoGeracao</p>
-        }
-        @if (_aviso is not null)
-        {
-            <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p>
         }
         @if (_erro is not null)
         {
@@ -163,8 +160,8 @@
 
     private List<Intervencao> _fichas = [];
     private IReadOnlyList<MembroEquipa> _tecnicos = [];
-    private bool _a_carregar = true, _falhou, _indisponivel, _ocupado;
-    private string? _aviso, _erro;
+    private bool _a_carregar = true, _falhou, _indisponivel, _ocupado, _temDados;
+    private string? _erro;
     private DateOnly _hoje;
     private const int PorPagina = 10;
     private readonly Dictionary<string, int> _limites = [];
@@ -186,14 +183,14 @@
         _avisoGeracao = r.Aviso;
         if (r.Criadas > 0)
         {
-            _aviso = $"Geradas {r.Criadas} planeadas de hoje.";
+            Toast.Sucesso($"Geradas {r.Criadas} planeadas de hoje.");
             await CarregarAsync();
         }
     }
 
     private async Task CarregarAsync()
     {
-        _a_carregar = true; _falhou = false; _indisponivel = false;
+        _a_carregar = true; _falhou = false; _indisponivel = false; _erro = null;
         _hoje = DateOnly.FromDateTime(DateTime.Today);
         try
         {
@@ -206,9 +203,15 @@
             catch (Exception) { _antecedencia = 7; _gerarPlaneadas = false; }
             // Só quem tem número do PHC pode ter fichas.
             _tecnicos = (await ServicoEquipa.ListarAsync(Sessao.Utilizador?.Token)).Where(m => m.Ativo && m.Tecno > 0).OrderBy(m => m.Nome).ToList();
+            _temDados = true;
         }
         catch (NotSupportedException) { _indisponivel = true; }
-        catch (Exception) { _falhou = true; }
+        catch (Exception)
+        {
+            // Já havia lista: mantém-se e mostra-se o erro por cima.
+            if (EstadoRecarga.FalhaSubstituiLista(_temDados)) _falhou = true;
+            else _erro = "Não foi possível atualizar a lista. Tente outra vez.";
+        }
         finally { _a_carregar = false; }
     }
 
@@ -238,13 +241,13 @@
     private async Task AtribuirAsync(Intervencao f, string? valor)
     {
         if (!int.TryParse(valor, out var tecno) || tecno == f.Tecno) return;
-        _ocupado = true; _aviso = _erro = null;
+        _ocupado = true; _erro = null;
         try
         {
             var nova = await Intervencoes.AtribuirAsync(f.Id, tecno);
             var pos = _fichas.FindIndex(x => x.Id == f.Id);
             if (pos >= 0) _fichas[pos] = nova;
-            _aviso = tecno == 0 ? $"{f.Equipamento}: sem técnico." : $"{f.Equipamento}: atribuída a {nova.Tecnico}.";
+            Toast.Sucesso(tecno == 0 ? $"{f.Equipamento}: sem técnico." : $"{f.Equipamento}: atribuída a {nova.Tecnico}.");
         }
         catch (InvalidOperationException ex)
         {
@@ -257,7 +260,7 @@
 
     private async Task AlternarAdicionalAsync(Intervencao f, int tecno, bool marcado)
     {
-        _ocupado = true; _aviso = _erro = null;
+        _ocupado = true; _erro = null;
         try
         {
             var novos = f.OutrosTecnicos.Select(a => a.Tecno).Where(t => t != tecno).ToList();
@@ -265,7 +268,7 @@
             var nova = await Intervencoes.DefinirAdicionaisAsync(f.Id, novos);
             var pos = _fichas.FindIndex(x => x.Id == f.Id);
             if (pos >= 0) _fichas[pos] = nova;
-            _aviso = $"{f.Equipamento}: técnicos atualizados.";
+            Toast.Sucesso($"{f.Equipamento}: técnicos atualizados.");
         }
         catch (InvalidOperationException ex)
         {

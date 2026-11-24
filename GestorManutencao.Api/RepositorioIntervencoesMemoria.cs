@@ -283,7 +283,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
 
     public Task GuardarConfiguracaoAsync(ConfigManutencao configuracao, TecnicoAtual supervisor, CancellationToken ct)
     {
-        _cfg = configuracao;
+        _cfg = configuracao with { IniciarSemStock = _cfg.IniciarSemStock };
         return Task.CompletedTask;
     }
 
@@ -324,6 +324,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
             // A primeira planeada da fila da mesma zona, por data.
             var primeira = _lista.Where(x => x.D.Estado == EstadoIntervencao.Planeada && x.D.Zona == f.D.Zona).OrderBy(x => x.D.DataPlaneada).First();
             if (primeira != f && !_cfg.AvancaOrdem) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.ForaDeOrdem));
+            if (!_cfg.IniciarSemStock && SemStock(id).Count > 0) return Task.FromResult(Falha<IntervencaoDto>(ResultadoIntervencao.SemStock));
 
             var semDono = f.Tecno == 0;
             f.D = f.D with

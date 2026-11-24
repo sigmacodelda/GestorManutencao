@@ -47,6 +47,10 @@
                 }
             </ul>
         }
+        else if (_aCarregarContadores)
+        {
+            <div class="contadores-reserva" aria-hidden="true"></div>
+        }
 
         @if (Sessao.PodeSerSupervisor)
         {
@@ -86,6 +90,8 @@
             <h2 class="grupo-inicio">Armazém</h2>
             <ul class="mosaicos">
                 <Mosaico Icone="package" Titulo="Arrumação" Href="pecas/arrumar" Descricao="Pôr as peças nos seus lugares do armazém" />
+                <Mosaico Icone="refresh-cw" Titulo="Rearrumar" Href="pecas/rearrumar" Descricao="Mudar uma peça para outro lugar" />
+                <Mosaico Icone="clipboard-list" Titulo="Inventários" Href="inventarios" Descricao="Contar as peças do armazém" />
                 <Mosaico Icone="camera" Titulo="Leitor" Href="leitor" Descricao="Câmara ou leitor de etiquetas" />
             </ul>
             <h2 class="grupo-inicio">Gestão</h2>
@@ -107,6 +113,8 @@
             <h2 class="grupo-inicio">Armazém</h2>
             <ul class="mosaicos">
                 <Mosaico Icone="package" Titulo="Arrumação" Href="pecas/arrumar" Descricao="Pôr as peças nos seus lugares do armazém" />
+                <Mosaico Icone="refresh-cw" Titulo="Rearrumar" Href="pecas/rearrumar" Descricao="Mudar uma peça para outro lugar" />
+                <Mosaico Icone="clipboard-list" Titulo="Inventários" Href="inventarios" Descricao="Contar as peças do armazém" />
                 <Mosaico Icone="camera" Titulo="Leitor" Href="leitor" Descricao="Câmara ou leitor de etiquetas" />
             </ul>
         }
@@ -130,6 +138,7 @@
     private List<Contador>? _contadores;
     private ContadoresMenu? _menu;
     private int _pendentesSaida, _porConcluir;
+    private bool _aCarregarContadores = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -173,15 +182,15 @@
         Nav.NavigateTo("login", replace: true);
     }
 
-    private async Task Mudar(ModoTrabalho modo) { Sessao.MudarModo(modo); await CarregarAsync(); }
+    // Outro modo tem outros contadores: limpam-se antes, para não mostrar os do modo anterior.
+    private async Task Mudar(ModoTrabalho modo) { Sessao.MudarModo(modo); _contadores = null; _menu = null; _aCarregarContadores = true; await CarregarAsync(); }
 
-    // Resumo do dia; se o serviço não responde, simplesmente não aparece.
+    // Resumo do dia; se o serviço não responde, simplesmente não aparece (e numa recarga mantém-se o que já estava).
     private async Task CarregarAsync()
     {
         try
         {
             var hoje = DateOnly.FromDateTime(DateTime.Now);
-            _menu = null;
             if (Sessao.EQualidade)
             {
                 var porConcluir = await Intervencoes.ListarPorConcluirAsync();
@@ -205,7 +214,8 @@
                 ];
             }
         }
-        catch (Exception) { _contadores = null; }
+        catch (Exception) { }
+        finally { _aCarregarContadores = false; }
     }
 
     private static string DataExtenso()

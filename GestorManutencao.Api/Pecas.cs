@@ -56,6 +56,19 @@ public static class RegrasPecas
         return local.Length > TamanhoLugarMax || lobs.Length > TamanhoLobs ? null : lobs;
     }
 
+    // Texto para uma coluna varchar: tamanho = COL_LENGTH (-1 = max, sem corte). null = a coluna não existe (não se grava).
+    public static string? AjustarACampo(string? texto, int? tamanho)
+    {
+        if (tamanho is null or 0) return null;
+        var t = (texto ?? "").Trim();
+        return tamanho > 0 && t.Length > tamanho ? t[..tamanho.Value].TrimEnd() : t;
+    }
+
+    public static string MotivoIntervencao(decimal numero) => $"Intervenção nº {numero:0}";
+
+    // O stamp da ficha só vai para bo.maquina se a coluna o comportar (-1 = max).
+    public static bool MaquinaCabe(int? tamanho, string stamp) => tamanho is -1 || (tamanho is > 0 && tamanho >= stamp.Length);
+
     public static bool ReferenciaValida(string? r) => !string.IsNullOrWhiteSpace(r) && r.Trim().Length <= TamanhoRef;
 
     public static bool QuantidadeValida(decimal? q) => q is > 0 and < QuantidadeMaxima + 1 && decimal.Round(q.Value, 3) == q.Value;

@@ -2,6 +2,7 @@
 @inject IGestaoService Gestao
 @inject SessaoService Sessao
 @inject ToastService Toast
+@inject IJSRuntime JS
 
 <PageTitle>Tarefas de manutenção · Gestor de Manutenção</PageTitle>
 
@@ -28,9 +29,7 @@
     }
     else
     {
-        @if (_aviso is not null) { <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p> }
-        @if (_avisoGeracao is not null) { <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>@_avisoGeracao</span></p> }
-        @if (_erroLista is not null) { <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>@_erroLista</span></p> }
+        @if (_erroLista is not null) { <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>@_erroLista</span></p> }
         @if (_tarefas.Count == 0) { <p class="estado-lista" role="status">Esta versão ainda não tem tarefas.</p> }
         <ul class="lista-intervencoes">
             @foreach (var t in _tarefas)
@@ -45,7 +44,7 @@
                     <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => Editar(t)"><Icone Nome="wrench" /><span>Editar</span></button>
                     @if (_apagar == t.Id)
                     {
-                        <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Apagar a tarefa? As fichas planeadas dela ficam canceladas.</span></p>
+                        <p class="alerta alerta-confirma" role="alert"><Icone Nome="triangle-alert" /><span>Apagar a tarefa? As fichas planeadas dela ficam canceladas.</span></p>
                         <button type="button" class="btn btn-primario" disabled="@_ocupado" @onclick="() => ApagarAsync(t)">Apagar</button>
                         <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _apagar = null">Voltar</button>
                     }
@@ -94,7 +93,7 @@
             {
                 @if (TemFormulario && _confirmarRecarga)
                 {
-                    <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu no formulário. Continuar?</span></p>
+                    <p class="alerta alerta-confirma" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu no formulário. Continuar?</span></p>
                     <button type="button" class="btn btn-primario" @onclick="CarregarAsync">Descartar e recarregar</button>
                     <button type="button" class="btn btn-secundario" @onclick="() => _confirmarRecarga = false">Voltar</button>
                 }
@@ -124,7 +123,7 @@
     private IReadOnlyList<string> _periodos = [];
     private TarefaManutencao? _editar;
     private string _periodo = "", _responsabilidade = "", _responsavel = "", _tipoManut = "", _descricao = "", _erro = "";
-    private string? _falhou, _apagar, _aviso, _avisoGeracao, _erroLista;
+    private string? _falhou, _apagar, _erroLista;
     private bool _a_carregar = true, _ocupado, _conflito, _confirmarRecarga;
 
     private bool TemFormulario => _editar is not null || _descricao.Length + _periodo.Length + _responsabilidade.Length + _responsavel.Length > 0;
@@ -157,9 +156,21 @@
 
     private void Editar(TarefaManutencao t)
     {
+        _irParaForm = true;
         _editar = t; _periodo = RegrasGestaoUi.Cortar(t.Periodo, RegrasGestaoUi.MaxPeriodo); _responsabilidade = t.Responsabilidade; _responsavel = t.Responsavel; _tipoManut = t.TipoManut;
         _descricao = t.Descricao;
-        _erro = ""; _conflito = false; _aviso = null; _avisoGeracao = null;
+        _erro = ""; _conflito = false;
+    }
+
+
+    private bool _irParaForm;
+
+    // "Editar" preenche o formulário que está depois da lista: leva-se o ecrã e o foco ao primeiro campo.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_irParaForm) return;
+        _irParaForm = false;
+        try { await JS.InvokeVoidAsync("gmIr", "ta-periodo", true); } catch (Exception) { /* sem scroll: o utilizador desce à mão */ }
     }
 
     private void Limpar()
@@ -171,7 +182,7 @@
     private async Task<TarefaManutencao?> GravarAsync(Func<Task<TarefaManutencao?>> acao, string sucesso)
     {
         if (_ocupado) return null;
-        _ocupado = true; _erro = ""; _aviso = null; _avisoGeracao = null; _erroLista = null; _conflito = false; _confirmarRecarga = false;
+        _ocupado = true; _erro = ""; _erroLista = null; _conflito = false; _confirmarRecarga = false;
         TarefaManutencao? gravada;
         try { gravada = await acao(); }
         catch (Exception ex)
@@ -182,7 +193,7 @@
             return null;
         }
         Toast.Sucesso(sucesso);
-        _avisoGeracao = gravada?.Aviso;
+        Toast.Sucesso(gravada?.Aviso ?? "");
         try { _tarefas = await Gestao.ListarTarefasAsync(Id); }
         catch (Exception ex) { _erroLista = "A gravação foi feita, mas não foi possível atualizar a lista. " + MensagensGestao.Para(ex, "Volte a abrir o ecrã."); }
         _ocupado = false;

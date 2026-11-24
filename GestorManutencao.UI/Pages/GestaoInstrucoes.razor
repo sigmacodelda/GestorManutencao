@@ -2,6 +2,7 @@
 @inject IGestaoService Gestao
 @inject SessaoService Sessao
 @inject ToastService Toast
+@inject IJSRuntime JS
 
 <PageTitle>Instruções de manutenção · Gestor de Manutenção</PageTitle>
 
@@ -29,13 +30,12 @@
     else
     {
         <p class="campo-erro" role="alert">@_erro</p>
-        @if (_aviso is not null) { <p class="alerta alerta-pin" role="status"><Icone Nome="circle-check" /><span>@_aviso</span></p> }
-        @if (_erroLista is not null) { <p class="alerta" role="status"><Icone Nome="triangle-alert" /><span>@_erroLista</span></p> }
+        @if (_erroLista is not null) { <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>@_erroLista</span></p> }
         @if (_conflito)
         {
             @if (TemFormulario && _confirmarRecarga)
             {
-                <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu no formulário. Continuar?</span></p>
+                <p class="alerta alerta-confirma" role="alert"><Icone Nome="triangle-alert" /><span>Recarregar descarta o que escreveu no formulário. Continuar?</span></p>
                 <button type="button" class="btn btn-primario" @onclick="RecarregarDescartandoAsync">Descartar e recarregar</button>
                 <button type="button" class="btn btn-secundario" @onclick="() => _confirmarRecarga = false">Voltar</button>
             }
@@ -60,7 +60,7 @@
                     }
                     else if (_confirmar == i.Id)
                     {
-                        <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Ao marcar como obsoleta, ficam canceladas as fichas planeadas das tarefas desta versão (as em curso não). Continuar?</span></p>
+                        <p class="alerta alerta-confirma" role="alert"><Icone Nome="triangle-alert" /><span>Ao marcar como obsoleta, ficam canceladas as fichas planeadas das tarefas desta versão (as em curso não). Continuar?</span></p>
                         <button type="button" class="btn btn-primario" disabled="@_ocupado" @onclick="() => MarcarObsoletaAsync(i)">Marcar obsoleta</button>
                         <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _confirmar = null">Voltar</button>
                     }
@@ -100,7 +100,7 @@
     private IReadOnlyList<InstrucaoManutencao> _instrucoes = [];
     private InstrucaoManutencao? _editar;
     private string _versao = "", _obs = "", _erro = "";
-    private string? _falhou, _confirmar, _aviso, _erroLista;
+    private string? _falhou, _confirmar, _erroLista;
     private DateOnly? _data;
     private bool _a_carregar = true, _ocupado, _conflito, _confirmarRecarga;
 
@@ -126,7 +126,18 @@
 
     private Task RecarregarDescartandoAsync() => CarregarAsync();
 
-    private void Editar(InstrucaoManutencao i) { _editar = i; _versao = i.Versao; _obs = i.Obs; _data = i.Data; _erro = ""; _aviso = null; }
+    private void Editar(InstrucaoManutencao i) { _irParaForm = true; _editar = i; _versao = i.Versao; _obs = i.Obs; _data = i.Data; _erro = ""; }
+
+
+    private bool _irParaForm;
+
+    // "Editar" preenche o formulário que está depois da lista: leva-se o ecrã e o foco ao primeiro campo.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_irParaForm) return;
+        _irParaForm = false;
+        try { await JS.InvokeVoidAsync("gmIr", "iv-versao", true); } catch (Exception) { /* sem scroll: o utilizador desce à mão */ }
+    }
 
     private void Limpar() { _editar = null; _versao = _obs = ""; _data = null; }
 
@@ -134,7 +145,7 @@
     private async Task<bool> GravarAsync(Func<Task> acao, string sucesso)
     {
         if (_ocupado) return false;
-        _ocupado = true; _erro = ""; _aviso = null; _erroLista = null; _conflito = false;
+        _ocupado = true; _erro = ""; _erroLista = null; _conflito = false;
         try { await acao(); }
         catch (Exception ex)
         {

@@ -82,11 +82,11 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         return (int)(await cmd.ExecuteScalarAsync(ct))! >= 0;
     }
 
-    // Mesmo critério da listagem: marcada em stobs.u_manut e não inativa.
+    // Mesmo critério da listagem: marcada em stobs.u_manut (inativas incluídas, como no desktop).
     private static async Task<bool> EPecaAsync(SqlConnection conn, SqlTransaction tx, string refPeca, CancellationToken ct)
     {
         if (!await CampoExisteAsync(conn, ct, tx)) return false;
-        await using var cmd = Cmd(conn, tx, $"SELECT COUNT(*) FROM st s WITH (NOLOCK) JOIN stobs o WITH (NOLOCK) ON o.ref = s.ref WHERE s.ref = @ref AND o.[{RegrasPecas.CampoStobs}] = 1 AND s.inactivo = 0",
+        await using var cmd = Cmd(conn, tx, $"SELECT COUNT(*) FROM st s WITH (NOLOCK) JOIN stobs o WITH (NOLOCK) ON o.ref = s.ref WHERE s.ref = @ref AND o.[{RegrasPecas.CampoStobs}] = 1",
             ("@ref", refPeca));
         return (int)(await cmd.ExecuteScalarAsync(ct))! > 0;
     }
@@ -145,7 +145,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         var filtros = palavras.Select((_, i) => $"(s.ref LIKE @t{i} ESCAPE '\\' OR s.design LIKE @t{i} ESCAPE '\\' OR s.codigo LIKE @t{i} ESCAPE '\\')");
         var onde = palavras.Length == 0 ? "" : " AND " + string.Join(" AND ", filtros);
         await using var cmd = Cmd(conn, null,
-            $"SELECT TOP (@max) {colunas} {De} WHERE o.[{RegrasPecas.CampoStobs}] = 1 AND s.inactivo = 0{onde} ORDER BY s.ref",
+            $"SELECT TOP (@max) {colunas} {De} WHERE o.[{RegrasPecas.CampoStobs}] = 1{onde} ORDER BY s.ref",
             ("@max", maximo + 1), ("@arm", RegrasPecas.Armazem), ("@ndos", RegrasPecas.NdosSaida));
         for (var i = 0; i < palavras.Length; i++) Parametro(cmd, $"@t{i}", "%" + RegrasPecas.EscaparLike(palavras[i]) + "%");
         var lista = new List<PecaDto>();
@@ -161,7 +161,7 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
         var colunas = Colunas(await EmconfExisteAsync(conn, ct));
         await using var cmd = Cmd(conn, null, $"""
             SELECT TOP 1 {colunas} {De}
-            WHERE o.[{RegrasPecas.CampoStobs}] = 1 AND s.inactivo = 0 AND (LTRIM(RTRIM(s.codigo)) = @c OR LTRIM(RTRIM(s.ref)) = @c)
+            WHERE o.[{RegrasPecas.CampoStobs}] = 1 AND (LTRIM(RTRIM(s.codigo)) = @c OR LTRIM(RTRIM(s.ref)) = @c)
             ORDER BY CASE WHEN LTRIM(RTRIM(s.codigo)) = @c THEN 0 ELSE 1 END
             """, ("@c", codigo), ("@arm", RegrasPecas.Armazem), ("@ndos", RegrasPecas.NdosSaida));
         await using var r = await cmd.ExecuteReaderAsync(ct);
@@ -182,10 +182,14 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
     }
 
     // Cria o dossier da ficha em conferência se faltar; devolve se está em conferência (null = a ficha já não existe).
-    private static async Task<bool?> GarantirDossierAsync(SqlConnection conn, SqlTransaction tx, string fichaId, string iniciais, CancellationToken ct)
+    private async Task<bool?> GarantirDossierAsync(SqlConnection conn, SqlTransaction tx, string fichaId, string iniciais, CancellationToken ct)
     {
         var bostamp = StampFicha(fichaId);
-        if (await EstadoDossierAsync(conn, tx, bostamp, ct) is { } emConf) return emConf;
+        if (await EstadoDossierAsync(conn, tx, bostamp, ct) is { } emConf)
+        {
+            await GravarMaquinaAsync(conn, tx, bostamp, ct); // dossiers anteriores à ligação: acerta-se o bo.maquina se estiver vazio
+            return emConf;
+        }
         string equip; decimal numero;
         await using (var f = Cmd(conn, tx, """
             SELECT f.no, LTRIM(RTRIM(ISNULL(e.ref, f.ref))) + ' ' + LTRIM(RTRIM(ISNULL(e.design, f.design)))
@@ -251,7 +255,12 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
             var dossier = await GarantirDossierAsync(conn, tx, fichaId, iniciais, ct);
             if (dossier is null) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroSemFicha); }
             if (dossier is false) { await RollbackSeguroAsync(tx); return ResultadoMovimento.Falha(RegrasPecas.ErroValidada); }
-            await InserirLinhaAsync(conn, tx, StampFicha(fichaId), RegrasPecas.NdosSaida, refPeca, qtt, textoLobs, iniciais, ct);
+            decimal? numeroFicha;
+            await using (var nf = Cmd(conn, tx, "SELECT [no] FROM u_fichaint WITH (NOLOCK) WHERE u_fichaintstamp = @f", ("@f", StampFicha(fichaId))))
+                numeroFicha = await nf.ExecuteScalarAsync(ct) is { } n and not DBNull ? Convert.ToDecimal(n) : null;
+            var motivo = numeroFicha is { } num ? RegrasPecas.MotivoIntervencao(num) : null;
+            var bistamp = await InserirLinhaAsync(conn, tx, StampFicha(fichaId), RegrasPecas.NdosSaida, refPeca, qtt, textoLobs, iniciais, ct);
+            await GravarOrigemMotivoAsync(conn, tx, bistamp, local, motivo, ct);
 
             await using var liga = Cmd(conn, tx, $"UPDATE u_matinterv SET ref = @ref, usrinis = @iniciais, usrdata = {Hoje}, usrhora = {Hora} WHERE u_matintervstamp = @m",
                 ("@ref", refPeca), ("@iniciais", iniciais), ("@m", materialId));
@@ -424,7 +433,22 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
 
     // ---------- Dossier e linhas (padrão do TransferenciasService da LandeiroMaui)
 
-    private static async Task CriarDossierAsync(SqlConnection conn, SqlTransaction tx, string bostamp, int ndos, string obranome, string iniciais, CancellationToken ct)
+    // bo.maquina = stamp da intervenção (ligação que o desktop usa); só se a coluna o comportar e só se estiver vazio.
+    private async Task GravarMaquinaAsync(SqlConnection conn, SqlTransaction tx, string stamp, CancellationToken ct)
+    {
+        int? tamanho;
+        await using (var t = Cmd(conn, tx, "SELECT COL_LENGTH('bo', 'maquina')"))
+            tamanho = await t.ExecuteScalarAsync(ct) is { } v and not DBNull ? Convert.ToInt32(v) : null;
+        if (!RegrasPecas.MaquinaCabe(tamanho, stamp))
+        {
+            log.LogWarning("bo.maquina não comporta o stamp da intervenção ({Tamanho}); o dossier fica sem ligação.", tamanho?.ToString() ?? "coluna inexistente");
+            return;
+        }
+        await using var cmd = Cmd(conn, tx, "UPDATE bo SET maquina = @s WHERE bostamp = @b AND LTRIM(RTRIM(ISNULL(maquina, ''))) = ''", ("@s", stamp), ("@b", stamp));
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private async Task CriarDossierAsync(SqlConnection conn, SqlTransaction tx, string bostamp, int ndos, string obranome, string iniciais, CancellationToken ct)
     {
         await using (var t = Cmd(conn, tx, "SELECT ISNULL(COL_LENGTH('bo', 'obranome'), 20)"))
         {
@@ -449,6 +473,29 @@ public sealed class SqlRepositorioPecas(IConfiguration configuracao, ILogger<Sql
             VALUES (@bostamp, @iniciais, {Hoje}, {Hora}, @iniciais, {Hoje}, {Hora});
             """, ("@bostamp", bostamp), ("@ndos", ndos), ("@iniciais", iniciais));
         await extra.ExecuteNonQueryAsync(ct);
+        await GravarMaquinaAsync(conn, tx, bostamp, ct);
+    }
+
+    // bi.lobs2 = origem (lugar) e bi.lobs3 = motivo, como o desktop os lê; cortam-se ao tamanho da coluna e omitem-se se a coluna não existir.
+    private static async Task GravarOrigemMotivoAsync(SqlConnection conn, SqlTransaction tx, string bistamp, string? origem, string? motivo, CancellationToken ct)
+    {
+        int? t2, t3;
+        await using (var t = Cmd(conn, tx, "SELECT COL_LENGTH('bi', 'lobs2'), COL_LENGTH('bi', 'lobs3')"))
+        await using (var r = await t.ExecuteReaderAsync(ct))
+        {
+            await r.ReadAsync(ct);
+            t2 = r.IsDBNull(0) ? null : Convert.ToInt32(r.GetValue(0));
+            t3 = r.IsDBNull(1) ? null : Convert.ToInt32(r.GetValue(1));
+        }
+        var o = string.IsNullOrWhiteSpace(origem) ? null : RegrasPecas.AjustarACampo(origem, t2);
+        var m = string.IsNullOrWhiteSpace(motivo) ? null : RegrasPecas.AjustarACampo(motivo, t3);
+        var sets = new List<string>();
+        var ps = new List<(string, object?)> { ("@b", bistamp) };
+        if (o is not null) { sets.Add("lobs2 = @o"); ps.Add(("@o", o)); }
+        if (m is not null) { sets.Add("lobs3 = @m"); ps.Add(("@m", m)); }
+        if (sets.Count == 0) return;
+        await using var cmd = Cmd(conn, tx, $"UPDATE bi SET {string.Join(", ", sets)} WHERE bistamp = @b", ps.ToArray());
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     // Linha em conferência (emconf = 1, sem toques: não move stock). lobs = stamp do material (e o lugar, se houver). Devolve o bistamp.

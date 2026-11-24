@@ -1,0 +1,282 @@
+@page "/inventarios/{Id}"
+@inject IInventarioService Servico
+@inject IPecasService Pecas
+@inject SessaoService Sessao
+@inject ToastService Toast
+@inject IPreferenciasLeitura Preferencias
+@inject IDetetorLeitor Detetor
+@inject IJSRuntime JS
+
+<PageTitle>Inventário · Gestor de Manutenção</PageTitle>
+
+<section class="conteudo">
+    <div class="boas-vindas">
+        <a class="voltar" href="inventarios"><Icone Nome="arrow-left" /><span>Inventários</span></a>
+        <h1 tabindex="-1">Inventário @(_det is null ? "" : _det.Inventario.Numero.ToString("0"))</h1>
+    </div>
+
+    @if (Sessao.EQualidade)
+    {
+        <p class="estado-lista" role="status">Esta área é para operadores e supervisores.</p>
+    }
+    else if (_a_carregar)
+    {
+        <p class="estado-lista" role="status">A carregar…</p>
+    }
+    else if (_det is null)
+    {
+        <p class="campo-erro" role="alert">@(_erro != "" ? _erro : "Este inventário já não existe.")</p>
+    }
+    else
+    {
+        var inv = _det.Inventario;
+        <p class="intervencao-desc">@inv.Descricao · @inv.Estado · @inv.Linhas @(inv.Linhas == 1 ? "linha" : "linhas")</p>
+
+        @if (inv.PodeEditar)
+        {
+            @if (BarraCamara)
+            {
+                <div class="picar-topo">
+                    <button type="button" id="picar-camara" class="btn btn-secundario" disabled="@_a_gravar" @onclick="PicarComCameraAsync">
+                        <Icone Nome="camera" /><span>Picar com a câmara</span>
+                    </button>
+                </div>
+            }
+            <p class="passo-atual" role="status">Passo @Passo de 3 · @TextoPasso</p>
+            <PecaLugar @ref="_pl" IdCampo="inventario-peca" LugarDestino="true" OnMudou="AoMudar" SemBotaoCamara="BarraCamara" />
+
+            @* Sem câmara ou leitor à mão, o lugar escolhe-se aqui (corredor, estante, nível, posição): só até haver lugar. *@
+            @if (_esc?.Local is null)
+            {
+                <EscolhaLugar Id="inventario" Estrutura="_estrutura" Falhou="_estruturaFalhou" Desativado="_a_gravar" OnEscolhido="UsarLugarEscolhidoAsync" />
+            }
+
+            @if (Passo == 3)
+            {
+                <form class="formulario" @onsubmit="ContarAsync" novalidate>
+                    <div class="campo">
+                        <label for="inventario-qtt">Quantidade contada</label>
+                        <input id="inventario-qtt" type="text" inputmode="decimal" autocomplete="off" maxlength="12" @bind="_qttTexto" @bind:event="oninput" />
+                    </div>
+                    <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_gravar"><Icone Nome="check" /><span>@(_a_gravar ? "A gravar…" : "Gravar linha")</span></button>
+                </form>
+            }
+        }
+        else
+        {
+            <p class="estado-lista" role="status">@(inv.Concluido || inv.Lancado ? "Este inventário já está concluído: só se pode consultar." : "Só o técnico a quem o inventário foi atribuído o pode contar.")</p>
+        }
+        <p class="campo-erro" role="alert">@_erro</p>
+
+        <h2 class="ficha-texto">Linhas contadas</h2>
+        @if (_det.Linhas.Count == 0)
+        {
+            <p class="estado-lista" role="status">Ainda não contou nenhuma peça.</p>
+        }
+        else
+        {
+            <ul class="lista-intervencoes">
+                @foreach (var l in _det.Linhas)
+                {
+                    <li class="intervencao" @key="l.Id">
+                        <span class="intervencao-titulo">@l.Ref @l.Design</span>
+                        <span class="intervencao-desc">Lugar <span class="lugar-codigo">@(LogicaFichaPeca.TextoNormalDoLugar(l.Lugar) ?? l.Lugar)</span> · @LogicaPicagem.TextoUnidades(l.Qtt)</span>
+                        @if (inv.PodeEditar)
+                        {
+                            @if (_editar == l.Id)
+                            {
+                                <div class="campo">
+                                    <label for="@("inv-q-" + l.Id)">Nova quantidade</label>
+                                    <input id="@("inv-q-" + l.Id)" type="text" inputmode="decimal" autocomplete="off" maxlength="12" @bind="_editarTexto" @bind:event="oninput" />
+                                </div>
+                                <button type="button" class="btn btn-primario" disabled="@_a_gravar" @onclick="() => GuardarAsync(l)"><Icone Nome="check" /><span>Guardar</span></button>
+                                <button type="button" class="btn-texto" disabled="@_a_gravar" @onclick="() => _editar = null"><Icone Nome="x" /><span>Cancelar</span></button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn-texto" disabled="@_a_gravar" @onclick="() => Editar(l)"><Icone Nome="pencil" /><span>Alterar quantidade</span></button>
+                                <button type="button" class="btn-texto" disabled="@_a_gravar" aria-label="Apagar a linha de @l.Design" @onclick="() => ApagarAsync(l)"><Icone Nome="trash" /><span>Apagar</span></button>
+                            }
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (inv.PodeEditar && _det.Linhas.Count > 0)
+        {
+            @if (!_confirmar)
+            {
+                <button type="button" class="btn btn-secundario btn-grande" disabled="@_a_gravar" @onclick="() => _confirmar = true"><Icone Nome="badge-check" /><span>Concluir inventário</span></button>
+            }
+            else
+            {
+                <div class="alerta-pin" role="alertdialog" aria-labelledby="inv-conf-titulo">
+                    <p id="inv-conf-titulo" class="campo-aviso">Concluir com @inv.Linhas @(inv.Linhas == 1 ? "linha" : "linhas")? Depois já não pode alterar a contagem.</p>
+                    <button type="button" class="btn btn-primario btn-grande" disabled="@_a_gravar" @onclick="ConcluirAsync"><Icone Nome="badge-check" /><span>@(_a_gravar ? "A concluir…" : "Sim, concluir")</span></button>
+                    <button type="button" class="btn-texto" disabled="@_a_gravar" @onclick="() => _confirmar = false"><Icone Nome="x" /><span>Ainda não</span></button>
+                </div>
+            }
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private PecaLugar? _pl;
+    private EscolhaPecaLugar? _esc;
+    private InventarioDetalhe? _det;
+    private string _erro = "", _qttTexto = "", _editarTexto = "";
+    private string? _editar;
+    private bool _a_carregar = true, _a_gravar, _confirmar, _estruturaFalhou;
+    private IReadOnlyList<EstanteArmazem>? _estrutura;
+
+    // Sem lugares carregados fica a mensagem e a picada da etiqueta continua a servir.
+    protected override async Task OnInitializedAsync()
+    {
+        if (Sessao.EQualidade) return;
+        try
+        {
+            var e = await Pecas.EstruturaArmazemAsync();
+            if (e.Count == 0) _estruturaFalhou = true;
+            else _estrutura = e;
+        }
+        catch (Exception) { _estruturaFalhou = true; }
+    }
+
+    private async Task UsarLugarEscolhidoAsync(string etiqueta)
+    {
+        _erro = "";
+        if (_pl is not null) await _pl.UsarLocalAsync(etiqueta);
+    }
+
+    private int Passo => _esc?.Ref is null && _esc?.Local is null ? 1 : _esc?.Ref is null || _esc.Local is null ? 2 : 3;
+    private string TextoPasso => Passo switch
+    {
+        1 => "pique a etiqueta do lugar ou a da peça, ou escolha-os",
+        2 => _esc?.Local is null ? "pique a etiqueta ou escolha o lugar" : "pique a etiqueta da peça ou procure-a",
+        _ => "indique a quantidade contada"
+    };
+
+    private bool BarraCamara => LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial) == ModoLeitura.Camara;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Sessao.EQualidade) { _a_carregar = false; return; }
+        _a_carregar = true;
+        try { _det = await Servico.ObterAsync(Id); }
+        catch (Exception e) { _det = null; _erro = MensagensGestao.Para(e, "Não foi possível abrir o inventário. Tente outra vez."); }
+        finally { _a_carregar = false; }
+    }
+
+    private Task PicarComCameraAsync() => _pl?.PicarComCameraAsync() ?? Task.CompletedTask;
+
+    private bool _irParaQtt;
+
+    // Ao chegar ao passo 3 o formulário abre mais abaixo: leva-se o ecrã e o foco à quantidade.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_irParaQtt || Passo != 3) return;
+        _irParaQtt = false;
+        try { await JS.InvokeVoidAsync("gmIr", "inventario-qtt", true); } catch (Exception) { /* sem scroll: o utilizador desce à mão */ }
+    }
+
+    private Task AoMudar(EscolhaPecaLugar e)
+    {
+        var eraPasso3 = Passo == 3;
+        _esc = e;
+        if (!eraPasso3 && Passo == 3) _irParaQtt = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    // Lugar e quantidade validam-se aqui antes de enviar; a gravação corre na fila das leituras do componente.
+    private async Task ContarAsync()
+    {
+        if (_a_gravar || _pl is null || _esc is not { Ref: not null, Local: not null }) return;
+        _erro = "";
+        _a_gravar = true;
+        try
+        {
+            await _pl.GravarAsync(async esc =>
+            {
+                if (!LogicaInventario.LugarCompleto(esc.Local)) { _erro = LogicaInventario.ErroLugar; return false; }
+                if (!LogicaInventario.LerQuantidade(_qttTexto, out var qtt))
+                {
+                    _erro = "Quantidade inválida: use zero ou um número positivo, com vírgula ou ponto e no máximo 3 casas decimais.";
+                    return false;
+                }
+                _det = await Servico.ContarAsync(Id, esc.Ref!, esc.Local!, qtt);
+                Toast.Sucesso($"Gravado: {LogicaPicagem.TextoQuantidade(qtt)} de {esc.Ref}");
+                _qttTexto = "";
+                return true;
+            });
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized })
+        {
+            _erro = MensagensGestao.Para(e, "Não foi possível gravar a linha. Tente outra vez.");
+        }
+        catch
+        {
+            // Falha sem resposta clara: o POST pode ter gravado. Mostra o que está no servidor em vez de repetir às cegas.
+            _erro = "Confirme as linhas antes de repetir.";
+            await RecarregarAsync();
+        }
+        finally { _a_gravar = false; }
+    }
+
+    private void Editar(LinhaInventario l)
+    {
+        _editar = l.Id;
+        _editarTexto = LogicaPicagem.TextoQuantidade(l.Qtt);
+        _erro = "";
+    }
+
+    private Task GuardarAsync(LinhaInventario l)
+    {
+        if (!LogicaInventario.LerQuantidade(_editarTexto, out var qtt))
+        {
+            _erro = "Quantidade inválida: use zero ou um número positivo, com no máximo 3 casas decimais.";
+            return Task.CompletedTask;
+        }
+        return Escrever(() => Servico.AlterarQuantidadeAsync(Id, l.Id, qtt), () => _editar = null);
+    }
+
+    private Task ApagarAsync(LinhaInventario l) => Escrever(() => Servico.ApagarLinhaAsync(Id, l.Id), null);
+
+    private Task ConcluirAsync() => Escrever(async () =>
+    {
+        var d = await Servico.ConcluirAsync(Id);
+        Toast.Sucesso("Inventário concluído");
+        return d;
+    }, () => _confirmar = false);
+
+    private async Task Escrever(Func<Task<InventarioDetalhe>> acao, Action? aoFim)
+    {
+        if (_a_gravar) return;
+        _erro = "";
+        _a_gravar = true;
+        try
+        {
+            _det = await acao();
+            aoFim?.Invoke();
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized })
+        {
+            _erro = MensagensGestao.Para(e, "Não foi possível gravar. Tente outra vez.");
+            aoFim?.Invoke();
+        }
+        catch
+        {
+            _erro = "Confirme o estado do inventário antes de repetir.";
+            await RecarregarAsync();
+        }
+        finally { _a_gravar = false; }
+    }
+
+    private async Task RecarregarAsync()
+    {
+        try { _det = await Servico.ObterAsync(Id) ?? _det; } catch { }
+    }
+}

@@ -18,16 +18,20 @@
     <section class="login-painel" aria-labelledby="titulo-login">
         <div class="login-form" tabindex="0" @ref="_raiz" @onkeydown="AoTecla" @onkeydown:preventDefault="_travarTeclas">
             <h1 id="titulo-login">Olá! Escreva o seu PIN</h1>
-            <p class="login-sub">São 4 números.</p>
-
-            @if (_erro is not null)
-            {
-                <div class="alerta" role="alert" tabindex="-1" @ref="_alerta">
-                    <Icone Nome="triangle-alert" />
-                    <span>@_erro</span>
-                </div>
-            }
-
+            @* Espaço fixo: o erro ocupa o lugar da frase, por isso o teclado nunca se mexe. *@
+            <div class="login-aviso">
+                @if (_erro is not null)
+                {
+                    <div class="alerta" role="alert" tabindex="-1" @ref="_alerta">
+                        <Icone Nome="triangle-alert" />
+                        <span>@_erro</span>
+                    </div>
+                }
+                else
+                {
+                    <p class="login-sub">São 4 números.</p>
+                }
+            </div>
             <div class="pin-pontos @(_erro is not null ? "pin-pontos-erro" : "")" role="img" aria-label="@_pin.Length de @RegrasPin.Maximo números escritos">
                 @for (var n = 0; n < RegrasPin.Maximo; n++)
                 {
@@ -76,7 +80,7 @@
         if (_focarAlerta && _erro is not null)
         {
             _focarAlerta = false;
-            await _alerta.FocusAsync();
+            await _alerta.FocusAsync(preventScroll: true);
         }
     }
 

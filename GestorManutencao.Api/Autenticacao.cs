@@ -120,7 +120,7 @@ public sealed class PinHasher(Microsoft.Extensions.Options.IOptions<PinOpcoes> o
     public string VersaoDev => DevAtivo ? Hash("dev-versao:" + opcoes.Value.Dev)[..16] : "";
 }
 
-public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste, TecnoEmUso, Protegido }
+public enum ResultadoPin { Ok, PinEmUso, NaoExiste, JaExiste, TecnoEmUso, Protegido, TecnoEsgotado }
 
 public sealed class RepositorioIndisponivelException(Exception? interna = null)
     : Exception("A base de dados dos utilizadores não está disponível.", interna);
@@ -207,4 +207,7 @@ public static partial class RegrasUtilizador
     // "configuracao" é o código do acesso por Pin:Dev: reservado para a auditoria não se confundir.
     public static bool CodigoOk(string? codigo) => codigo is not null && codigo != EmissorToken.UtilizadorConfiguracao.Codigo && CodigoValido().IsMatch(codigo);
     public static bool NomeOk(string? nome) => nome is { } n && n.Trim().Length is >= 2 and <= 60;
+
+    // Só interno (o pedido nunca o traz: tecno < 0 dá 400): o repositório atribui o maior número já usado + 1.
+    public const int TecnoAutomatico = -1;
 }

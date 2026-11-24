@@ -3,6 +3,7 @@
 @inject SessaoService Sessao
 @inject IGestorOffline Offline
 @inject IAreaTransferencia Transferencia
+@inject ToastService Toast
 
 <PageTitle>Por rever · Gestor de Manutenção</PageTitle>
 
@@ -58,7 +59,10 @@
             }
         </ul>
     }
-    <p class="@(_copiavel ? "campo-ok" : "campo-erro")" role="status">@_mensagem</p>
+    @if (_mensagem.Length > 0)
+    {
+        <p class="campo-erro" role="alert">@_mensagem</p>
+    }
 </section>
 
 @code {
@@ -97,7 +101,8 @@
         try
         {
             var ainda = await Offline.RepetirConfirmacaoAsync(a.Id);
-            _mensagem = ainda is null ? $"Conferência confirmada: {a.Equipamento}." : $"Ainda por confirmar: {ainda}";
+            if (ainda is null) Toast.Sucesso($"Conferência confirmada: {a.Equipamento}.");
+            else _mensagem = $"Ainda por confirmar: {ainda}";
         }
         catch (InvalidOperationException ex) { _mensagem = ex.Message; }
         catch (Exception) { _mensagem = "Não foi possível confirmar. Tente outra vez."; }
@@ -114,7 +119,7 @@
             _copiavel = false;
             _mensagem = "Não foi possível copiar. Toque no texto para o selecionar.";
         }
-        else _mensagem = "Copiado.";
+        else Toast.Sucesso("Copiado.");
     }
 
     public void Dispose() => Offline.Mudou -= Atualizar;

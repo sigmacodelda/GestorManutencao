@@ -206,7 +206,8 @@
                                 @if (AvisoDe(m) is { } aviso)
                                 {
                                     <br />
-                                    <span class="campo-aviso" role="status">@aviso</span>
+                                    @* Fica no cartão (o aviso flutuante some ao fim de uns segundos): a pessoa vê depois o que correu mal. *@
+                                    <span class="aviso-cartao">@aviso</span>
                                 }
                             </span>
                             @{
@@ -265,7 +266,7 @@
                                             <li>
                                                 <button type="button" class="intervencao" disabled="@_a_gravar" @onclick="() => EscolherLugarItemAsync(m, l)">
                                                     <span class="intervencao-titulo">@l.Texto</span>
-                                                    <span class="intervencao-desc">@LogicaPicagem.TextoQuantidade(l.Qtt) unidades</span>
+                                                    <span class="intervencao-desc">@LogicaPicagem.TextoUnidades(l.Qtt)</span>
                                                 </button>
                                             </li>
                                         }
@@ -276,7 +277,7 @@
                         </li>
                     }
                 </ul>
-                @if (_avisoMaterial is not null) { <p class="campo-aviso" role="status">@_avisoMaterial</p> }
+                @if (_avisoMaterial is not null) { <p class="campo-aviso" role="alert">@_avisoMaterial</p> }
                 @if (_matEditId is not null)
                 {
                     @* A escolha de peça e lugar (com a pesquisa) fica fora do form de guardar para o Enter não gravar. *@
@@ -289,7 +290,6 @@
                         }
                     </div>
                     <form class="formulario" @onsubmit="GuardarMaterialEditadoAsync" novalidate>
-                        @if (_eAvisoStock is not null) { <p class="campo-aviso" role="status">@_eAvisoStock</p> }
                         <div class="material-novo">
                             <div class="campo">
                                 <label for="e-material">Material</label>
@@ -310,6 +310,7 @@
                         <p class="campo-erro" role="alert">@_erroMaterial</p>
                         <button type="submit" class="btn btn-secundario" disabled="@_a_gravar"><Icone Nome="check" /><span>Guardar material</span></button>
                         <button type="button" class="btn-texto" @onclick="() => _matEditId = null">Deixar de editar</button>
+                        @if (_eAvisoStock is not null) { <p class="campo-aviso" role="status">@_eAvisoStock</p> }
                     </form>
                 }
                 @if (_i.Estado == EstadoIntervencao.EmCurso)
@@ -322,11 +323,6 @@
                         }
                     </div>
                     <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
-                        @if (LogicaFichaPeca.LinhaDaPeca(_materiais, _esc?.Ref) is { } jaTem)
-                        {
-                            <p class="campo-aviso" role="status">Já tem @jaTem.Qtt.ToString("0.###") unid. de @jaTem.Design no material: a quantidade nova soma-se a essa linha.</p>
-                        }
-                        @if (_avisoStock is not null) { <p class="campo-aviso" role="status">@_avisoStock</p> }
                         <div class="material-novo">
                             <div class="campo">
                                 <label for="material">Material</label>
@@ -348,6 +344,12 @@
                         </div>
                         <p class="campo-erro" role="alert">@_erroMaterial</p>
                         <button type="submit" class="btn btn-secundario" disabled="@_a_gravar"><Icone Nome="plus" /><span>Juntar material</span></button>
+                        @* Avisos por baixo do botão: aparecem quando o campo perde o foco e não podem deslocar o botão antes do toque. *@
+                        @if (LogicaFichaPeca.LinhaDaPeca(_materiais, _esc?.Ref) is { } jaTem)
+                        {
+                            <p class="campo-aviso" role="status">Já tem @jaTem.Qtt.ToString("0.###") unid. de @jaTem.Design no material: a quantidade nova soma-se a essa linha.</p>
+                        }
+                        @if (_avisoStock is not null) { <p class="campo-aviso" role="status">@_avisoStock</p> }
                     </form>
                 }
             </section>
@@ -562,6 +564,9 @@
         // com o nome da peça mas sem peça nem lugar.
         _esc = null; _avisoStock = null; _material = ""; _qtt = 1; _epv = null;
         _eRef = m.Ref ?? ""; _escEdit = null; _eAvisoStock = null; _escolhaItem = null; _avisoMaterial = null;
+        // O formulário abre por baixo da lista: com muitas linhas fica fora do ecrã.
+        StateHasChanged();
+        await RolarParaAsync("e-material");
     }
 
     private string? AvisoDe(Material m) => _avisosMat.GetValueOrDefault(m.Id) ?? m.AvisoStock;
@@ -681,8 +686,11 @@
             gravou = _plEdit is null ? await Gravar(new EscolhaPecaLugar(new(null, null), null, null)) : await _plEdit.GravarAsync(Gravar);
             if (gravou)
             {
+                var nome = _eDesign!.Trim();
                 _matEditId = null; _escEdit = null;
                 await RecarregarAsync();
+                Toast.Sucesso($"Material guardado: {nome}");
+                await RolarParaAsync("titulo-materiais");
             }
         }
         catch (EscolhaLugarException ex)

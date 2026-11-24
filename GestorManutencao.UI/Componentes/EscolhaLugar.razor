@@ -1,0 +1,66 @@
+@* Lugar por seleção em cascata (corredor, estante, nível, posição). Os quatro campos e o botão estão sempre presentes
+   (só ficam ativos por passos): nada sobe nem desce ao escolher. Devolve a etiqueta (LOC-A-2-1-1), como uma picada. *@
+<div class="formulario lugar-escolha">
+    <p class="lugar-aviso" role="status">@(Falhou ? "Não foi possível carregar os lugares do armazém." : Estrutura is null ? "A carregar os lugares do armazém…" : "")</p>
+    <div class="campo">
+        <label for="@(Id)-corredor">Corredor</label>
+        <select id="@(Id)-corredor" disabled="@(Corredores.Count == 0 || Desativado)" value="@_corredor" @onchange="e => EscolherCorredor(e.Value?.ToString())">
+            <option value="">Escolha o corredor</option>
+            @foreach (var c in Corredores) { <option value="@c">@c</option> }
+        </select>
+    </div>
+    <div class="campo">
+        <label for="@(Id)-estante">Estante</label>
+        <select id="@(Id)-estante" disabled="@(_corredor == "" || Desativado)" value="@_estante" @onchange="e => EscolherEstante(e.Value?.ToString())">
+            <option value="">Escolha a estante</option>
+            @foreach (var x in Estantes) { <option value="@x">@x.ToString("00")</option> }
+        </select>
+    </div>
+    <div class="campo">
+        <label for="@(Id)-nivel">Nível</label>
+        <select id="@(Id)-nivel" disabled="@(_estante == "" || Desativado)" value="@_nivel" @onchange="e => EscolherNivel(e.Value?.ToString())">
+            <option value="">Escolha o nível</option>
+            @foreach (var x in Niveis) { <option value="@x">@x</option> }
+        </select>
+    </div>
+    <div class="campo">
+        <label for="@(Id)-posicao">Posição</label>
+        <select id="@(Id)-posicao" disabled="@(_nivel == "" || Desativado)" value="@_posicao" @onchange="e => EscolherPosicao(e.Value?.ToString())">
+            <option value="">Escolha a posição</option>
+            @foreach (var x in Posicoes) { <option value="@x">@x.ToString("00")</option> }
+        </select>
+    </div>
+    <button type="button" class="btn btn-secundario" disabled="@(_posicao == "" || Desativado)" @onclick="UsarAsync">@TextoBotao</button>
+</div>
+
+@code {
+    // null = ainda a carregar; Falhou = sem lugares carregados (fica a mensagem).
+    [Parameter] public IReadOnlyList<EstanteArmazem>? Estrutura { get; set; }
+    [Parameter] public bool Falhou { get; set; }
+    [Parameter] public bool Desativado { get; set; }
+    [Parameter] public string Id { get; set; } = "lugar";
+    [Parameter] public string TextoBotao { get; set; } = "Usar este lugar";
+    [Parameter] public EventCallback<string> OnEscolhido { get; set; }
+
+    private string _corredor = "", _estante = "", _nivel = "", _posicao = "";
+
+    private IReadOnlyList<EstanteArmazem> Lista => Estrutura ?? [];
+    private IReadOnlyList<string> Corredores => LogicaEstrutura.Corredores(Lista);
+    private IReadOnlyList<int> Estantes => LogicaEstrutura.Estantes(Lista, _corredor);
+    private IReadOnlyList<int> Niveis => LogicaEstrutura.Niveis(Lista, _corredor, Inteiro(_estante));
+    private IReadOnlyList<int> Posicoes => LogicaEstrutura.Posicoes(Lista, _corredor, Inteiro(_estante));
+    private static int? Inteiro(string t) => int.TryParse(t, out var n) ? n : null;
+
+    private void EscolherCorredor(string? v) { _corredor = v ?? ""; _estante = _nivel = _posicao = ""; }
+    private void EscolherEstante(string? v) { _estante = v ?? ""; _nivel = _posicao = ""; }
+    private void EscolherNivel(string? v) { _nivel = v ?? ""; _posicao = ""; }
+    private void EscolherPosicao(string? v) => _posicao = v ?? "";
+
+    private async Task UsarAsync()
+    {
+        if (Inteiro(_estante) is not { } estante || Inteiro(_nivel) is not { } nivel || Inteiro(_posicao) is not { } posicao || _corredor == "") return;
+        var etiqueta = LogicaFichaPeca.EtiquetaDeLugar(_corredor, estante, nivel, posicao);
+        _corredor = _estante = _nivel = _posicao = "";
+        await OnEscolhido.InvokeAsync(etiqueta);
+    }
+}

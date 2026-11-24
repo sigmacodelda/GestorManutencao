@@ -393,6 +393,7 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
             var corpo = await LerConflitoAsync(resposta, ct);
             var erro = corpo?.Erro;
             throw new InvalidOperationException(erro is { } e && e.Contains(' ') ? e
+                : erro == "sem_stock" ? MensagensIntervencao.SemStock(corpo?.Pecas)
                 : erro == "pecas_por_dar" && !string.IsNullOrWhiteSpace(corpo?.Mensagem) ? corpo.Mensagem
                 : MensagensIntervencao.Para(erro));
         }
@@ -401,7 +402,7 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
 
     private sealed record CorpoErro(string? Erro);
 
-    private sealed record CorpoConflito(string? Erro, string? Mensagem);
+    private sealed record CorpoConflito(string? Erro, string? Mensagem, List<string>? Pecas = null);
 
     private static async Task<CorpoConflito?> LerConflitoAsync(HttpResponseMessage resposta, CancellationToken ct)
     {

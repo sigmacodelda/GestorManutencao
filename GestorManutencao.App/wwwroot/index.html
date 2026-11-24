@@ -20,6 +20,74 @@
         };
         document.documentElement.setAttribute("data-modo", window.gmModo.obter());
 
+        // Páginas Razor: levar o ecrã a um elemento (e, com foco=true, dar-lhe o foco). Sem o elemento não faz nada.
+        window.gmIr = function (id, foco) {
+            var el = document.getElementById(id); if (!el) return;
+            var reduzir = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            if (foco) { try { el.focus({ preventScroll: true }); } catch (e) { } }
+            el.scrollIntoView({ behavior: reduzir ? "auto" : "smooth", block: "center" });
+        };
+
+        // Erros e avisos de texto simples flutuam no topo (o original fica escondido por CSS): o ecrã não mexe.
+        // Confirmações com botões (.alerta-pin, .alerta-devolvida, .alerta-confirma) ficam no sítio.
+        (function () {
+            var SEL = '.campo-erro[role="alert"], .alerta[role="alert"]:not(.alerta-pin):not(.alerta-devolvida):not(.alerta-confirma), .campo-aviso[role="alert"], .campo-aviso[role="status"]';
+            var vistos = new WeakMap(), agendado = false, zona = null;
+            function obterZona() {
+                if (zona && zona.isConnected) return zona;
+                zona = document.createElement("div");
+                zona.className = "gm-avisos"; zona.setAttribute("role", "status"); zona.setAttribute("aria-live", "assertive"); zona.setAttribute("aria-atomic", "false");
+                document.body.appendChild(zona);
+                return zona;
+            }
+            function mostrar(texto, erro) {
+                var z = obterZona(), el = null;
+                for (var i = 0; i < z.children.length; i++) if (z.children[i].textContent === texto) el = z.children[i];
+                if (!el) {
+                    el = document.createElement("p");
+                    el.className = "gm-aviso " + (erro ? "gm-aviso-erro" : "gm-aviso-info");
+                    el.textContent = texto;
+                    el.onclick = function () { el.remove(); };
+                    z.appendChild(el);
+                    while (z.children.length > 3) z.removeChild(z.firstChild);
+                }
+                clearTimeout(el._t);
+                el._t = setTimeout(function () { el.remove(); }, erro ? 8000 : 6000);
+            }
+            function verificar() {
+                agendado = false;
+                document.querySelectorAll(SEL).forEach(function (el) {
+                    var t = (el.textContent || "").trim();
+                    if (!t) { vistos.delete(el); return; }
+                    if (vistos.get(el) === t) return;
+                    vistos.set(el, t);
+                    mostrar(t, !el.classList.contains("campo-aviso"));
+                });
+            }
+            document.addEventListener("DOMContentLoaded", obterZona);
+            new MutationObserver(function () { if (!agendado) { agendado = true; requestAnimationFrame(verificar); } })
+                .observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+        })();
+
+        // Um aviso de erro (role="alert") que aparece ou muda de texto fora do ecrã sobe até se ver, sem mexer se já está visível.
+        (function () {
+            var vistos = new WeakMap(), agendado = false;
+            function verificar() {
+                agendado = false;
+                document.querySelectorAll('[role="alert"]').forEach(function (el) {
+                    var t = (el.textContent || "").trim();
+                    if (!t || vistos.get(el) === t) return;
+                    vistos.set(el, t);
+                    var r = el.getBoundingClientRect();
+                    if (r.top >= 0 && r.bottom <= window.innerHeight) return;
+                    var reduzir = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                    el.scrollIntoView({ behavior: reduzir ? "auto" : "smooth", block: "nearest" });
+                });
+            }
+            new MutationObserver(function () { if (!agendado) { agendado = true; requestAnimationFrame(verificar); } })
+                .observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+        })();
+
         // Área de desenho da assinatura: traço a azul-escuro sobre fundo branco, exportado em PNG (data URL).
         window.gmAssinatura = (function () {
             var estados = {};

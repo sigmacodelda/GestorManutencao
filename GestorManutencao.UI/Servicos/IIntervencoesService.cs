@@ -99,6 +99,11 @@ public static class MensagensIntervencao
     public const string EscolhaLugar = "Esta peça está em vários lugares. Escolha de onde a tirou.";
     public const string ComPendentes = "Esta intervenção tem alterações por enviar. Tente outra vez depois de serem enviadas.";
 
+    public const string PrefixoSemStock = "Não há stock de: ";
+
+    public static string SemStock(IEnumerable<string>? pecas) =>
+        PrefixoSemStock + (pecas?.ToList() is { Count: > 0 } l ? string.Join("; ", l) : "peças necessárias") + ". A configuração não permite iniciar sem stock.";
+
     public static string Para(string? codigo) => codigo switch
     {
         "ref_duplicada" => "Esse nº de infraestrutura já existe. Altere o número.",

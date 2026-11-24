@@ -13,4 +13,8 @@ public interface IPecasService
     Task<IReadOnlyList<PecaNoLugar>> PecasNoLugarAsync(string local, CancellationToken ct = default);
     // local = texto da etiqueta (LOC-A-02-1-01); devolve os lugares já atualizados.
     Task<LocalizacoesPeca> ArrumarAsync(string refPeca, string local, decimal qtt, CancellationToken ct = default);
+    // Rearrumar: muda qtt do lugar de origem (texto A-01-1-01) para o destino (etiqueta ou texto); devolve os lugares já atualizados.
+    Task<LocalizacoesPeca> MoverAsync(string refPeca, string origem, string destino, decimal qtt, CancellationToken ct = default);
+    // Estantes onde se pode arrumar (sem o buffer), para escolher corredor, estante, nível e posição.
+    Task<IReadOnlyList<EstanteArmazem>> EstruturaArmazemAsync(CancellationToken ct = default);
 }

@@ -335,4 +335,51 @@ public class IntervencoesApiTests : IDisposable
         var lista = (await c.GetFromJsonAsync<List<UtilizadorApp>>("/utilizadores"))!;
         Assert.Equal(20, lista.Single(u => u.Codigo == "joao").Tecno);
     }
+
+    [Fact]
+    public async Task Operador_criado_sem_numero_recebe_o_seguinte_ao_maior_e_os_outros_perfis_ficam_sem_numero()
+    {
+        var c = await ComoAsync("603918");
+        var antes = (await c.GetFromJsonAsync<List<UtilizadorApp>>("/utilizadores"))!;
+        var maior = antes.Max(u => u.Tecno);
+
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/utilizadores", new PedidoNovoUtilizador("auto1", "Auto Um"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/utilizadores", new PedidoNovoUtilizador("auto2", "Auto Dois", 0))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/utilizadores", new PedidoNovoUtilizador("qual1", "Qualidade Um", null, Perfil.Qualidade))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/utilizadores", new PedidoNovoUtilizador("sup1", "Supervisor Um", null, Perfil.Supervisor))).StatusCode);
+
+        var lista = (await c.GetFromJsonAsync<List<UtilizadorApp>>("/utilizadores"))!;
+        Assert.Equal(maior + 1, lista.Single(u => u.Codigo == "auto1").Tecno);
+        Assert.Equal(maior + 2, lista.Single(u => u.Codigo == "auto2").Tecno);
+        Assert.Equal(0, lista.Single(u => u.Codigo == "qual1").Tecno);
+        Assert.Equal(0, lista.Single(u => u.Codigo == "sup1").Tecno);
+    }
+
+    [Fact]
+    public async Task Numero_indicado_a_mao_continua_a_valer_e_o_automatico_nao_o_repete()
+    {
+        var c = await ComoAsync("603918");
+
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/utilizadores", new PedidoNovoUtilizador("manual1", "Manual Um", 500))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/utilizadores", new PedidoNovoUtilizador("auto3", "Auto Tres"))).StatusCode);
+
+        var lista = (await c.GetFromJsonAsync<List<UtilizadorApp>>("/utilizadores"))!;
+        Assert.Equal(500, lista.Single(u => u.Codigo == "manual1").Tecno);
+        Assert.Equal(501, lista.Single(u => u.Codigo == "auto3").Tecno);
+        // As sementes de teste já repetem números entre si; o que importa é que o automático não repete nenhum.
+        Assert.Single(lista, u => u.Tecno == 501);
+    }
+
+    [Fact]
+    public async Task Sem_numero_livre_o_operador_automatico_e_recusado_sem_gravar()
+    {
+        var c = await ComoAsync("603918");
+
+        Assert.Equal(HttpStatusCode.Created, (await c.PostAsJsonAsync("/utilizadores", new PedidoNovoUtilizador("topo", "No Limite", 99999))).StatusCode);
+        var r = await c.PostAsJsonAsync("/utilizadores", new PedidoNovoUtilizador("semnumero", "Sem Numero"));
+
+        Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
+        Assert.Contains("tecno_esgotado", await r.Content.ReadAsStringAsync());
+        Assert.DoesNotContain((await c.GetFromJsonAsync<List<UtilizadorApp>>("/utilizadores"))!, u => u.Codigo == "semnumero");
+    }
 }
