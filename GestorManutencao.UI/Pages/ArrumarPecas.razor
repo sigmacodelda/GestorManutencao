@@ -2,6 +2,8 @@
 @inject IPecasService Pecas
 @inject SessaoService Sessao
 @inject ToastService Toast
+@inject IPreferenciasLeitura Preferencias
+@inject IDetetorLeitor Detetor
 
 <PageTitle>Arrumação · Gestor de Manutenção</PageTitle>
 
@@ -17,73 +19,61 @@
     }
     else
     {
-        <p class="ficha-texto">Pique a peça e a etiqueta do local, por qualquer ordem.</p>
-        <LeitorEtiquetas @ref="_leitor" OnLido="LerAsync" TextoCamara="Picar com a câmara" />
+        @if (BarraCamara)
+        {
+            @* Botão da câmara sempre à mão no topo, como na ficha. *@
+            <div class="picar-topo">
+                <button type="button" id="picar-camara" class="btn btn-secundario" disabled="@_a_gravar" @onclick="PicarComCameraAsync">
+                    <Icone Nome="camera" /><span>Picar com a câmara</span>
+                </button>
+            </div>
+        }
+        <p class="passo-atual" role="status">Passo @Passo de 3 · @TextoPasso</p>
+
+        @* Mesma escolha da ficha (picar ou pesquisar, por qualquer ordem); aqui o lugar é o destino da peça. *@
+        <PecaLugar @ref="_pl" IdCampo="arrumar-peca" LugarDestino="true" OnMudou="AoMudarAsync" SemBotaoCamara="BarraCamara" />
         <p class="campo-erro" role="alert">@_erro</p>
 
-        <h2 class="ficha-texto">Peça</h2>
-        @if (_estado.Peca is null || _peca is null)
+        @if (_esc?.Lugares is { } lug && _esc.Ref is not null)
         {
-            <PecaPesquisa @ref="_pesquisa" SemLeitor="true" IdCampo="arrumar-peca" OnEscolher="EscolherAsync" />
-        }
-        else
-        {
-            <div class="intervencao">
-                <span class="intervencao-titulo">@_peca.Ref @_peca.Design</span>
-                <span class="intervencao-desc">Stock @_peca.Stock.ToString("0.###") · No buffer (por arrumar) @(_lug?.PorArrumar.ToString("0.###") ?? "?")</span>
-                <button type="button" class="btn btn-secundario" @onclick="LimparPeca"><Icone Nome="x" /><span>Mudar de peça</span></button>
-            </div>
-            @if (_lug is { PorArrumar: <= 0 })
+            <p class="intervencao-desc">Stock @lug.Stock.ToString("0.###") · À espera de arrumar @lug.PorArrumar.ToString("0.###")</p>
+            @if (lug.PorArrumar <= 0)
             {
-                <p class="estado-lista" role="status">Esta peça não tem nada no buffer: só se arruma o que lá está.</p>
+                <p class="estado-lista" role="status">Esta peça não tem nada à espera de arrumar: só se arruma o que lá está.</p>
+            }
+            @if (_esc.Local is null && lug.Lugares.Count > 0)
+            {
+                <h2 class="ficha-texto">Ou escolha um lugar da peça</h2>
+                <ul class="lista-intervencoes">
+                    @foreach (var l in lug.Lugares)
+                    {
+                        <li>
+                            <button type="button" class="intervencao" @onclick="() => EscolherLugarAsync(l)">
+                                <span class="intervencao-titulo">@l.Texto</span>
+                                <span class="intervencao-desc">@l.Qtt.ToString("0.###") unidades</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
             }
         }
 
-        <h2 class="ficha-texto">Local</h2>
-        @if (_estado.Local is { } local)
-        {
-            <div class="intervencao">
-                <span class="intervencao-titulo">@local</span>
-                <button type="button" class="btn btn-secundario" @onclick="LimparLocal"><Icone Nome="x" /><span>Mudar de local</span></button>
-            </div>
-        }
-        else
-        {
-            <p class="estado-lista" role="status">Pique a etiqueta do local@(_lug is { Lugares.Count: > 0 } ? " ou escolha um lugar da peça" : "").</p>
-        }
-
-        @if (_lug is { Lugares.Count: > 0 } && _estado.Peca is not null)
-        {
-            <h2 class="ficha-texto">Lugares da peça</h2>
-            <ul class="lista-intervencoes">
-                @foreach (var l in _lug.Lugares)
-                {
-                    <li>
-                        <button type="button" class="intervencao" @onclick="() => EscolherLugar(l)">
-                            <span class="intervencao-titulo">@l.Texto</span>
-                            <span class="intervencao-desc">@l.Qtt.ToString("0.###") unidades</span>
-                        </button>
-                    </li>
-                }
-            </ul>
-        }
-
-        @if (_estado.Completo && _lug is { PorArrumar: > 0 })
+        @if (Passo == 3 && _esc?.Lugares is { PorArrumar: > 0 } pa)
         {
             <form class="formulario" @onsubmit="ArrumarAsync" novalidate>
                 <div class="campo">
                     <label for="arrumar-qtt">Quantidade a arrumar</label>
                     <input id="arrumar-qtt" type="text" inputmode="decimal" autocomplete="off" maxlength="12" @bind="_qttTexto" @bind:event="oninput" />
                 </div>
-                @if (_lug is not null && LogicaPicagem.LerQuantidade(_qttTexto, out var proposta) && proposta > _lug.PorArrumar)
+                @if (LogicaPicagem.LerQuantidade(_qttTexto, out var proposta) && proposta > pa.PorArrumar)
                 {
-                    <p class="campo-erro" role="alert">Só pode arrumar o que está no buffer (@_lug.PorArrumar.ToString("0.###")).</p>
+                    <p class="campo-erro" role="alert">Só pode arrumar o que está à espera de arrumar (@pa.PorArrumar.ToString("0.###")).</p>
                 }
                 <button type="submit" class="btn btn-primario btn-grande" disabled="@_a_gravar"><Icone Nome="check" /><span>@(_a_gravar ? "A gravar…" : "Arrumar")</span></button>
             </form>
         }
 
-        @if (_ultimo is not null && _estado.Peca is null)
+        @if (_ultimo is not null && _esc?.Ref is null)
         {
             <h2 class="ficha-texto">Lugares atualizados · @_ultimo.Ref</h2>
             <ul class="lista-intervencoes">
@@ -95,111 +85,75 @@
                     </li>
                 }
             </ul>
-            <p class="estado-lista" role="status">Por arrumar: @_ultimo.PorArrumar.ToString("0.###")</p>
+            <p class="estado-lista" role="status">À espera de arrumar: @_ultimo.PorArrumar.ToString("0.###")</p>
         }
     }
 </section>
 
 @code {
-    private EstadoPicagem _estado = new(null, null);
-    private Peca? _peca;
-    private LocalizacoesPeca? _lug, _ultimo;
+    private PecaLugar? _pl;
+    private EscolhaPecaLugar? _esc;
+    private LocalizacoesPeca? _ultimo;
     private string _erro = "", _qttTexto = "";
     private bool _a_gravar;
-    private LeitorEtiquetas? _leitor;
-    private PecaPesquisa? _pesquisa;
-    private readonly SemaphoreSlim _fila = new(1, 1);
 
-    // Leituras seguidas (PDA) esperam pela anterior.
-    private async Task LerAsync(string codigo)
+    private int Passo => _esc?.Ref is null ? 1 : _esc.Local is null ? 2 : 3;
+    private string TextoPasso => Passo switch
     {
-        await _fila.WaitAsync();
-        try
+        1 => "pique a etiqueta da peça ou procure-a",
+        2 => "pique a etiqueta do lugar de destino",
+        _ => "indique a quantidade"
+    };
+
+    // Só com a câmara há botão (no leitor industrial a picada vem do campo escondido).
+    private bool BarraCamara => !Sessao.EQualidade && LogicaLeitura.ModoEfetivo(Preferencias.Modo, Detetor.PareceLeitorIndustrial) == ModoLeitura.Camara;
+
+    private Task PicarComCameraAsync() => _pl?.PicarComCameraAsync() ?? Task.CompletedTask;
+
+    // Mudou a escolha: peça nova propõe arrumar tudo o que está à espera.
+    private Task AoMudarAsync(EscolhaPecaLugar e)
+    {
+        var pecaNova = e.Ref is not null && e.Ref != _esc?.Ref;
+        _esc = e;
+        if (pecaNova)
         {
             _erro = "";
-            if (LogicaPicagem.Classificar(codigo) == TipoLeitura.Local) { _estado = _estado.Aplicar(codigo); return; }
-            try
-            {
-                if (await Pecas.ObterPorCodigoAsync(codigo) is { } p) await CarregarPecaAsync(p);
-                else _erro = LogicaEcraPecas.MensagemSemResultado(codigo);
-            }
-            catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível ler a peça. Tente outra vez."); }
+            _ultimo = null;
+            _qttTexto = e.Lugares is { PorArrumar: > 0 } l ? LogicaPicagem.TextoQuantidade(l.PorArrumar) : "";
         }
-        finally { _fila.Release(); StateHasChanged(); }
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
-    private async Task EscolherAsync(Peca p)
-    {
-        await _fila.WaitAsync();
-        try
-        {
-            _erro = "";
-            try { await CarregarPecaAsync(p); }
-            catch (Exception e) { _erro = MensagensGestao.Para(e, "Não foi possível ler a peça. Tente outra vez."); }
-        }
-        finally { _fila.Release(); }
-    }
+    private Task EscolherLugarAsync(Lugar l) => _pl?.DefinirLugarAsync(l) ?? Task.CompletedTask;
 
-    private async Task CarregarPecaAsync(Peca p)
-    {
-        var lug = await Pecas.LugaresAsync(p.Ref);
-        if (lug is null) { _erro = "Peça não encontrada."; return; }
-        _peca = p; // só detalhe para mostrar; a peça "ativa" é _estado.Peca
-        _lug = lug;
-        _ultimo = null;
-        _estado = _estado with { Peca = p.Ref };
-        _qttTexto = lug.PorArrumar > 0 ? LogicaPicagem.TextoQuantidade(lug.PorArrumar) : "";
-    }
-
-    private async Task EscolherLugar(Lugar l)
-    {
-        _estado = _estado.Aplicar("LOC-" + l.Texto);
-        await DevolverFocoAsync();
-    }
-
-    private async Task LimparPeca()
-    {
-        _peca = null;
-        _lug = null;
-        _estado = _estado with { Peca = null };
-        await DevolverFocoAsync();
-    }
-
-    private async Task LimparLocal()
-    {
-        _estado = _estado with { Local = null };
-        await DevolverFocoAsync();
-    }
-
-    // Passa pela mesma fila das leituras: uma picada que chegue durante o POST espera e aplica-se
-    // depois da limpeza, em vez de ser apagada por ela.
+    // A gravação corre na fila das leituras do componente: uma picada que chegue durante o envio
+    // espera e aplica-se depois da limpeza, em vez de ser apagada por ela.
     private async Task ArrumarAsync()
     {
-        if (_a_gravar || !_estado.Completo || _estado.Peca is null) return;
+        if (_a_gravar || _pl is null || _esc is not { Ref: not null, Local: not null }) return;
         _erro = "";
-        if (!LogicaPicagem.LerQuantidade(_qttTexto, out var qtt))
-        {
-            _erro = "Quantidade inválida: use um número positivo, com vírgula ou ponto e no máximo 3 casas decimais.";
-            return;
-        }
-        if (_lug is null || qtt > _lug.PorArrumar)
-        {
-            _erro = $"Só pode arrumar o que está no buffer ({_lug?.PorArrumar.ToString("0.###") ?? "?"}).";
-            return;
-        }
+        var refPeca = _esc.Ref;
         _a_gravar = true;
-        var gravou = false;
-        await _fila.WaitAsync();
         try
         {
-            var refPeca = _estado.Peca!;
-            _ultimo = await Pecas.ArrumarAsync(refPeca, _estado.Local!, qtt);
-            Toast.Sucesso($"Arrumado: {LogicaPicagem.TextoQuantidade(qtt)} de {refPeca}");
-            _peca = null;
-            _lug = null;
-            _estado = new(null, null);
-            _qttTexto = "";
-            gravou = true;
+            await _pl.GravarAsync(async esc =>
+            {
+                if (!LogicaPicagem.LerQuantidade(_qttTexto, out var qtt))
+                {
+                    _erro = "Quantidade inválida: use um número positivo, com vírgula ou ponto e no máximo 3 casas decimais.";
+                    return false;
+                }
+                if (esc.Lugares is not { } lug || qtt > lug.PorArrumar)
+                {
+                    _erro = $"Só pode arrumar o que está à espera de arrumar ({esc.Lugares?.PorArrumar.ToString("0.###") ?? "?"}).";
+                    return false;
+                }
+                _ultimo = await Pecas.ArrumarAsync(esc.Ref!, esc.Local!, qtt);
+                Toast.Sucesso($"Arrumado: {LogicaPicagem.TextoQuantidade(qtt)} de {esc.Ref}");
+                _qttTexto = "";
+                return true;
+            });
         }
         catch (Exception e) when (e is InvalidOperationException or HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized })
         {
@@ -208,20 +162,11 @@
         catch
         {
             // Falha sem resposta clara (rede, tempo, 503): o POST pode ter gravado; não se repete às cegas.
+            // Mostra o que está realmente no armazém e obriga a voltar a escolher.
             _erro = "Confirme os lugares antes de repetir.";
-            try { _lug = await Pecas.LugaresAsync(_estado.Peca!) ?? _lug; } catch { }
+            try { _ultimo = await Pecas.LugaresAsync(refPeca!) ?? _ultimo; } catch { }
+            await _pl.LimparAsync();
         }
-        finally { _a_gravar = false; _fila.Release(); }
-        if (gravou) await DevolverFocoAsync();
-    }
-
-    // Em modo Leitor o foco volta ao campo escondido (sem teclado virtual); senão à pesquisa.
-    // Falha de foco nunca é erro de arrumação.
-    private async Task DevolverFocoAsync()
-    {
-        StateHasChanged();
-        await Task.Yield();
-        if (_leitor is not null) await _leitor.FocarAsync();
-        if (_pesquisa is not null) await _pesquisa.FocarAsync();
+        finally { _a_gravar = false; }
     }
 }

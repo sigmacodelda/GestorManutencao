@@ -722,7 +722,7 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
     padding-top: calc(var(--esp-2) + env(safe-area-inset-top));
     background: var(--superficie-2); color: var(--texto); border-bottom: 2px solid var(--primario); font-size: .9375rem; font-weight: 600;
 }
-.faixa-estado-item { display: inline-flex; align-items: center; gap: var(--esp-2); min-height: 32px; color: inherit; text-decoration: none; }
+.faixa-estado-item { display: inline-flex; align-items: center; gap: var(--esp-2); min-height: 44px; color: inherit; text-decoration: none; }
 .faixa-estado-item .icone { width: 20px; height: 20px; color: var(--primario); }
 .faixa-estado a.faixa-estado-item { text-decoration: underline; min-height: 44px; }
 .faixa-estado-rever .icone { color: var(--erro); }
@@ -815,3 +815,25 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 /* Campo do leitor (PDA): fora do ecrã mas focável (com display:none não receberia as teclas). */
 .leitor-escondido { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; }
 .leitor-teste { font-size: 1.25rem; font-weight: 700; word-break: break-all; }
+
+/* Linha do material: uma ação principal visível e o resto no menu "⋯". */
+.material-acoes { flex: 1 1 100%; display: flex; align-items: center; justify-content: flex-end; gap: var(--esp-2); flex-wrap: wrap; }
+.menu-linha[open] { flex: 1 1 100%; }
+.btn-acao { min-height: 44px; padding-inline: var(--esp-3); border-radius: 999px; border: 2px solid var(--primario); background: transparent; color: var(--primario); font: 700 .9375rem var(--fonte-corpo); cursor: pointer; }
+.btn-acao.acao-lugar { border-color: var(--erro); color: var(--erro); }
+.btn-acao:disabled { opacity: .5; cursor: default; }
+.menu-linha { position: relative; }
+.menu-linha > summary { list-style: none; display: grid; place-items: center; min-width: 44px; min-height: 44px; border-radius: 12px; color: var(--primario); cursor: pointer; }
+.menu-linha > summary::-webkit-details-marker { display: none; }
+.menu-itens { position: static; margin-top: var(--esp-2); width: 100%; display: grid; background: var(--superficie); border: 1px solid var(--borda-suave); border-radius: var(--raio); box-shadow: var(--painel-sombra); padding: var(--esp-1); }
+.menu-itens .btn-texto { display: flex; align-items: center; gap: var(--esp-2); width: 100%; justify-content: flex-start; align-self: stretch; }
+.menu-itens .btn-texto.perigo { color: var(--erro); }
+.confirma-tirar { flex: 1 1 100%; display: flex; align-items: center; gap: var(--esp-2); }
+
+/* Grupos da página inicial e passo atual da Arrumação. */
+.grupo-inicio { margin: var(--esp-4) 0 var(--esp-2); font: 700 .8125rem var(--fonte-titulos); letter-spacing: .06em; text-transform: uppercase; color: var(--texto-suave); }
+.passo-atual { margin: 0; font-weight: 700; color: var(--primario); }
+
+/* Cartões de escolha: uma coluna em ecrãs estreitos (o botão não aperta o título) e botões de lista a toda a largura. */
+.peca-lugar > .intervencao { grid-template-columns: 1fr; justify-items: start; }
+.lista-intervencoes > li > button.intervencao { width: 100%; text-align: left; }

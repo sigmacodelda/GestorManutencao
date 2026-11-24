@@ -196,7 +196,8 @@
                                 <span class="intervencao-titulo">@m.Design</span>
                                 @if (ClassificacaoErros.IdLocal(m.Id)) { <span class="chip chip-pendente">Por enviar</span> }
                                 <br />
-                                <span class="intervencao-desc">@m.Qtt.ToString("0.###") × @m.Epv.ToString("0.00") € = @m.Custo.ToString("0.00") €</span>
+                                @* O preço só é para o supervisor: o técnico vê apenas a quantidade. *@
+                                <span class="intervencao-desc">@(VerPreco ? $"{m.Qtt:0.###} × {m.Epv:0.00} € = {m.Custo:0.00} €" : $"{m.Qtt:0.###} unid.")</span>
                                 @if (!string.IsNullOrEmpty(m.Ref))
                                 {
                                     <br />
@@ -208,21 +209,51 @@
                                     <span class="campo-aviso" role="status">@aviso</span>
                                 }
                             </span>
-                            @if (m.FaltaLugar || (!string.IsNullOrEmpty(m.Ref) && !ClassificacaoErros.IdLocal(m.Id) && _d is { PodeEditar: true }))
-                            {
-                                <button type="button" class="btn-texto" aria-label="@(m.SaidaDada ? "Mudar" : "Escolher") o lugar de @m.Design" disabled="@_a_gravar" @onclick="() => PedirLugarAsync(m)">@(m.SaidaDada ? "Mudar o lugar" : "Escolher o lugar")</button>
+                            @{
+                                var comRef = !string.IsNullOrEmpty(m.Ref) && !ClassificacaoErros.IdLocal(m.Id) && _d is { PodeEditar: true };
+                                var daSaida = comRef && !m.SaidaDada && !m.FaltaLugar;
+                                var podeTirar = _i.Estado == EstadoIntervencao.EmCurso;
+                                var podeEditar = _d is { PodeEditar: true } && !ClassificacaoErros.IdLocal(m.Id);
+                                var temMenu = podeEditar || podeTirar || (comRef && !m.FaltaLugar);
                             }
-                            @if (!string.IsNullOrEmpty(m.Ref) && !m.SaidaDada && !m.FaltaLugar && !ClassificacaoErros.IdLocal(m.Id) && _d is { PodeEditar: true })
+                            @* Uma ação principal visível, com a cor do estado; o resto fica no menu "⋯". *@
+                            <div class="material-acoes">
+                                @if (m.FaltaLugar)
+                                {
+                                    <button type="button" class="btn-acao acao-lugar" aria-label="Escolher o lugar de @m.Design" disabled="@_a_gravar" @onclick="() => PedirLugarAsync(m)">Escolher o lugar</button>
+                                }
+                                else if (daSaida)
+                                {
+                                    <button type="button" class="btn-acao" aria-label="Dar saída da peça de @m.Design" disabled="@_a_gravar" @onclick="() => RepetirSaidaAsync(m)">Dar saída da peça</button>
+                                }
+                                @if (temMenu)
+                                {
+                                    <details class="menu-linha" open="@(_menuId == m.Id)">
+                                        <summary aria-label="Mais ações de @m.Design" @onclick="() => AlternarMenu(m.Id)" @onclick:preventDefault><Icone Nome="ellipsis" /></summary>
+                                        <div class="menu-itens">
+                                            @if (comRef && !m.FaltaLugar)
+                                            {
+                                                <button type="button" class="btn-texto" aria-label="@(m.SaidaDada ? "Mudar" : "Escolher") o lugar de @m.Design" disabled="@_a_gravar" @onclick="() => { _menuId = null; return PedirLugarAsync(m); }">@(m.SaidaDada ? "Mudar o lugar" : "Escolher o lugar")</button>
+                                            }
+                                            @if (podeEditar)
+                                            {
+                                                <button type="button" class="btn-texto" aria-label="Editar @m.Design" disabled="@_a_gravar" @onclick="() => { _menuId = null; return EditarMaterialAsync(m); }"><Icone Nome="pencil" /><span>Editar</span></button>
+                                            }
+                                            @if (podeTirar)
+                                            {
+                                                <button type="button" class="btn-texto perigo" aria-label="Tirar @m.Design" disabled="@_a_gravar" @onclick="() => { _menuId = null; _apagarId = m.Id; }"><Icone Nome="trash" /><span>Tirar</span></button>
+                                            }
+                                        </div>
+                                    </details>
+                                }
+                            </div>
+                            @if (_apagarId == m.Id)
                             {
-                                <button type="button" class="btn-texto" aria-label="Repetir saída de @m.Design" disabled="@_a_gravar" @onclick="() => RepetirSaidaAsync(m)">Repetir saída</button>
-                            }
-                            @if (_d is { PodeEditar: true } && !ClassificacaoErros.IdLocal(m.Id))
-                            {
-                                <button type="button" class="btn-texto" aria-label="Editar @m.Design" disabled="@_a_gravar" @onclick="() => EditarMaterialAsync(m)"><Icone Nome="wrench" /></button>
-                            }
-                            @if (_i.Estado == EstadoIntervencao.EmCurso)
-                            {
-                                <button type="button" class="btn-texto" aria-label="Tirar @m.Design" disabled="@_a_gravar" @onclick="() => ApagarMaterialAsync(m)"><Icone Nome="trash" /></button>
+                                @* Dois toques: tirar o material devolve a peça ao stock, não se deve fazer sem querer. *@
+                                <div class="confirma-tirar">
+                                    <button type="button" class="btn-acao acao-lugar" aria-label="Confirmar: tirar @m.Design" disabled="@_a_gravar" @onclick="() => ApagarMaterialAsync(m)">Tirar mesmo?</button>
+                                    <button type="button" class="btn-texto" @onclick="() => _apagarId = null">Não</button>
+                                </div>
                             }
                             @if (_escolhaItem is { } escolha && escolha.MaterialId == m.Id)
                             {
@@ -268,10 +299,13 @@
                                 <label for="e-qtt">Quantidade</label>
                                 <input id="e-qtt" type="number" inputmode="decimal" step="any" min="0" @ref="_eQttCampo" @bind="_eQtt" @bind:after="RecalcularAvisoEditado" />
                             </div>
-                            <div class="campo">
-                                <label for="e-epv">Preço (€)</label>
-                                <input id="e-epv" type="number" inputmode="decimal" step="any" min="0" @bind="_eEpv" />
-                            </div>
+                            @if (VerPreco)
+                            {
+                                <div class="campo">
+                                    <label for="e-epv">Preço (€)</label>
+                                    <input id="e-epv" type="number" inputmode="decimal" step="any" min="0" @bind="_eEpv" />
+                                </div>
+                            }
                         </div>
                         <p class="campo-erro" role="alert">@_erroMaterial</p>
                         <button type="submit" class="btn btn-secundario" disabled="@_a_gravar"><Icone Nome="check" /><span>Guardar material</span></button>
@@ -288,6 +322,10 @@
                         }
                     </div>
                     <form class="formulario" @onsubmit="AdicionarMaterialAsync" novalidate>
+                        @if (LogicaFichaPeca.LinhaDaPeca(_materiais, _esc?.Ref) is { } jaTem)
+                        {
+                            <p class="campo-aviso" role="status">Já tem @jaTem.Qtt.ToString("0.###") unid. de @jaTem.Design no material: a quantidade nova soma-se a essa linha.</p>
+                        }
                         @if (_avisoStock is not null) { <p class="campo-aviso" role="status">@_avisoStock</p> }
                         <div class="material-novo">
                             <div class="campo">
@@ -299,10 +337,14 @@
                                 <label for="qtt">Quantidade</label>
                                 <input id="qtt" type="number" inputmode="decimal" step="any" min="0" @ref="_qttCampo" @bind="_qtt" @bind:after="RecalcularAviso" />
                             </div>
-                            <div class="campo">
-                                <label for="epv">Preço (€, se souber)</label>
-                                <input id="epv" type="number" inputmode="decimal" step="any" min="0" @bind="_epv" />
-                            </div>
+                            @* Com peça escolhida o preço vem dela; sem peça só o supervisor o indica. *@
+                            @if (VerPreco && _esc?.Peca is null)
+                            {
+                                <div class="campo">
+                                    <label for="epv">Preço (€, se souber)</label>
+                                    <input id="epv" type="number" inputmode="decimal" step="any" min="0" @bind="_epv" />
+                                </div>
+                            }
                         </div>
                         <p class="campo-erro" role="alert">@_erroMaterial</p>
                         <button type="submit" class="btn btn-secundario" disabled="@_a_gravar"><Icone Nome="plus" /><span>Juntar material</span></button>
@@ -352,7 +394,12 @@
 
     private Intervencao? _i;
     private string _feito = "", _erro = "", _material = "", _erroMaterial = "";
-    private decimal? _qtt, _epv;
+    // Quantidade já a 1: o caso comum é uma só peça (o aviso de stock também assume 1).
+    private decimal? _qtt = 1, _epv;
+    private string? _apagarId, _menuId;
+    private void AlternarMenu(string id) => _menuId = _menuId == id ? null : id;
+    // Só o supervisor vê preços do material (e só se o servidor não ocultar os custos); o técnico nunca os vê.
+    private bool VerPreco => Sessao.Modo == ModoTrabalho.Supervisor && _d is { CustosOcultos: false };
     private IReadOnlyList<Material> _materiais = [];
     private IReadOnlyList<Foto> _fotos = [];
     private readonly Dictionary<string, string> _miniaturas = [];
@@ -513,7 +560,7 @@
         _matEditId = m.Id; _eDesign = m.Design; _eQtt = m.Qtt; _eEpv = m.Epv; _erroMaterial = "";
         // A escolha de juntar sai do ecrã enquanto se edita (só um leitor de cada vez): limpa-se tudo para não ficar um material
         // com o nome da peça mas sem peça nem lugar.
-        _esc = null; _avisoStock = null; _material = ""; _qtt = _epv = null;
+        _esc = null; _avisoStock = null; _material = ""; _qtt = 1; _epv = null;
         _eRef = m.Ref ?? ""; _escEdit = null; _eAvisoStock = null; _escolhaItem = null; _avisoMaterial = null;
     }
 
@@ -672,6 +719,7 @@
             await Intervencoes.DefinirLugarMaterialAsync(Id, m.Id, LogicaFichaPeca.EtiquetaDe(l));
             _escolhaItem = null;
             await CarregarMateriaisAsync();
+            Toast.Sucesso($"Lugar de {m.Design}: {l.Texto}");
         }
         catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível guardar o lugar. Tente outra vez."); }
         finally { _a_gravar = false; }
@@ -689,6 +737,7 @@
             if (!string.IsNullOrWhiteSpace(guardado.AvisoStock)) _avisosMat[guardado.Id] = guardado.AvisoStock;
             _escolhaItem = null;
             await RecarregarAsync();
+            Toast.Sucesso($"Lugar de {m.Design}: {l.Texto}");
         }
         catch (EscolhaLugarException ex) { _erroMaterial = ex.Message; }
         catch (Exception ex) { _erroMaterial = MensagensGestao.Para(ex, "Não foi possível mudar o lugar. Tente outra vez."); await RecarregarMateriaisSeguroAsync(); }
@@ -787,7 +836,7 @@
                     : await Intervencoes.EditarMaterialAsync(Id, existente.Id, existente.Design, existente.Qtt + _qtt!.Value, existente.Epv, existente.Ref, esc.Local ?? "");
                 if (existente is not null) _avisoMaterial = $"{existente.Design} já estava no material: somou-se a quantidade à linha existente.";
                 if (!string.IsNullOrWhiteSpace(criado.AvisoStock)) _avisosMat[criado.Id] = criado.AvisoStock;
-                _material = ""; _qtt = _epv = null; _avisoStock = null; _esc = null;
+                _material = ""; _qtt = 1; _epv = null; _avisoStock = null; _esc = null;
                 return true;
             }
             if (_plAdd is null) await Gravar(new EscolhaPecaLugar(new(null, null), null, null)); else await _plAdd.GravarAsync(Gravar);
@@ -806,6 +855,7 @@
 
     private async Task ApagarMaterialAsync(Material m)
     {
+        _apagarId = null;
         _a_gravar = true; _erroMaterial = ""; _avisoMaterial = null;
         try
         {

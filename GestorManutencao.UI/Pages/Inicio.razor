@@ -62,37 +62,62 @@
             </div>
         }
 
-        <ul class="mosaicos">
-            @if (qualidade)
-            {
+        @if (qualidade)
+        {
+            <ul class="mosaicos">
                 <Mosaico Icone="shield-check" Titulo="Qualidade" Href="qualidade" Descricao="Intervenções validadas à espera de conclusão" Contagem="_porConcluir" RotuloContagem="por concluir" />
-            }
-            else if (supervisor)
-            {
+            </ul>
+        }
+        else if (supervisor)
+        {
+            <h2 class="grupo-inicio">Trabalho do dia</h2>
+            <ul class="mosaicos">
                 <Mosaico Icone="calendar" Titulo="Planeadas" Href="planeadas" Descricao="Intervenções por atribuir e em atraso" Contagem="_menu?.PlaneadasAtrasadas ?? 0" RotuloContagem="em atraso" />
-                <Mosaico Icone="shield-check" Titulo="Validação" Href="validacao" Descricao="Fichas concluídas a validar" Contagem="_menu?.PorValidar ?? 0" RotuloContagem="por validar" />
-                <Mosaico Icone="plus" Titulo="Nova ficha" Href="nova-ficha" Descricao="Criar uma ficha de intervenção" />
+                <Mosaico Icone="badge-check" Titulo="Validação" Href="validacao" Descricao="Fichas concluídas a validar" Contagem="_menu?.PorValidar ?? 0" RotuloContagem="por validar" />
+                <Mosaico Icone="file-plus" Titulo="Nova ficha" Href="nova-ficha" Descricao="Criar uma ficha de intervenção" />
+                <Mosaico Icone="list" Titulo="Todas as fichas" Href="fichas" Descricao="Pesquisar fichas de qualquer estado" />
+            </ul>
+            <h2 class="grupo-inicio">Equipamentos</h2>
+            <ul class="mosaicos">
                 <Mosaico Icone="factory" Titulo="Equipamentos" Href="equipamentos" Descricao="Fichas, histórico e instruções de cada equipamento" />
                 <Mosaico Icone="plus" Titulo="Novo equipamento" Href="equipamentos/novo" Descricao="Registar um equipamento novo" />
                 <Mosaico Icone="clock" Titulo="Periodicidades" Href="periodicidades" Descricao="Unidade, intervalo e aviso" />
+            </ul>
+            <h2 class="grupo-inicio">Armazém</h2>
+            <ul class="mosaicos">
                 <Mosaico Icone="package" Titulo="Arrumação" Href="pecas/arrumar" Descricao="Pôr as peças nos seus lugares do armazém" />
                 <Mosaico Icone="camera" Titulo="Leitor" Href="leitor" Descricao="Câmara ou leitor de etiquetas" />
-                <Mosaico Icone="list" Titulo="Todas as fichas" Href="fichas" Descricao="Pesquisar fichas de qualquer estado" />
+            </ul>
+            <h2 class="grupo-inicio">Gestão</h2>
+            <ul class="mosaicos">
                 <Mosaico Icone="users" Titulo="Equipa" Href="equipa" Descricao="Utilizadores e PINs" />
                 <Mosaico Icone="settings" Titulo="Configuração" Href="configuracao" Descricao="Regras da manutenção" />
-            }
-            else
-            {
+                <Mosaico Icone="pen-line" Titulo="A minha assinatura" Href="assinatura" Descricao="Escrever a assinatura do meu utilizador" />
+                <Mosaico Icone="bell" Titulo="Notificações" Href="notificacoes" Contagem="Notificacoes.NaoLidas"
+                         Descricao="@(Notificacoes.NaoLidas > 0 ? "Tem avisos novos" : "Sem avisos novos")" />
+            </ul>
+        }
+        else
+        {
+            <ul class="mosaicos">
                 <Mosaico Icone="clipboard-list" Titulo="As minhas intervenções" Href="intervencoes" Descricao="O que tenho para fazer hoje" />
                 <Mosaico Icone="triangle-alert" Titulo="Registar avaria" Href="avaria" Descricao="Avisar de um problema no equipamento" />
                 <Mosaico Icone="factory" Titulo="Equipamentos" Href="equipamentos" Descricao="Consultar fichas e histórico" />
+            </ul>
+            <h2 class="grupo-inicio">Armazém</h2>
+            <ul class="mosaicos">
                 <Mosaico Icone="package" Titulo="Arrumação" Href="pecas/arrumar" Descricao="Pôr as peças nos seus lugares do armazém" />
                 <Mosaico Icone="camera" Titulo="Leitor" Href="leitor" Descricao="Câmara ou leitor de etiquetas" />
-            }
-            <Mosaico Icone="pen-line" Titulo="A minha assinatura" Href="assinatura" Descricao="Escrever a assinatura do meu utilizador" />
-            <Mosaico Icone="bell" Titulo="Notificações" Href="notificacoes" Contagem="Notificacoes.NaoLidas"
-                     Descricao="@(Notificacoes.NaoLidas > 0 ? "Tem avisos novos" : "Sem avisos novos")" />
-        </ul>
+            </ul>
+        }
+        @if (!supervisor)
+        {
+            <ul class="mosaicos">
+                <Mosaico Icone="pen-line" Titulo="A minha assinatura" Href="assinatura" Descricao="Escrever a assinatura do meu utilizador" />
+                <Mosaico Icone="bell" Titulo="Notificações" Href="notificacoes" Contagem="Notificacoes.NaoLidas"
+                         Descricao="@(Notificacoes.NaoLidas > 0 ? "Tem avisos novos" : "Sem avisos novos")" />
+            </ul>
+        }
         @if (_pendentesSaida > 0)
         {
             <ConfirmaSaida Pendentes="_pendentesSaida" Sair="TerminarSessaoAsync" Ficar="() => _pendentesSaida = 0" />

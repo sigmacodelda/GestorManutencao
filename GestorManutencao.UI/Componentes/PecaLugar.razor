@@ -15,7 +15,10 @@
     {
         <div class="intervencao">
             <span class="intervencao-titulo">@_peca.Ref @_peca.Design</span>
-            <span class="intervencao-desc">Stock disponível @_peca.QuantidadeDisponivel.ToString("0.###")@(_peca.QuantidadeDisponivel != _peca.Stock ? $" (stock {_peca.Stock:0.###})" : "")</span>
+            @if (!LugarDestino)
+            {
+                <span class="intervencao-desc">Stock disponível @_peca.QuantidadeDisponivel.ToString("0.###")@(_peca.QuantidadeDisponivel != _peca.Stock ? $" (stock {_peca.Stock:0.###})" : "")</span>
+            }
             <button type="button" class="btn-texto" @onclick="LimparPeca"><Icone Nome="x" /><span>Mudar de peça</span></button>
         </div>
     }
@@ -77,7 +80,7 @@
             </ul>
         </ModalEscolha>
     }
-    @if (_estado.Completo)
+    @if (_estado.Completo && !LugarDestino)
     {
         <p class="estado-lista" role="status">Peça e lugar escolhidos. Indique a quantidade.</p>
     }
@@ -91,6 +94,12 @@
     [Parameter] public bool SemBotaoCamara { get; set; }
     // Edição de um material que já tem peça: picar só o lugar corrige o lugar, sem perguntar pela peça.
     [Parameter] public bool PecaJaLigada { get; set; }
+    // Arrumação: o lugar é o destino da peça, não aquele de onde saiu. Não se deriva lugar da peça nem se propõem
+    // peças ao picar um lugar; só se guardam a peça e o lugar picados.
+    [Parameter] public bool LugarDestino { get; set; }
+
+    // Atalho da página (lugar da lista da peça).
+    public async Task DefinirLugarAsync(Lugar l) => await EscolherLugarAsync(l);
     // Material que a ficha já tem: ao picar só o lugar, as peças por dar são candidatas ("É este").
     [Parameter] public IReadOnlyList<Material> MaterialDaFicha { get; set; } = [];
     [Parameter] public EventCallback<(Material Linha, string Local)> OnLinhaEscolhida { get; set; }
@@ -193,7 +202,7 @@
             {
                 _sel = _sel.PicarLocal(codigo);
                 // Sem peça escolhida: o lugar diz que peça é (uma só escolhe-se; várias, a pessoa decide num modal).
-                if (_estado.Peca is null && !PecaJaLigada) await ProporPecasDoLugarAsync(codigo);
+                if (_estado.Peca is null && !PecaJaLigada && !LugarDestino) await ProporPecasDoLugarAsync(codigo);
             }
             else
             {
@@ -278,8 +287,8 @@
         catch (Exception) { _erro = "Não foi possível ver os lugares da peça. Pode juntar na mesma: pede-se o lugar se for preciso."; }
         _peca = p;
         _lug = lug;
-        _sel = _sel.EscolherPeca(p.Ref, lug);
-        _lugares = LogicaFichaPeca.ComStock(lug);
+        _sel = LugarDestino ? new SelecaoPecaLugar(_sel.Estado with { Peca = p.Ref }, _sel.Origem) : _sel.EscolherPeca(p.Ref, lug);
+        _lugares = LugarDestino ? [] : LogicaFichaPeca.ComStock(lug);
         // Um único lugar já ficou escolhido: não há lista para mostrar.
         if (_lugares.Count <= 1) _lugares = [];
     }
@@ -314,7 +323,7 @@
             _sel = _sel.LimparLocal();
             _pecasLugar = [];
             // Voltar a escolher: se a peça tem vários lugares a lista reaparece.
-            if (_lug is not null && LogicaFichaPeca.ComStock(_lug).Count > 1) _lugares = LogicaFichaPeca.ComStock(_lug);
+            if (!LugarDestino && _lug is not null && LogicaFichaPeca.ComStock(_lug).Count > 1) _lugares = LogicaFichaPeca.ComStock(_lug);
         }
         finally { _fila.Release(); }
         await NotificarAsync(refocar: true);
