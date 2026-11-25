@@ -17,7 +17,15 @@
             <span class="intervencao-titulo">@_peca.Ref @_peca.Design</span>
             @if (!LugarDestino)
             {
-                <span class="intervencao-desc">Stock disponível @_peca.QuantidadeDisponivel.ToString("0.###")@(_peca.QuantidadeDisponivel != _peca.Stock ? $" (stock {_peca.Stock:0.###})" : "")</span>
+                @* Com o lugar escolhido o que interessa é o que lá está; o total da peça fica ao lado. *@
+                @if (QuantidadeNoLugar() is { } noLugar)
+                {
+                    <span class="intervencao-desc">Neste lugar @LogicaPicagem.TextoUnidades(noLugar) · stock total @_peca.QuantidadeDisponivel.ToString("0.###")@(_peca.QuantidadeDisponivel != _peca.Stock ? $" (stock {_peca.Stock:0.###})" : "")</span>
+                }
+                else
+                {
+                    <span class="intervencao-desc">Stock disponível @_peca.QuantidadeDisponivel.ToString("0.###")@(_peca.QuantidadeDisponivel != _peca.Stock ? $" (stock {_peca.Stock:0.###})" : "")</span>
+                }
             }
             <button type="button" class="btn-texto" @onclick="LimparPeca"><Icone Nome="x" /><span>Mudar de peça</span></button>
         </div>
@@ -131,6 +139,15 @@
     private EstadoPicagem _estado => _sel.Estado;
     private Peca? _peca;
     private LocalizacoesPeca? _lug;
+
+    // Quantidade da peça no lugar escolhido (null se ainda não há lugar ou a peça não está lá).
+    private decimal? QuantidadeNoLugar()
+    {
+        var alvo = LogicaFichaPeca.TextoNormalDoLugar(_estado.Local);
+        if (alvo is null || _lug is null) return null;
+        var l = _lug.Lugares.FirstOrDefault(x => LogicaFichaPeca.TextoNormalDoLugar(x.Texto) == alvo);
+        return l is null || l.Qtt <= 0 ? null : l.Qtt;
+    }
     // Lugares com stock para escolher: os da peça, ou os que a API devolveu em 409 escolha_o_lugar.
     private IReadOnlyList<Lugar> _lugares = [];
     // Peças do lugar picado quando ainda não há peça (mais de uma: escolha obrigatória).
