@@ -66,6 +66,11 @@ ficheiroDispositivos = string.IsNullOrWhiteSpace(ficheiroDispositivos)
     : Path.GetFullPath(ficheiroDispositivos, builder.Environment.ContentRootPath);
 builder.Services.AddSingleton<IRepositorioDispositivos>(sp => new RepositorioDispositivosFicheiro(ficheiroDispositivos, sp.GetRequiredService<TimeProvider>(),
     sp.GetRequiredService<ILogger<RepositorioDispositivosFicheiro>>()));
+// Pedidos de devolução dos técnicos: só persistem em ficheiro com a base real (em desenvolvimento e testes vivem em memória).
+var ficheiroPedidos = string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PHCConn")) ? null
+    : Path.Combine(builder.Environment.ContentRootPath, "dados", "pedidos-devolucao.json");
+builder.Services.AddSingleton<IRepositorioPedidosDevolucao>(sp => new RepositorioPedidosDevolucao(sp.GetRequiredService<TimeProvider>(), ficheiroPedidos,
+    sp.GetRequiredService<ILogger<RepositorioPedidosDevolucao>>()));
 var chaveFirebase = builder.Configuration["Push:CaminhoChaveFirebase"];
 if (string.IsNullOrWhiteSpace(chaveFirebase)) builder.Services.AddSingleton<IEnviadorPush, EnviadorPushNulo>();
 else builder.Services.AddSingleton<IEnviadorPush>(sp => new EnviadorPushFirebase(Path.GetFullPath(chaveFirebase, builder.Environment.ContentRootPath),sp.GetRequiredService<IRepositorioDispositivos>(), sp.GetRequiredService<ILogger<EnviadorPushFirebase>>()));

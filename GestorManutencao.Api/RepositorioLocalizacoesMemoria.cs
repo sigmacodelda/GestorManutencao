@@ -1,7 +1,10 @@
 namespace GestorManutencao.Api;
 
-// Um dossier 66 (arrumação): origem em bo.lobs, destino em bo.lobs2 e a linha da peça.
-public sealed record MovimentoArrumacao(int Ndos, string Ref, string Origem, string Destino, decimal Qtt, string Iniciais);
+// Uma linha do dossier 66 (um por dia): origem em bi.lobs, destino em bi.lobs2, a peça e a quantidade.
+public sealed record MovimentoArrumacao(int Ndos, string Ref, string Origem, string Destino, decimal Qtt, string Iniciais)
+{
+    public DateOnly Dia { get; init; } = DateOnly.FromDateTime(DateTime.Today);
+}
 
 // Modo Development e testes: mesmas regras do SQL, sem base. O stock vem da peça do repositório de peças.
 public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IRepositorioLocalizacoes
@@ -13,7 +16,7 @@ public sealed class RepositorioLocalizacoesMemoria(IRepositorioPecas pecas) : IR
     private LugarDto? _buffer;
     private readonly List<MovimentoArrumacao> _movimentos = [];
 
-    // Dossiers 66 criados (no PHC é o trigger que move o stock; aqui o movimento também ajusta os lugares em memória).
+    // Linhas dos dossiers 66 (um dossier por dia: o Dia identifica-o) (no PHC é o trigger que move o stock; aqui o movimento também ajusta os lugares em memória).
     public IReadOnlyList<MovimentoArrumacao> Movimentos { get { lock (_trinco) return _movimentos.ToList(); } }
 
     // Sem buffer por defeito (como u_configman.localentrada vazio); os testes definem-no.

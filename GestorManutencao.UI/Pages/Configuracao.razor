@@ -62,6 +62,11 @@
                 <span class="interruptor-texto">Manutenção externa só conclui com fornecedor e documento</span>
             </label>
             <label class="interruptor">
+                <input type="checkbox" role="switch" @bind="_iniciarSemStock" />
+                <span class="interruptor-trilho" aria-hidden="true"></span>
+                <span class="interruptor-texto">Deixar começar fichas com peças sem stock</span>
+            </label>
+            <label class="interruptor">
                 <input type="checkbox" role="switch" @bind="_comprasFichaInt" />
                 <span class="interruptor-trilho" aria-hidden="true"></span>
                 <span class="interruptor-texto">Contar as compras ligadas nos totais da ficha</span>
@@ -79,7 +84,7 @@
 
 @code {
     private string _antecedencia = "", _erro = "";
-    private bool _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt;
+    private bool _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt, _iniciarSemStock;
     private bool _a_carregar = true, _falhou, _indisponivel, _a_guardar, _guardada;
 
     protected override async Task OnInitializedAsync()
@@ -101,7 +106,7 @@
     {
         _antecedencia = c.Antecedencia.ToString();
         _gerarPlaneadas = c.GerarPlaneadas; _avancaOrdem = c.AvancaOrdem; _validarPropria = c.ValidarPropria;
-        _extExigeDoc = c.ExtExigeDoc; _comprasFichaInt = c.ComprasFichaInt;
+        _extExigeDoc = c.ExtExigeDoc; _comprasFichaInt = c.ComprasFichaInt; _iniciarSemStock = c.IniciarSemStock;
     }
 
     private async Task GuardarAsync()
@@ -113,7 +118,7 @@
         _a_guardar = true;
         try
         {
-            Aplicar(await Intervencoes.GuardarConfiguracaoAsync(new ConfiguracaoManutencao(dias!.Value, _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt)));
+            Aplicar(await Intervencoes.GuardarConfiguracaoAsync(new ConfiguracaoManutencao(dias!.Value, _gerarPlaneadas, _avancaOrdem, _validarPropria, _extExigeDoc, _comprasFichaInt, _iniciarSemStock)));
             Toast.Sucesso("Configuração guardada");
             Nav.NavigateTo("mais");
         }

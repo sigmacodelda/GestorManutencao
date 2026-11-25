@@ -817,7 +817,15 @@ public sealed partial class SqlRepositorioIntervencoes(IConfiguration configurac
 
     public Task GuardarConfiguracaoAsync(ConfigManutencao configuracao, TecnicoAtual supervisor, CancellationToken ct) => Executar(async conn =>
     {
-        await using var cmd = new SqlCommand(SqlGuardarConfiguracao, conn);
+        // iniciarsemstock é um campo do PHC que pode não existir nesta base: só se grava se existir (a leitura da configuração descobre-o).
+        await LerConfiguracaoAsync(conn, ct);
+        var temSemStock = _camposPlano is { IniciarSemStock: true };
+        var sql = !temSemStock ? SqlGuardarConfiguracao
+            : SqlGuardarConfiguracao.Replace("comprasfichaint = @compras,", "comprasfichaint = @compras, iniciarsemstock = @semstock,")
+                                    .Replace("pinmaxtent, comprasfichaint,", "pinmaxtent, comprasfichaint, iniciarsemstock,")
+                                    .Replace("5, @compras,", "5, @compras, @semstock,");
+        await using var cmd = new SqlCommand(sql, conn);
+        if (temSemStock) cmd.Parameters.Add("@semstock", SqlDbType.Bit).Value = configuracao.IniciarSemStock;
         Texto(cmd, "@stamp", 25, Guid.NewGuid().ToString("N")[..25].ToUpperInvariant());
         Numero(cmd, "@antecedencia", configuracao.Antecedencia, 5);
         cmd.Parameters.Add("@gerar", SqlDbType.Bit).Value = configuracao.GerarPlaneadas;

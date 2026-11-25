@@ -30,7 +30,8 @@ public sealed record Intervencao(
     IReadOnlyList<TecnicoFicha>? Adicionais = null,
     int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false,
     bool EmPausa = false, bool PodePausar = false,
-    bool Externa = false, bool TemAssinaturaExterna = false, string? AvisoStock = null)
+    bool Externa = false, bool TemAssinaturaExterna = false, string? AvisoStock = null,
+    string? PedidoDevolucao = null)
 {
     public bool PorFazer => Estado is EstadoIntervencao.Planeada or EstadoIntervencao.EmCurso;
 
@@ -82,7 +83,7 @@ public sealed record FiltroFichas(
 public sealed record PaginaFichas(IReadOnlyList<Intervencao> Itens, bool TemMais);
 
 public sealed record ConfiguracaoManutencao(
-    int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false, bool ExtExigeDoc = true, bool ComprasFichaInt = true);
+    int Antecedencia = 7, bool GerarPlaneadas = true, bool AvancaOrdem = false, bool ValidarPropria = false, bool ExtExigeDoc = true, bool ComprasFichaInt = true, bool IniciarSemStock = false);
 
 public static class RegrasConfiguracao
 {

@@ -85,7 +85,7 @@
                         var foraDePrazo = f.ForaDePrazo(_hoje);
                         var atrasada = f.EstaAtrasada(_hoje) || foraDePrazo;
                         <li class="intervencao @(atrasada ? "atrasada" : "")">
-                            <span class="intervencao-titulo">@f.Equipamento</span>
+                            <a class="intervencao-titulo" href="intervencoes/@f.Id">@f.Equipamento</a>
                             <span class="intervencao-desc">@(f.Tecno == 0 ? "Sem técnico" : f.Tecnico ?? "PHC " + f.Tecno)@(f.OutrosTecnicos.Count > 0 ? " + " + string.Join(", ", f.OutrosTecnicos.Select(a => a.Nome)) : "")</span>
                             <span class="chips">
                                 @if (foraDePrazo) { <span class="chip chip-erro">Fora de prazo</span> }

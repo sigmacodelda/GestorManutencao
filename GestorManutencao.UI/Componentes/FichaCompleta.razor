@@ -13,7 +13,7 @@
 }
 
 @* Fora do "if (Detalhe)" e das ações: depois de validar ou cancelar a ficha já não oferece essas ações e o aviso tem de continuar à vista. *@
-<AvisoConferencia Aviso="_avisoConf" Titulo="@(_confAcao == "cancelar" ? "Ficha cancelada" : "Ficha validada")" Ocupado="_ocupado" OnRepetir="RepetirConferenciaAsync" />
+<AvisoConferencia Aviso="@_avisoConf" Titulo="@(_confAcao == "cancelar" ? "Ficha cancelada" : "Ficha validada")" Ocupado="_ocupado" OnRepetir="RepetirConferenciaAsync" />
 
 @if (Detalhe is { } d)
 {

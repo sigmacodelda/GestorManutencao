@@ -32,7 +32,7 @@ else if (_resultado is not null)
                 <li>
                     <button type="button" class="intervencao @(p.AbaixoDoMinimo ? "atrasada" : "")" @onclick="() => EscolherAsync(p)">
                         <span class="intervencao-titulo">@p.Ref @p.Design</span>
-                        <span class="intervencao-desc">Stock @p.Stock.ToString("0.###") · @(p.Local.Length > 0 ? p.Local : "Sem local")</span>
+                        <span class="intervencao-desc">Stock @p.Stock.ToString("0.###")</span>
                     </button>
                 </li>
             }

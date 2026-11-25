@@ -63,6 +63,8 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
         lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(Fichas.Values.Where(f => f.PorFazer).ToList());
     }
 
+    public Task<IReadOnlyList<Intervencao>> ListarAnterioresAsync(CancellationToken ct = default) => ListarRecentesAsync(30, ct);
+
     public Task<IReadOnlyList<Intervencao>> ListarRecentesAsync(int dias, CancellationToken ct = default)
     {
         Entrar("ListarRecentes");
@@ -318,6 +320,16 @@ internal sealed class RemotoFalso : IIntervencoesRemoto
             var f = Fichas.GetValueOrDefault(id);
             if (f is not { Estado: EstadoIntervencao.Concluida }) throw new InvalidOperationException(MensagensIntervencao.Mudou);
             return Task.FromResult(Fichas[id] = f with { Estado = EstadoIntervencao.EmCurso, Motivo = motivo });
+        }
+    }
+    public Task<Intervencao> PedirDevolucaoAsync(string id, string motivo, CancellationToken ct = default)
+    {
+        Entrar("PedirDevolucao", id);
+        lock (_trinco)
+        {
+            var f = Fichas.GetValueOrDefault(id);
+            if (f is not { Estado: EstadoIntervencao.Concluida }) throw new InvalidOperationException(MensagensIntervencao.Mudou);
+            return Task.FromResult(Fichas[id] = f with { PedidoDevolucao = motivo.Trim() });
         }
     }
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => throw new NotSupportedException();

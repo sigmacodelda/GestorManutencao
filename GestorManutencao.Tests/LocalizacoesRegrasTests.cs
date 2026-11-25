@@ -125,6 +125,17 @@ public class LocalizacoesRegrasTests
     }
 
     [Fact]
+    public async Task Memoria_arrumar_e_rearrumar_no_mesmo_dia_ficam_no_mesmo_dossier_66()
+    {
+        var repo = new RepositorioLocalizacoesMemoria(new RepositorioPecasMemoria([new PecaDto("P001", "Parafuso", "560001", "A-01-1-01", 10, 4, 0.12m)]));
+        var ct = CancellationToken.None;
+        await repo.ArrumarAsync("P001", "B", 1, 1, 1, 2, "ab", ct);
+        await repo.MoverAsync("P001", new LugarDto("A", "A-02", 1, 1, 0), new LugarDto("B", "B-01", 2, 3, 0), 1, "ab", ct);
+        Assert.Equal(2, repo.Movimentos.Count);
+        Assert.Single(repo.Movimentos.Select(m => m.Dia).Distinct());
+    }
+
+    [Fact]
     public void Texto_do_lugar_para_o_dossier()
     {
         Assert.Equal("", RegrasLocalizacao.TextoLugar(null));

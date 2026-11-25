@@ -86,7 +86,7 @@
         @* A ficha completa (horas, mão de obra, externos, dados de gestão) é do supervisor; o técnico só vê o essencial. *@
         @if (Sessao.Modo == ModoTrabalho.Supervisor)
         {
-            <FichaCompleta Detalhe="_d" Aviso="_avisoOnline" OnMudou="RecarregarAsync" />
+            <FichaCompleta Detalhe="_d" Aviso="@_avisoOnline" OnMudou="RecarregarAsync" />
         }
 
         @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
@@ -385,6 +385,27 @@
                 <span class="sucesso-icone"><Icone Nome="circle-check" /></span>
                 <p class="sucesso-titulo">@(_i.Estado == EstadoIntervencao.Concluida ? "Feito! Obrigado." : _i.Estado == EstadoIntervencao.Cancelada ? "Foi cancelada." : "Já está fechada.")</p>
                 @if (_i.Estado == EstadoIntervencao.Concluida) { <p class="sucesso-desc">O supervisor vai ver e confirmar.</p> }
+                @if (_i.Estado == EstadoIntervencao.Concluida && !string.IsNullOrWhiteSpace(_i.PedidoDevolucao))
+                {
+                    <p class="sucesso-desc"><strong>Pediu a devolução:</strong> @_i.PedidoDevolucao</p>
+                }
+                else if (_i.Estado == EstadoIntervencao.Concluida && _aPedirDevolucao)
+                {
+                    <div class="campo">
+                        <label for="motivo-devolucao">Porque quer que seja devolvida?</label>
+                        <textarea id="motivo-devolucao" rows="2" maxlength="254" @bind="_motivoDevolucao" @bind:event="oninput"></textarea>
+                        <Microfone @bind-Texto="_motivoDevolucao" MaxLength="254" />
+                    </div>
+                    <p class="campo-erro" role="alert">@_erroDevolucao</p>
+                    <div class="ficha-acoes">
+                        <button type="button" class="btn btn-primario" disabled="@(_a_gravar || string.IsNullOrWhiteSpace(_motivoDevolucao))" @onclick="PedirDevolucaoAsync"><Icone Nome="rotate-ccw" /><span>Enviar pedido</span></button>
+                        <button type="button" class="btn btn-secundario" disabled="@_a_gravar" @onclick="() => _aPedirDevolucao = false">Cancelar</button>
+                    </div>
+                }
+                else if (_i.Estado == EstadoIntervencao.Concluida)
+                {
+                    <button type="button" class="btn btn-secundario" @onclick="() => { _aPedirDevolucao = true; _motivoDevolucao = string.Empty; _erroDevolucao = string.Empty; }"><Icone Nome="rotate-ccw" /><span>Pedir devolução</span></button>
+                }
                 <a class="btn btn-primario btn-grande" href="intervencoes"><span>Ver as minhas intervenções</span></a>
             </div>
         }
@@ -396,6 +417,8 @@
 
     private Intervencao? _i;
     private string _feito = "", _erro = "", _material = "", _erroMaterial = "";
+    private bool _aPedirDevolucao;
+    private string _motivoDevolucao = "", _erroDevolucao = "";
     // Quantidade já a 1: o caso comum é uma só peça (o aviso de stock também assume 1).
     private decimal? _qtt = 1, _epv;
     private string? _apagarId, _menuId;
@@ -472,6 +495,20 @@
         if (real == Id) return false;
         Nav.NavigateTo($"intervencoes/{Uri.EscapeDataString(real)}", replace: true);
         return true;
+    }
+
+    // Só pede: a ficha continua concluída e é o supervisor que a devolve.
+    private async Task PedirDevolucaoAsync()
+    {
+        if (_i is null || _a_gravar) return;
+        _a_gravar = true; _erroDevolucao = "";
+        try
+        {
+            Usar(await Intervencoes.PedirDevolucaoAsync(_i.Id, _motivoDevolucao.Trim()));
+            _aPedirDevolucao = false;
+        }
+        catch (Exception ex) { _erroDevolucao = MensagensGestao.Para(ex, "Não foi possível enviar o pedido. Tente outra vez."); }
+        finally { _a_gravar = false; }
     }
 
     // Quando termina o envio, a ficha deixa de estar "por enviar": volta a ler o que está guardado.
@@ -908,7 +945,12 @@
             _fim = agora < _inicio ? _inicio : agora;
         }
         _erro = RegrasIntervencao.ValidarConclusao(_feito, _inicio, _fim) ?? "";
-        if (_erro.Length > 0) return;
+        if (_erro.Length > 0)
+        {
+            // O aviso flutua no topo e o campo pode estar longe: leva-se o utilizador até ele.
+            try { await JS.InvokeVoidAsync("gmIr", string.IsNullOrWhiteSpace(_feito) || _feito.Trim().Length > RegrasIntervencao.MaxFeito ? "feito" : "inicio", true); } catch (Exception) { /* sem scroll: o utilizador sobe à mão */ }
+            return;
+        }
         // A assinatura atualiza a ficha (Usar repõe as horas): guardam-se antes de assinar.
         var inicio = _inicio!.Value;
         var fim = _fim!.Value;

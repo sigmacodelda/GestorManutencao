@@ -7,6 +7,8 @@ public interface IIntervencoesService
 {
     // Intervenções atribuídas ao utilizador autenticado.
     Task<IReadOnlyList<Intervencao>> ListarMinhasAsync(CancellationToken ct = default);
+    // Histórico só de leitura: as minhas fichas concluídas, validadas e canceladas nos últimos dias, mais recentes primeiro.
+    Task<IReadOnlyList<Intervencao>> ListarAnterioresAsync(CancellationToken ct = default);
     Task<Intervencao?> ObterAsync(string id, CancellationToken ct = default);
     // A avaria nasce logo em curso, com a hora de início de agora.
     Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default);
@@ -22,6 +24,8 @@ public interface IIntervencoesService
     Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default);
     Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default);
     Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default);
+    // O técnico pede ao supervisor que devolva a sua ficha concluída por validar (só online; o estado não muda, a ficha passa a trazer o PedidoDevolucao).
+    Task<Intervencao> PedirDevolucaoAsync(string id, string motivo, CancellationToken ct = default);
     // Só para o perfil Qualidade: fichas validadas por concluir e conclusão com o nome de quem higienizou (grava-se uma só vez).
     Task<IReadOnlyList<Intervencao>> ListarPorConcluirAsync(CancellationToken ct = default);
     Task<Intervencao> ConcluirQualidadeAsync(string id, string higienizacao, CancellationToken ct = default);
@@ -119,6 +123,7 @@ public static class MensagensIntervencao
         "nao_externa" => "Esta intervenção não é de manutenção externa.",
         "ja_assinada" => "Esta intervenção já foi assinada pela empresa externa.",
         "propria" => "Não pode validar uma intervenção feita por si.",
+        "nao_concluida" => "Esta intervenção já não está concluída por validar.",
         "limite_fotos" => $"No máximo {RegrasFoto.Max} fotos por intervenção.",
         _ => Mudou
     };
@@ -183,6 +188,11 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
     {
         await Task.Delay(300, ct);
         lock (_trinco) return _lista.ToList();
+    }
+
+    public Task<IReadOnlyList<Intervencao>> ListarAnterioresAsync(CancellationToken ct = default)
+    {
+        lock (_trinco) return Task.FromResult<IReadOnlyList<Intervencao>>(_lista.Where(i => !i.PorFazer).OrderByDescending(i => i.DataPlaneada).ToList());
     }
 
     public Task<Intervencao?> ObterAsync(string id, CancellationToken ct = default)
@@ -476,6 +486,12 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
         }
     }
 
+    public Task<Intervencao> PedirDevolucaoAsync(string id, string motivo, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(motivo) || motivo.Trim().Length > 254) throw new InvalidOperationException("Indique o motivo (até 254 caracteres).");
+        return Alterar(id, EstadoIntervencao.Concluida, i => i with { PedidoDevolucao = motivo.Trim() });
+    }
+
     public Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default)
     {
         if (RegrasFichaDetalhe.ValidarCancelamento(motivo) is { } mensagem) throw new InvalidOperationException(mensagem);
@@ -581,6 +597,7 @@ public sealed class DevIntervencoesService : IIntervencoesService, IEquipamentos
 public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamentosService
 {
     public Task<IReadOnlyList<Intervencao>> ListarMinhasAsync(CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<IReadOnlyList<Intervencao>> ListarAnterioresAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao?> ObterAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> RegistarAvariaAsync(string equipamentoId, string anomalia, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
@@ -593,6 +610,7 @@ public sealed class IntervencoesIndisponiveis : IIntervencoesService, IEquipamen
     public Task<IReadOnlyList<Intervencao>> ListarPorValidarAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> ValidarAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
+    public Task<Intervencao> PedirDevolucaoAsync(string id, string motivo, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> AtribuirAsync(string id, int tecno, CancellationToken ct = default) => throw new NotSupportedException();
     public Task<Intervencao> DefinirAdicionaisAsync(string id, IReadOnlyList<int> tecnos, CancellationToken ct = default) => throw new NotSupportedException();
