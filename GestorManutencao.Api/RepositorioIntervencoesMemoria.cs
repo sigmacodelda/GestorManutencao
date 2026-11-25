@@ -283,7 +283,7 @@ public sealed partial class RepositorioIntervencoesMemoria(TimeProvider relogio,
 
     public Task GuardarConfiguracaoAsync(ConfigManutencao configuracao, TecnicoAtual supervisor, CancellationToken ct)
     {
-        _cfg = configuracao with { IniciarSemStock = _cfg.IniciarSemStock };
+        _cfg = configuracao;
         return Task.CompletedTask;
     }
 

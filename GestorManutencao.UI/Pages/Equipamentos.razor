@@ -205,8 +205,10 @@
     {
         var partes = new List<string>();
         if (e.Ref.Length > 0) partes.Add(e.Ref);
-        if (e.Tipo.Length > 0) partes.Add(e.Tipo);
-        var marca = $"{e.Marca} {e.Modelo}".Trim();
+        if (Limpo(e.Tipo).Length > 0) partes.Add(e.Tipo);
+        // No PHC "-----------" faz de vazio: não se mostra.
+        static string Limpo(string? t) => (t ?? "").Trim().TrimStart('-').Trim().Length == 0 ? "" : t!.Trim();
+        var marca = $"{Limpo(e.Marca)} {Limpo(e.Modelo)}".Trim();
         if (marca.Length > 0) partes.Add(marca);
         partes.Add(e.Zona.Length > 0 ? e.Zona : "Sem local");
         return string.Join(" · ", partes);

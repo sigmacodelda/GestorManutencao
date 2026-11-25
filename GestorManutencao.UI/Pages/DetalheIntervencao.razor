@@ -86,7 +86,7 @@
         @* A ficha completa (horas, mão de obra, externos, dados de gestão) é do supervisor; o técnico só vê o essencial. *@
         @if (Sessao.Modo == ModoTrabalho.Supervisor)
         {
-            <FichaCompleta Detalhe="_d" Aviso="_avisoOnline" OnMudou="RecarregarAsync" />
+            <FichaCompleta Detalhe="_d" Aviso="@_avisoOnline" OnMudou="RecarregarAsync" />
         }
 
         @if (_i.Estado is EstadoIntervencao.EmCurso or EstadoIntervencao.Concluida)
@@ -945,7 +945,12 @@
             _fim = agora < _inicio ? _inicio : agora;
         }
         _erro = RegrasIntervencao.ValidarConclusao(_feito, _inicio, _fim) ?? "";
-        if (_erro.Length > 0) return;
+        if (_erro.Length > 0)
+        {
+            // O aviso flutua no topo e o campo pode estar longe: leva-se o utilizador até ele.
+            try { await JS.InvokeVoidAsync("gmIr", string.IsNullOrWhiteSpace(_feito) || _feito.Trim().Length > RegrasIntervencao.MaxFeito ? "feito" : "inicio", true); } catch (Exception) { /* sem scroll: o utilizador sobe à mão */ }
+            return;
+        }
         // A assinatura atualiza a ficha (Usar repõe as horas): guardam-se antes de assinar.
         var inicio = _inicio!.Value;
         var fim = _fim!.Value;

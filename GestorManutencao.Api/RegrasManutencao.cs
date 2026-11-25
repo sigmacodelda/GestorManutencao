@@ -9,7 +9,7 @@ public sealed record ConfigManutencao(
     // Colunas do backoffice do Landeiro (só se lêem, nunca se gravam aqui): início do plano, limite de atraso em meses
     // (0 = sem limite) e se a regularização manual está ligada. Sem início (ano < 2000) vale a regra antiga.
     DateTime DataInicio = default, int MesesRegularizar = 12, bool Regularizacao = false,
-    // u_configman.iniciarsemstock (só leitura): desligado = não se inicia com peças necessárias sem stock. Campo ausente = desligado (como no desktop).
+    // u_configman.iniciarsemstock (campo do PHC, editável no supervisor): desligado = não se inicia com peças necessárias sem stock. Campo ausente = desligado (como no desktop).
     bool IniciarSemStock = false)
 {
     public bool TemInicio => DataInicio.Year >= 2000;

@@ -193,7 +193,7 @@ h1:focus-visible { outline: none; }
 .boas-vindas { display: flex; flex-direction: column; gap: var(--esp-1); }
 .boas-vindas .login-sub { text-align: left; margin-top: 0; }
 
-.segmentos { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-2); background: var(--superficie-2); padding: var(--esp-1); border-radius: var(--raio); max-width: 420px; }
+.segmentos { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--esp-2); background: var(--superficie-2); padding: var(--esp-1); border-radius: var(--raio); max-width: 420px; }
 .segmento {
     display: inline-flex; align-items: center; justify-content: center; gap: var(--esp-2);
     min-height: 48px; border: 0; border-radius: 9px; background: transparent; color: var(--texto);
@@ -854,6 +854,10 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
     position: fixed; z-index: 60; top: calc(10px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); right: calc(12px + env(safe-area-inset-right));
     display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none;
 }
+/* Ecrã estreito: os avisos ficam abaixo do sinal de ligação (canto superior direito) em vez de o taparem. */
+@media (max-width: 719px) { .gm-avisos { top: calc(46px + env(safe-area-inset-top)); } }
+/* Campos focados ou levados à vista não ficam por baixo da barra fixa nem da navegação. */
+html { scroll-padding-bottom: calc(var(--nav-h) + 6rem); }
 .gm-aviso {
     margin: 0; max-width: 480px; width: 100%; padding: .75rem 1rem; border-radius: var(--raio); border: 2px solid var(--primario);
     background: var(--marca-fundo); color: var(--sobre-marca); font-weight: 700; font-size: .9375rem; overflow-wrap: anywhere;

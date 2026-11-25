@@ -44,7 +44,7 @@
             }
             @if (_esc.Local is null && lug.Lugares.Count > 0)
             {
-                <h2 class="ficha-texto">Ou escolha um lugar da peça</h2>
+                <h2 class="ficha-texto">@(lug.PorArrumar > 0 ? "Ou escolha um lugar da peça" : "Lugares da peça")</h2>
                 <ul class="lista-intervencoes">
                     @foreach (var l in lug.Lugares)
                     {

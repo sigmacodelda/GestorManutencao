@@ -48,7 +48,7 @@ public sealed record FiltroFichas(EstadoIntervencao? Estado, DateOnly? Desde, Da
 
 public sealed record PaginaFichasDto(IReadOnlyList<IntervencaoDto> Itens, bool TemMais);
 
-public sealed record PedidoConfiguracao(int? Antecedencia, bool? GerarPlaneadas, bool? AvancaOrdem, bool? ValidarPropria, bool? ExtExigeDoc, bool? ComprasFichaInt);
+public sealed record PedidoConfiguracao(int? Antecedencia, bool? GerarPlaneadas, bool? AvancaOrdem, bool? ValidarPropria, bool? ExtExigeDoc, bool? ComprasFichaInt, bool? IniciarSemStock = null);
 
 // Local = lugar de onde saiu a peça (A-02-1-01), quando conhecido; AvisoStock só vem na resposta de gravar (nunca é lido da base).
 public sealed record MaterialDto(string Id, string Design, decimal Qtt, decimal Epv, decimal Custo, string Ref = "", bool SaidaDada = false, string? Local = null, string? AvisoStock = null);
@@ -394,12 +394,14 @@ public static partial class EndpointsIntervencoes
             if (RegrasManutencao.ValidarConfiguracao(p) is { } mensagem)
                 return Results.Json(new { erro = "pedido_invalido", mensagem }, statusCode: StatusCodes.Status400BadRequest);
 
-            var nova = new ConfigManutencao(p.Antecedencia!.Value, p.GerarPlaneadas!.Value, p.AvancaOrdem!.Value, p.ValidarPropria!.Value, p.ExtExigeDoc!.Value, p.ComprasFichaInt!.Value);
             return await ComoSupervisor(eu, utilizadores, ct, async s =>
             {
+                // Pedido sem "iniciar sem stock" (app antiga): mantém o que está.
+                var semStock = p.IniciarSemStock ?? (await repo.ObterConfiguracaoAsync(ct)).IniciarSemStock;
+                var nova = new ConfigManutencao(p.Antecedencia!.Value, p.GerarPlaneadas!.Value, p.AvancaOrdem!.Value, p.ValidarPropria!.Value, p.ExtExigeDoc!.Value, p.ComprasFichaInt!.Value, IniciarSemStock: semStock);
                 await repo.GuardarConfiguracaoAsync(nova, s, ct);
-                log.LogInformation("Configuração da manutenção alterada por {Supervisor}: antecedência {Antecedencia}, gerar planeadas {Gerar}, avança ordem {Ordem}, validar própria {Propria}, externa exige documento {Doc}, compras na ficha {Compras}.",
-                    s.Codigo, nova.Antecedencia, nova.GerarPlaneadas, nova.AvancaOrdem, nova.ValidarPropria, nova.ExtExigeDoc, nova.ComprasFichaInt);
+                log.LogInformation("Configuração da manutenção alterada por {Supervisor}: antecedência {Antecedencia}, gerar planeadas {Gerar}, avança ordem {Ordem}, validar própria {Propria}, externa exige documento {Doc}, compras na ficha {Compras}, iniciar sem stock {SemStock}.",
+                    s.Codigo, nova.Antecedencia, nova.GerarPlaneadas, nova.AvancaOrdem, nova.ValidarPropria, nova.ExtExigeDoc, nova.ComprasFichaInt, nova.IniciarSemStock);
                 // Devolve o que ficou guardado.
                 return Results.Ok(await repo.ObterConfiguracaoAsync(ct));
             });

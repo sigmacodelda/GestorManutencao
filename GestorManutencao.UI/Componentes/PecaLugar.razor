@@ -17,10 +17,14 @@
             <span class="intervencao-titulo">@_peca.Ref @_peca.Design</span>
             @if (!LugarDestino)
             {
-                @* Com o lugar escolhido o que interessa é o que lá está; o total da peça fica ao lado. *@
+                @* Com o lugar escolhido mostra-se só o que lá está; o total da peça só aparece sem lugar. *@
                 @if (QuantidadeNoLugar() is { } noLugar)
                 {
-                    <span class="intervencao-desc">Neste lugar @LogicaPicagem.TextoUnidades(noLugar) · stock total @_peca.QuantidadeDisponivel.ToString("0.###")@(_peca.QuantidadeDisponivel != _peca.Stock ? $" (stock {_peca.Stock:0.###})" : "")</span>
+                    <span class="intervencao-desc">Neste lugar @LogicaPicagem.TextoUnidades(noLugar)</span>
+                }
+                else if (_estado.Local is not null && _lug is not null)
+                {
+                    <span class="intervencao-desc">Sem stock neste lugar</span>
                 }
                 else
                 {

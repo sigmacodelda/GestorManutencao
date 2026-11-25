@@ -83,7 +83,7 @@
                                     <ul class="lista-material">
                                         @foreach (var m in mats)
                                         {
-                                            <li>@m.Design · @LogicaPicagem.TextoUnidades(m.Qtt)@(string.IsNullOrWhiteSpace(m.Local) ? "" : " · " + (LogicaFichaPeca.TextoNormalDoLugar(m.Local) ?? m.Local))@(m.Ref != "" && !m.SaidaDada ? " · saída por dar" : "")</li>
+                                            <li>@m.Design · @LogicaPicagem.TextoUnidades(m.Qtt)@if (!string.IsNullOrWhiteSpace(m.Local)) { <text> · <span class="lugar-codigo">@(LogicaFichaPeca.TextoNormalDoLugar(m.Local) ?? m.Local)</span></text> }@(m.Ref != "" && !m.SaidaDada ? " · saída por dar" : "")</li>
                                         }
                                     </ul>
                                 }
@@ -114,7 +114,7 @@
                         else if (_aConfirmar == f.Id)
                         {
                             <div class="ficha-acoes">
-                                <button type="button" class="btn" disabled="@_ocupado" @onclick="() => ValidarAsync(f)">
+                                <button type="button" class="btn btn-primario" disabled="@_ocupado" @onclick="() => ValidarAsync(f)">
                                     <Icone Nome="circle-check" /><span>Confirmar</span>
                                 </button>
                                 <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => _aConfirmar = null">Cancelar</button>
@@ -123,7 +123,7 @@
                         else
                         {
                             <div class="ficha-acoes">
-                                <button type="button" class="btn" disabled="@_ocupado" @onclick="() => { _aConfirmar = f.Id; _aDevolver = null; }">
+                                <button type="button" class="btn btn-primario" disabled="@_ocupado" @onclick="() => { _aConfirmar = f.Id; _aDevolver = null; }">
                                     <Icone Nome="shield-check" /><span>Validar</span>
                                 </button>
                                 <button type="button" class="btn btn-secundario" disabled="@_ocupado" @onclick="() => { _aDevolver = f.Id; _aConfirmar = null; _motivo = string.Empty; }">
