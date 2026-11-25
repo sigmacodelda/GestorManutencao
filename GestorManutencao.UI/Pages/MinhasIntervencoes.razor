@@ -12,6 +12,11 @@
         <h1 tabindex="-1">As minhas intervenções</h1>
     </div>
 
+    <div class="separadores" role="tablist" aria-label="Intervenções">
+        <button type="button" role="tab" aria-selected="@(!_anteriores)" class="btn @(!_anteriores ? "btn-primario" : "btn-secundario")" @onclick="() => MudarAsync(false)">Por fazer</button>
+        <button type="button" role="tab" aria-selected="@_anteriores" class="btn @(_anteriores ? "btn-primario" : "btn-secundario")" @onclick="() => MudarAsync(true)">Anteriores</button>
+    </div>
+
     @if (_erroAtualizar)
     {
         <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Não foi possível atualizar a lista. Tente outra vez.</span></p>
@@ -34,6 +39,34 @@
             <p>Não foi possível carregar as intervenções.</p>
             <button type="button" class="btn btn-secundario" @onclick="CarregarAsync">Tentar outra vez</button>
         </div>
+    }
+    else if (_anteriores && _historico.Count == 0)
+    {
+        <p class="estado-lista" role="status">Não há intervenções concluídas nos últimos @ManutencaoCache.DiasRetencao dias.</p>
+    }
+    else if (_anteriores)
+    {
+        <ul class="lista-intervencoes">
+            @foreach (var i in _historico.Take(_limiteHistorico))
+            {
+                <li>
+                    <a class="intervencao" href="intervencoes/@i.Id">
+                        <span class="intervencao-titulo">@i.Equipamento</span>
+                        <span class="intervencao-desc">@(string.IsNullOrWhiteSpace(i.Zona) ? "Sem zona" : i.Zona)</span>
+                        <span class="chips">
+                            <span class="chip @ClasseEstado(i.Estado)">@TextoEstado(i.Estado)</span>
+                            @if (i.Pendente) { <span class="chip chip-pendente">Por enviar</span> }
+                            <span class="chip @(i.Tipo == TipoIntervencao.Curativa ? "chip-aviso" : "")">@(i.Tipo == TipoIntervencao.Curativa ? "Avaria" : "Preventiva")</span>
+                        </span>
+                        <span class="intervencao-data">@TextoData(i.DataPlaneada)</span>
+                    </a>
+                </li>
+            }
+        </ul>
+        @if (_historico.Count > _limiteHistorico)
+        {
+            <button type="button" class="btn btn-secundario" @onclick="() => _limiteHistorico += PorPagina">Ver mais (@(_historico.Count - _limiteHistorico))</button>
+        }
     }
     else if (_grupos.Count == 0)
     {
@@ -84,6 +117,32 @@
     private DateOnly _hoje;
     private const int PorPagina = 10;
     private readonly Dictionary<string, int> _limites = [];
+    private bool _anteriores;
+    private IReadOnlyList<Intervencao> _historico = [];
+    private int _limiteHistorico = PorPagina;
+
+    private static string TextoEstado(EstadoIntervencao e) => e switch
+    {
+        EstadoIntervencao.Concluida => "Por validar",
+        EstadoIntervencao.Validada => "Validada",
+        EstadoIntervencao.Cancelada => "Cancelada",
+        _ => e.ToString()
+    };
+
+    private static string ClasseEstado(EstadoIntervencao e) => e switch
+    {
+        EstadoIntervencao.Concluida => "chip-aviso",
+        EstadoIntervencao.Cancelada => "chip-erro",
+        _ => ""
+    };
+
+    private async Task MudarAsync(bool anteriores)
+    {
+        if (_anteriores == anteriores) return;
+        _anteriores = anteriores;
+        _limiteHistorico = PorPagina;
+        await CarregarAsync();
+    }
 
     // Poucas fichas de cada vez: uma lista muito comprida cansa e esconde o que importa.
     private int Limite(GrupoIntervencoes g) => _limites.GetValueOrDefault(g.Titulo, PorPagina);
@@ -105,7 +164,8 @@
         _hoje = DateOnly.FromDateTime(DateTime.Today);
         try
         {
-            _grupos = AgrupadorIntervencoes.Agrupar(await Intervencoes.ListarMinhasAsync(), _hoje);
+            if (_anteriores) _historico = await Intervencoes.ListarAnterioresAsync();
+            else _grupos = AgrupadorIntervencoes.Agrupar(await Intervencoes.ListarMinhasAsync(), _hoje);
             _temDados = true;
         }
         catch (NotSupportedException) { _indisponivel = true; }

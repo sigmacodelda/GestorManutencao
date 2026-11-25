@@ -53,6 +53,9 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
         return await resposta.Content.ReadFromJsonAsync<List<Intervencao>>(ct) ?? [];
     }
 
+    public async Task<IReadOnlyList<Intervencao>> ListarAnterioresAsync(CancellationToken ct = default) =>
+        (await ListarRecentesAsync(ManutencaoCache.DiasRetencao, ct)).OrderByDescending(i => i.DataPlaneada).ToList();
+
     public Task<Intervencao> IniciarAsync(string id, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/iniciar", null, ct);
 
@@ -77,6 +80,9 @@ public sealed class IntervencoesApiService(HttpClient http, SessaoService sessao
 
     public Task<Intervencao> DevolverAsync(string id, string motivo, CancellationToken ct = default) =>
         AlterarAsync(HttpMethod.Post, $"validacao/{Uri.EscapeDataString(id)}/devolver", new { motivo }, ct);
+
+    public Task<Intervencao> PedirDevolucaoAsync(string id, string motivo, CancellationToken ct = default) =>
+        AlterarAsync(HttpMethod.Post, $"intervencoes/{Uri.EscapeDataString(id)}/pedir-devolucao", new { motivo }, ct);
 
     public async Task<IReadOnlyList<Intervencao>> ListarPlaneadasAsync(CancellationToken ct = default)
     {

@@ -67,6 +67,26 @@ public sealed class OfflineIntervencoesService(
         return await PorFazerAsync();
     }
 
+    // Histórico: com rede refresca as fechadas na cache; sem rede mostra as que já lá estão (as concluídas por enviar vêm marcadas como pendentes).
+    public async Task<IReadOnlyList<Intervencao>> ListarAnterioresAsync(CancellationToken ct = default)
+    {
+        if (await mc.GarantirDonoAsync() is not { } dono) return await remoto.ListarAnterioresAsync(ct);
+        if (rede.Disponivel)
+            try
+            {
+                var marca = mc.Marca;
+                await mc.MesclarFichasAsync(await remoto.ListarRecentesAsync(ManutencaoCache.DiasRetencao, ct), dono, marca);
+                await DefinirLeituraAsync(false);
+                return await FechadasAsync();
+            }
+            catch (Exception e) when (FalhaDeRede(e, ct)) { }
+        await DefinirLeituraAsync(true);
+        return await FechadasAsync();
+    }
+
+    private async Task<IReadOnlyList<Intervencao>> FechadasAsync() =>
+        (await Cache.ListarFichasAsync()).Where(f => !f.PorFazer).OrderByDescending(f => f.DataPlaneada).ThenByDescending(f => f.Id, StringComparer.Ordinal).ToList();
+
     private async Task<IReadOnlyList<Intervencao>> PorFazerAsync() =>
         (await Cache.ListarFichasAsync()).Where(f => f.PorFazer).OrderBy(f => f.DataPlaneada).ThenBy(f => f.Id, StringComparer.Ordinal).ToList();
 
@@ -693,6 +713,13 @@ public sealed class OfflineIntervencoesService(
             DataPlaneada = d.Data, Tipo = d.Tipo, Tecno = d.Tecno, Tecnico = d.Tecnico
         });
         return d;
+    }
+
+    public async Task<Intervencao> PedirDevolucaoAsync(string id, string motivo, CancellationToken ct = default)
+    {
+        var f = await SoOnlineAsync(id, i => remoto.PedirDevolucaoAsync(i, motivo, ct), true, ct: ct);
+        await AtualizarCacheAsync(f.Id, c => c with { PedidoDevolucao = f.PedidoDevolucao });
+        return f;
     }
 
     public async Task<Intervencao> CancelarAsync(string id, string motivo, CancellationToken ct = default)

@@ -325,7 +325,7 @@ a.intervencao { color: inherit; text-decoration: none; }
 .fotos .btn { position: relative; overflow: hidden; }
 .fotos .btn.desativado { opacity: .6; pointer-events: none; }
 .foto-entrada { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
-/* =====================================================================
+/* ==============================================================
    Visual industrial: painel de aço, engrenagem 3D, fichas com talão.
    O 3D está concentrado em três coisas: a engrenagem, os botões/teclas
    que afundam e os contadores com LED. O resto é plano e sóbrio.
@@ -877,3 +877,6 @@ div.contador:active { transform: none; box-shadow: var(--bisel), var(--painel-so
 
 /* Aviso que fica no cartão (stock insuficiente, peça sem lugar): legível depois de o aviso flutuante desaparecer */
 .aviso-cartao { display: inline-block; margin-top: var(--esp-1); padding: var(--esp-1) var(--esp-2); border-radius: var(--raio); background: var(--fundo-aviso, rgba(180, 90, 0, .12)); color: var(--texto); font-size: .875rem; font-weight: 600; }
+=======
+.separadores { display: flex; gap: var(--esp-2); margin-bottom: var(--esp-4); }
+.separadores .btn { flex: 1; }

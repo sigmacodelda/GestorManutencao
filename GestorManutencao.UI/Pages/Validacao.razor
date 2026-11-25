@@ -89,6 +89,10 @@
                                 }
                             </div>
                         }
+                        @if (!string.IsNullOrWhiteSpace(f.PedidoDevolucao))
+                        {
+                            <p class="ficha-texto"><span class="chip chip-aviso">Pedido de devolução</span> <strong>@(f.Tecnico ?? "O técnico") pede:</strong> @f.PedidoDevolucao</p>
+                        }
                         @if (!f.PodeValidar)
                         {
                             <p class="ficha-texto">Concluiu esta ficha: tem de ser outra pessoa a validar.</p>

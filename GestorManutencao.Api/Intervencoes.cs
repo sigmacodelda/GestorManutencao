@@ -20,7 +20,7 @@ public sealed record IntervencaoDto(
     DateOnly? UltimaIntervencao = null, DateOnly? UltimaCancelada = null, DateOnly? DataPrevista = null,
     bool PodeAbrir = false, string? Motivo = null, IReadOnlyList<TecnicoFichaDto>? Adicionais = null,
     int Numero = 0, decimal Total = 0, bool Fechada = false, bool PorSupervisionar = false, bool ForaDeOrdem = false, bool Antiga = false, bool EmPausa = false, bool PodePausar = false,
-    bool Externa = false, bool TemAssinaturaExterna = false, string? AvisoStock = null);
+    bool Externa = false, bool TemAssinaturaExterna = false, string? AvisoStock = null, string? PedidoDevolucao = null);
 
 // Técnico adicional da intervenção: o número vem do memo tecnos da ficha e o nome resolve-se na API (nunca fica gravado na ficha).
 public sealed record TecnicoFichaDto(int Tecno, string Nome);
@@ -317,8 +317,20 @@ public static partial class EndpointsIntervencoes
             return await ComoTecnico(eu, utilizadores, ct, async t => Results.Ok(await repo.ListarRecentesAsync(t, dias ?? RegrasIntervencao.DiasRecentesOmissao, ct)));
         });
 
-        g.MapGet("/intervencoes/{id}", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
-            ComoTecnico(eu, utilizadores, ct, async t => await repo.ObterAsync(id, t, ct) is { } i ? Results.Ok(i) : Results.NotFound()));
+        g.MapGet("/intervencoes/{id}", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPedidosDevolucao pedidos, CancellationToken ct) =>
+            ComoTecnico(eu, utilizadores, ct, async t => await repo.ObterAsync(id, t, ct) is { } i ? Results.Ok(ComPedido(i, pedidos)) : Results.NotFound()));
+
+        // O técnico que concluiu pede ao supervisor que devolva a ficha (com motivo). A ficha não muda de estado; o filtro acima já acorda os aparelhos do supervisor.
+        g.MapPost("/intervencoes/{id}/pedir-devolucao", (string id, PedidoDevolucaoTecnico p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPedidosDevolucao pedidos, CancellationToken ct) =>
+            string.IsNullOrWhiteSpace(p.Motivo) || p.Motivo.Trim().Length > RegrasManutencao.TamanhoMotivo
+                ? Task.FromResult(Results.BadRequest())
+                : ComoTecnico(eu, utilizadores, ct, async t =>
+                {
+                    if (await repo.ObterAsync(id, t, ct) is not { } ficha) return Results.NotFound();
+                    if (ficha.Estado != EstadoIntervencao.Concluida) return Conflito("nao_concluida");
+                    pedidos.Registar(id, t.Tecno, p.Motivo.Trim());
+                    return Results.Ok(ComPedido(ficha, pedidos));
+                }));
 
         // leve=true é a pesquisa da avaria (2 letras, 20 resultados, sem agregados). Sem leve: com texto pedem-se 2 letras; sem texto lista-se tudo, com os filtros.
         g.MapGet("/equipamentos", async Task<IResult> (string? q, string? tipo, string? local, bool? obsoletos, bool? leve,
@@ -712,12 +724,12 @@ public static partial class EndpointsIntervencoes
                 ? Results.NoContent()
                 : Resposta<object>((r, null))));
 
-        g.MapGet("/validacao", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
-            ComoSupervisor(eu, utilizadores, ct, async s => Results.Ok(await repo.ListarPorValidarAsync(s, ct)))).RequireAuthorization("Supervisor");
+        g.MapGet("/validacao", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPedidosDevolucao pedidos, CancellationToken ct) =>
+            ComoSupervisor(eu, utilizadores, ct, async s => Results.Ok((await repo.ListarPorValidarAsync(s, ct)).Select(i => ComPedido(i, pedidos)).ToList()))).RequireAuthorization("Supervisor");
 
         // Valida a ficha e só depois confirma a conferência (o stock do PHC nunca se move para uma ficha por validar). Se a confirmação falhar a ficha
         // fica validada, responde-se 200 com avisoStock e uma nova chamada, já sem validar, tenta só a confirmação.
-        g.MapPost("/validacao/{id}", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, ILogger<Program> log, CancellationToken ct) =>
+        g.MapPost("/validacao/{id}", (string id, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, IRepositorioPedidosDevolucao pedidos, ILogger<Program> log, CancellationToken ct) =>
             ComoSupervisor(eu, utilizadores, ct, async s =>
             {
                 var atual = await repo.ObterDetalheAsync(id, s, true, ct);
@@ -732,13 +744,19 @@ public static partial class EndpointsIntervencoes
                 }
                 var (res, ficha) = await repo.ValidarAsync(id, s, ct);
                 if (res != ResultadoIntervencao.Ok || ficha is null) return Resposta((res, ficha));
+                pedidos.Remover(id);
                 return Results.Ok(ficha with { AvisoStock = await ConfirmarSeguraAsync(pecas, id, s.Codigo, log) });
             })).RequireAuthorization("Supervisor");
 
-        g.MapPost("/validacao/{id}/devolver", (string id, PedidoDevolucao p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
+        g.MapPost("/validacao/{id}/devolver", (string id, PedidoDevolucao p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPedidosDevolucao pedidos, CancellationToken ct) =>
             string.IsNullOrWhiteSpace(p.Motivo) || p.Motivo.Trim().Length > RegrasManutencao.TamanhoMotivo
                 ? Task.FromResult(Results.BadRequest())
-                : ComoSupervisor(eu, utilizadores, ct, async s => Resposta(await repo.DevolverAsync(id, p.Motivo.Trim(), s, ct)))).RequireAuthorization("Supervisor");
+                : ComoSupervisor(eu, utilizadores, ct, async s =>
+                {
+                    var r = await repo.DevolverAsync(id, p.Motivo.Trim(), s, ct);
+                    if (r.Item1 == ResultadoIntervencao.Ok) pedidos.Remover(id); // pedido atendido
+                    return Resposta(r);
+                })).RequireAuthorization("Supervisor");
 
         g.MapGet("/qualidade", (ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, CancellationToken ct) =>
             ComoQualidade(eu, utilizadores, ct, async _ => Results.Ok(await repo.ListarPorConcluirAsync(ct)))).RequireAuthorization("Qualidade");
@@ -909,6 +927,10 @@ public static partial class EndpointsIntervencoes
     private static IResult StockDesfasado() => Results.Json(
         new { erro = "A ficha recusou a operação e não foi possível repor a saída da peça: o stock pode estar desfasado. Avise o supervisor." },
         statusCode: StatusCodes.Status409Conflict);
+
+    // Só uma ficha ainda por validar mostra o pedido; um pedido antigo de uma ficha que entretanto avançou ou foi devolvida não conta.
+    private static IntervencaoDto ComPedido(IntervencaoDto i, IRepositorioPedidosDevolucao pedidos) =>
+        i.Estado == EstadoIntervencao.Concluida && pedidos.Obter(i.Id) is { } p ? i with { PedidoDevolucao = p.Motivo } : i;
 
     private static IResult Conflito(string codigo) => Results.Json(new { erro = codigo }, statusCode: StatusCodes.Status409Conflict);
 

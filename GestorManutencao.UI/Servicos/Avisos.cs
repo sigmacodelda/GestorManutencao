@@ -6,7 +6,7 @@ using GestorManutencao.UI.Modelos;
 namespace GestorManutencao.UI.Servicos;
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum TipoAviso { Atribuida, Devolvida, Hoje, Atraso, PorValidar, Avaria, SemTecnico, Resumo }
+public enum TipoAviso { Atribuida, Devolvida, Hoje, Atraso, PorValidar, PedidoDevolucao, Avaria, SemTecnico, Resumo }
 
 // A Chave identifica o estado que originou o aviso: muda quando o estado muda e é igual entre execuções.
 public sealed record Aviso(string Chave, TipoAviso Tipo, string Titulo, string Texto, string? FichaId, DateTime Quando)
@@ -14,7 +14,7 @@ public sealed record Aviso(string Chave, TipoAviso Tipo, string Titulo, string T
     // Página que o toque no aviso abre.
     public string Destino(Perfil perfil) =>
         perfil == Perfil.Supervisor
-            ? (Tipo == TipoAviso.PorValidar ? "validacao" : "planeadas")
+            ? (Tipo is TipoAviso.PorValidar or TipoAviso.PedidoDevolucao ? "validacao" : "planeadas")
             : (FichaId is null ? "intervencoes" : $"intervencoes/{Uri.EscapeDataString(FichaId)}");
 }
 
@@ -74,6 +74,9 @@ public static class CentroAvisos
             if (f.Estado == EstadoIntervencao.Concluida && f.PodeValidar)
                 avisos.Add(Novo($"validar:{f.Id}:{Hash((f.Feito ?? "") + f.HoraFim?.ToString("HH:mm", CultureInfo.InvariantCulture))}", TipoAviso.PorValidar, "Ficha por validar",
                     f.Tecnico is null ? f.Equipamento : $"{f.Equipamento} · {f.Tecnico}", f, agora));
+            if (f.Estado == EstadoIntervencao.Concluida && !string.IsNullOrWhiteSpace(f.PedidoDevolucao))
+                avisos.Add(Novo($"pedidodevolucao:{f.Id}:{Hash(f.PedidoDevolucao.Trim())}", TipoAviso.PedidoDevolucao, "Pedido de devolução",
+                    $"{f.Equipamento}{(f.Tecnico is null ? "" : " · " + f.Tecnico)}: {f.PedidoDevolucao.Trim()}", f, agora));
             if (f.Tipo == TipoIntervencao.Curativa && f.PorFazer)
                 avisos.Add(Novo($"avaria:{f.Id}", TipoAviso.Avaria, "Avaria registada",
                     string.IsNullOrWhiteSpace(f.Anomalia) ? f.Equipamento : $"{f.Equipamento}: {f.Anomalia.Trim()}", f, agora));
