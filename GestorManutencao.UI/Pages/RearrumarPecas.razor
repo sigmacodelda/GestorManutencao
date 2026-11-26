@@ -51,7 +51,7 @@
                             <li>
                                 <button type="button" class="intervencao" disabled="@_a_gravar" @onclick="() => EscolherOrigem(l)">
                                     <span class="intervencao-titulo">@l.Texto</span>
-                                    <span class="intervencao-desc">@(l.Qtt > 0 ? LogicaPicagem.TextoUnidades(l.Qtt) : "Quantidade não indicada")</span>
+                                    <span class="intervencao-desc">@LogicaPicagem.TextoDisponivel(l)</span>
                                 </button>
                             </li>
                         }
@@ -62,7 +62,7 @@
             {
                 <div class="intervencao">
                     <span class="intervencao-titulo">Sai de <span class="lugar-codigo">@_origem.Texto</span></span>
-                    <span class="intervencao-desc">@(_origem.Qtt > 0 ? LogicaPicagem.TextoUnidades(_origem.Qtt) : "Quantidade não indicada")</span>
+                    <span class="intervencao-desc">@LogicaPicagem.TextoDisponivel(_origem)</span>
                     <button type="button" class="btn-texto" disabled="@_a_gravar" @onclick="LimparOrigem"><Icone Nome="x" /><span>Mudar de origem</span></button>
                 </div>
             }
@@ -86,11 +86,11 @@
                 }
                 else
                 {
-                    <p class="intervencao-desc" role="status">Quantidade não indicada neste lugar: muda-se o lugar todo.</p>
+                    <p class="intervencao-desc" role="status">@(_origem.SoReservado ? "Todo o stock deste lugar está reservado em fichas em conferência: não há nada disponível para mudar." : "Indique a quantidade deste lugar antes de mudar de sítio.")</p>
                 }
                 @* Sempre presente (vazio ou não): o botão não sobe nem desce enquanto se escreve a quantidade. *@
                 <p class="campo-erro" role="alert">@(LogicaPicagem.LerQuantidade(_qttTexto, out var proposta) && _origem.Qtt > 0 && proposta > _origem.Qtt ? $"Só há {LogicaPicagem.TextoQuantidade(_origem.Qtt)} nesse lugar." : "")</p>
-                <button type="submit" id="rearrumar-mudar" class="btn btn-primario btn-grande" disabled="@(_a_gravar || _esc?.Local is null)"><Icone Nome="check" /><span>@(_a_gravar ? "A gravar…" : "Mudar de sítio")</span></button>
+                <button type="submit" id="rearrumar-mudar" class="btn btn-primario btn-grande" disabled="@(_a_gravar || _esc?.Local is null || _origem.Qtt <= 0)"><Icone Nome="check" /><span>@(_a_gravar ? "A gravar…" : "Mudar de sítio")</span></button>
             </form>
         }
 
@@ -102,7 +102,7 @@
                 {
                     <li class="intervencao">
                         <span class="intervencao-titulo">@l.Texto</span>
-                        <span class="intervencao-desc">@(l.Qtt > 0 ? LogicaPicagem.TextoUnidades(l.Qtt) : "Quantidade não indicada")</span>
+                        <span class="intervencao-desc">@LogicaPicagem.TextoDisponivel(l)</span>
                     </li>
                 }
             </ul>
@@ -210,23 +210,24 @@
                     _erro = "A origem e o destino são o mesmo lugar.";
                     return false;
                 }
-                // Origem sem quantidade indicada: muda-se a linha toda (o servidor ignora o número).
-                decimal qtt = 1;
-                if (origem.Qtt > 0)
+                // Só se muda o disponível: sem quantidade indicada ou tudo reservado a API recusa (o trigger descartaria o movimento).
+                if (origem.Qtt <= 0)
                 {
-                    if (!LogicaPicagem.LerQuantidade(_qttTexto, out qtt))
-                    {
-                        _erro = "Quantidade inválida: use um número positivo, com vírgula ou ponto e no máximo 3 casas decimais.";
-                        return false;
-                    }
-                    if (qtt > origem.Qtt)
-                    {
-                        _erro = $"Só há {LogicaPicagem.TextoQuantidade(origem.Qtt)} nesse lugar.";
-                        return false;
-                    }
+                    _erro = origem.SoReservado ? "Todo o stock deste lugar está reservado em fichas em conferência." : "Indique a quantidade deste lugar antes de mudar de sítio.";
+                    return false;
+                }
+                if (!LogicaPicagem.LerQuantidade(_qttTexto, out var qtt))
+                {
+                    _erro = "Quantidade inválida: use um número positivo, com vírgula ou ponto e no máximo 3 casas decimais.";
+                    return false;
+                }
+                if (qtt > origem.Qtt)
+                {
+                    _erro = $"Só há {LogicaPicagem.TextoQuantidade(origem.Qtt)} nesse lugar.";
+                    return false;
                 }
                 _ultimo = await Pecas.MoverAsync(esc.Ref!, origem.Texto, destino, qtt);
-                Toast.Sucesso($"Mudado: {(origem.Qtt > 0 ? LogicaPicagem.TextoQuantidade(qtt) : "tudo")} de {esc.Ref} para {destino}");
+                Toast.Sucesso($"Mudado: {LogicaPicagem.TextoQuantidade(qtt)} de {esc.Ref} para {destino}");
                 _qttTexto = "";
                 return true;
             });

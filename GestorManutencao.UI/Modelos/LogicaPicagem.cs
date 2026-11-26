@@ -40,14 +40,23 @@ public static class LogicaPicagem
 
     // "1 unidade", "2 unidades", "0,5 unidades" (só o um singular).
     public static string TextoUnidades(decimal qtt) => $"{TextoQuantidade(qtt)} {(qtt == 1 ? "unidade" : "unidades")}";
+
+    // Disponível do lugar: com Qtt 0 só é "não indicada" se nada estiver reservado; senão está tudo reservado em conferência.
+    public static string TextoDisponivel(Lugar l) =>
+        l.Qtt > 0 ? TextoUnidades(l.Qtt) : l.SoReservado ? "Reservado em conferência, sem disponível" : "Quantidade não indicada";
 }
 
 // Regras puras da escolha de peça e lugar na ficha (material). O estado da escolha é sempre o EstadoPicagem (fonte única).
 public static class LogicaFichaPeca
 {
-    // Só interessam os lugares com stock: é de lá que a peça pode ter saído.
-    public static IReadOnlyList<Lugar> ComStock(LocalizacoesPeca? lugares) =>
-        lugares?.Lugares.Where(l => l.Qtt > 0).ToList() ?? [];
+    // Só interessam os lugares com stock: é de lá que a peça pode ter saído. Se todo o stock está reservado em conferência
+    // (disponível 0), servem os lugares com reservado, como na API (a saída fica ligada ao lugar para o saldo descer ao validar).
+    public static IReadOnlyList<Lugar> ComStock(LocalizacoesPeca? lugares)
+    {
+        var todos = lugares?.Lugares ?? [];
+        var disponiveis = todos.Where(l => l.Qtt > 0).ToList();
+        return disponiveis.Count > 0 ? disponiveis : todos.Where(l => l.Reservado > 0).ToList();
+    }
 
     // Um só lugar com stock: escolhe-se sozinho. Vários ou nenhum: não.
     public static Lugar? LugarUnico(LocalizacoesPeca? lugares) => ComStock(lugares) is [var unico] ? unico : null;

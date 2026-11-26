@@ -17,7 +17,6 @@ public class RearrumarRegrasTests
     [Theory]
     [InlineData(3, 3, null)]
     [InlineData(3, 1.5, null)]
-    [InlineData(0, 5, null)] // 0 = quantidade não indicada: qualquer pedido move a linha toda
     public void Quantidade_dentro_do_que_la_esta_e_aceite(double existente, double qtt, string? esperado)
         => Assert.Equal(esperado, RegrasLocalizacao.ErroQuantidadeMover((decimal)existente, (decimal)qtt));
 
@@ -26,10 +25,32 @@ public class RearrumarRegrasTests
         => Assert.Equal("Só há 3 nesse lugar.", RegrasLocalizacao.ErroQuantidadeMover(3, 3.5m));
 
     [Fact]
-    public void Quantidade_movida_sem_numero_inventado_quando_a_origem_e_zero()
+    public void Origem_sem_quantidade_indicada_nao_se_move()
+        => Assert.Equal(RegrasLocalizacao.ErroMoverSemQuantidade, RegrasLocalizacao.ErroQuantidadeMover(0, 5));
+
+    [Fact]
+    public void UI_so_diz_nao_indicada_com_qtt_e_reservado_a_zero_e_com_reservado_diz_sem_disponivel()
     {
-        Assert.Equal(2m, RegrasLocalizacao.QuantidadeMovida(5, 2));
-        Assert.Equal(0m, RegrasLocalizacao.QuantidadeMovida(0, 2));
+        var naoIndicada = new Lugar("A", "A-02", 1, 1, 0, "A-02-1-01");
+        var reservado = new Lugar("A", "A-02", 1, 1, 0, "A-02-1-01", 2);
+        var normal = new Lugar("A", "A-02", 1, 1, 3, "A-02-1-01", 2);
+
+        Assert.True(naoIndicada.NaoIndicada);
+        Assert.False(reservado.NaoIndicada);
+        Assert.True(reservado.SoReservado);
+        Assert.Equal("Quantidade não indicada", LogicaPicagem.TextoDisponivel(naoIndicada));
+        Assert.Equal("Reservado em conferência, sem disponível", LogicaPicagem.TextoDisponivel(reservado));
+        Assert.Equal("3 unidades", LogicaPicagem.TextoDisponivel(normal));
+    }
+
+    [Fact]
+    public void UI_lugar_todo_reservado_conta_como_com_stock_so_se_nao_ha_disponivel_noutro()
+    {
+        var reservado = new Lugar("A", "A-02", 1, 1, 0, "A-02-1-01", 2);
+        var outro = new Lugar("B", "B-01", 1, 1, 4, "B-01-1-01");
+
+        Assert.Equal(reservado, LogicaFichaPeca.LugarUnico(new LocalizacoesPeca("P001", 10, 2, 8, [reservado])));
+        Assert.Equal(outro, LogicaFichaPeca.LugarUnico(new LocalizacoesPeca("P001", 10, 6, 4, [reservado, outro])));
     }
 
     [Fact]
@@ -148,19 +169,24 @@ public class RearrumarApiTests : IDisposable
     [Fact]
     public async Task Destino_que_ja_tem_stock_soma()
     {
-        Assert.True((await _repo.ReporAsync("P001", "B", "B-01", 1, 1, 2, "XX", Ct)).Ok);
+        _repo.Semear("P001", "B", "B-01", 1, 1, 2);
         var d = await Lugares(await Mover(await ComoAsync("482913"), "A-02-1-01", "B-01-1-01", 3));
         Assert.Equal(5, Assert.Single(d.Lugares).Qtt);
     }
 
     [Fact]
-    public async Task Origem_com_quantidade_nao_indicada_move_a_linha_sem_inventar_numeros()
+    public async Task Origem_com_quantidade_nao_indicada_400_e_nao_cria_dossier_nem_destino()
     {
-        Assert.True((await _repo.ReporAsync("P002", "A", "A-05", 1, 1, 0, "XX", Ct)).Ok); // qtt 0 = não indicada
-        var d = await Lugares(await Mover(await ComoAsync("482913"), "A-05-1-01", "B-01-1-01", 1, "P002"));
-        var lugar = Assert.Single(d.Lugares);
-        Assert.Equal("B-01-1-01", lugar.Texto);
-        Assert.Equal(0, lugar.Qtt);
+        _repo.Semear("P002", "A", "A-05", 1, 1, 0); // qtt 0 = não indicada: o trigger descartaria o movimento
+        var c = await ComoAsync("482913");
+
+        var r = await Mover(c, "A-05-1-01", "B-01-1-01", 1, "P002");
+
+        Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
+        Assert.Contains("Indique a quantidade do lugar de origem", await r.Content.ReadAsStringAsync());
+        Assert.Empty(_repo.Movimentos);
+        var d = (await c.GetFromJsonAsync<LocalizacoesPecaDto>("/pecas/P002/localizacoes"))!;
+        Assert.Equal("A-05-1-01", Assert.Single(d.Lugares).Texto);
     }
 
     [Theory]
@@ -214,7 +240,7 @@ public class RearrumarApiTests : IDisposable
     public async Task Buffer_nunca_e_destino_nem_origem()
     {
         _repo.DefinirBuffer("Z-09-9-09");
-        Assert.True((await _repo.ReporAsync("P001", "Z", "Z-09", 9, 9, 7, "XX", Ct)).Ok); // 7 à espera no buffer
+        _repo.Semear("P001", "Z", "Z-09", 9, 9, 7); // 7 à espera no buffer
         var c = await ComoAsync("482913");
 
         var paraBuffer = await Mover(c, "A-02-1-01", "Z-09-9-09", 1);
@@ -233,8 +259,6 @@ public class RearrumarApiTests : IDisposable
     {
         public Task<LocalizacoesPecaDto> ListarAsync(string r, CancellationToken ct) => interno.ListarAsync(r, ct);
         public Task<ResultadoMovimento> ArrumarAsync(string r, string c, int e, int n, int p, decimal q, string i, CancellationToken ct) => interno.ArrumarAsync(r, c, e, n, p, q, i, ct);
-        public Task<ResultadoMovimento> DescontarAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => interno.DescontarAsync(r, c, e, n, p, q, i, ct);
-        public Task<ResultadoMovimento> ReporAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => interno.ReporAsync(r, c, e, n, p, q, i, ct);
         public Task<string> VerificarTabelaAsync(CancellationToken ct) => Task.FromResult(tabela);
         public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string c, string e, int n, int p, CancellationToken ct) => interno.ListarPecasDoLugarAsync(c, e, n, p, ct);
         public Task<ResultadoMovimento> MoverAsync(string r, LugarDto o, LugarDto d, decimal q, string i, CancellationToken ct) => Task.FromResult(resultado!);

@@ -116,7 +116,7 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Material_com_lugar_unico_desconta_do_lugar_e_so_o_disponivel_desce()
+    public async Task Material_com_lugar_unico_reserva_no_lugar_e_so_o_disponivel_desce()
     {
         var c = await ComoAnaAsync();
 
@@ -128,8 +128,29 @@ public class FichaConferenciaApiTests : IDisposable
         var p = await PecaAsync(c);
         Assert.Equal(10, p.Stock);
         Assert.Equal(8, p.Disponivel);
-        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01")); // disponível; o saldo continua nos 3
+        var lugares = await LugaresAsync(c);
+        Assert.Equal(2, lugares.Lugares.Single().Reservado);
+        Assert.Equal(3, lugares.Localizado);
         Assert.Equal("A-02-1-01", Assert.Single(await ListaAsync(c)).Local);
+    }
+
+    [Fact]
+    public async Task Saldo_do_lugar_so_desce_ao_validar_a_ficha()
+    {
+        var ana = await ComoAnaAsync();
+        var chefe = await ComoAsync("603918");
+        await JuntarAsync(ana, 2);
+        await ConcluirAsync(ana);
+        Assert.Equal(3, (await LugaresAsync(chefe)).Localizado);
+
+        Assert.Equal(HttpStatusCode.OK, (await chefe.PostAsync("/validacao/F1", null)).StatusCode);
+
+        var depois = await LugaresAsync(chefe);
+        var lugar = Assert.Single(depois.Lugares);
+        Assert.Equal((1m, 0m), (lugar.Qtt, lugar.Reservado));
+        Assert.Equal(1, depois.Localizado);
+        Assert.Equal(8, (await PecaAsync(chefe)).Stock);
     }
 
     [Fact]
@@ -163,7 +184,7 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Lugar_sem_quantidade_suficiente_grava_na_mesma_e_avisa()
+    public async Task Lugar_sem_disponivel_suficiente_grava_na_mesma_com_o_lugar_e_avisa()
     {
         var c = await ComoAnaAsync();
 
@@ -172,10 +193,25 @@ public class FichaConferenciaApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
         var m = (await r.Content.ReadFromJsonAsync<MaterialDto>())!;
         Assert.True(m.SaidaDada);
-        Assert.Contains("A-02-1-01", m.AvisoStock);
-        Assert.Null(m.Local);
-        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.Contains("só tem 3", m.AvisoStock);
+        Assert.Equal("A-02-1-01", m.Local); // o lugar escolhido grava-se na linha: é o que o trigger lê ao validar
+        Assert.Equal(0, await NoLugarAsync(c, "A-02-1-01")); // tudo reservado
         Assert.Equal(5, (await PecaAsync(c)).Disponivel);
+    }
+
+    [Fact]
+    public async Task Todo_o_stock_do_lugar_reservado_sem_local_grava_o_lugar_com_aviso_em_vez_de_sair_sem_lugar()
+    {
+        var c = await ComoAnaAsync();
+        await JuntarAsync(c, 3); // reserva os 3: o disponível do lugar fica a 0
+
+        var m = await MaterialAsync(await JuntarAsync(c, 1));
+
+        Assert.True(m.SaidaDada);
+        Assert.Equal("A-02-1-01", m.Local); // sem o lugar o trigger não desceria o saldo ao validar
+        Assert.Contains("só tem 0", m.AvisoStock);
+        Assert.DoesNotContain("sem localização", m.AvisoStock);
+        Assert.Equal(4, (await LugaresAsync(c)).Lugares.Single().Reservado);
     }
 
     [Fact]
@@ -203,7 +239,7 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Editar_a_quantidade_repoe_e_desconta_o_mesmo_lugar()
+    public async Task Editar_a_quantidade_muda_a_reserva_do_mesmo_lugar()
     {
         var c = await ComoAnaAsync();
         var m = (await (await JuntarAsync(c, 2)).Content.ReadFromJsonAsync<MaterialDto>())!;
@@ -217,7 +253,7 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Editar_o_lugar_repoe_o_antigo_e_desconta_o_novo()
+    public async Task Editar_o_lugar_liberta_a_reserva_do_antigo_e_reserva_no_novo()
     {
         var c = await ComoAnaAsync();
         await Arrumar(c, "A-03-2-01", 2);
@@ -247,19 +283,20 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Apagar_repoe_o_lugar()
+    public async Task Apagar_liberta_a_reserva_do_lugar_sem_repor_saldo()
     {
         var c = await ComoAnaAsync();
         var m = (await (await JuntarAsync(c, 2)).Content.ReadFromJsonAsync<MaterialDto>())!;
 
         Assert.Equal(HttpStatusCode.NoContent, (await c.DeleteAsync($"/intervencoes/F1/materiais/{m.Id}")).StatusCode);
 
-        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        var lugares = await LugaresAsync(c);
+        Assert.Equal((3m, 0m, 3m), (lugares.Lugares.Single().Qtt, lugares.Lugares.Single().Reservado, lugares.Localizado));
         Assert.Equal(10, (await PecaAsync(c)).Disponivel);
     }
 
     [Fact]
-    public async Task Falha_a_dar_saida_repoe_o_lugar_e_deixa_a_peca_por_dar_repetivel()
+    public async Task Falha_a_dar_saida_nao_reserva_o_lugar_e_deixa_a_peca_por_dar_repetivel()
     {
         var c = await ComoAnaAsync();
         _pecas.FalharSaida = true;
@@ -438,21 +475,23 @@ public class FichaConferenciaApiTests : IDisposable
         c.PutAsJsonAsync($"/intervencoes/{ficha}/materiais/{id}", new PedidoMaterial("Peça", qtt, 1m, peca, local));
 
     [Fact]
-    public async Task Editar_material_que_saiu_com_lugar_insuficiente_nunca_repoe_o_que_nao_descontou()
+    public async Task Editar_material_que_reservou_mais_do_que_o_lugar_tem_nunca_deixa_o_saldo_acima_do_que_existe()
     {
         var c = await ComoAnaAsync();
-        var m = await MaterialAsync(await JuntarAsync(c, 5, "A-02-1-01")); // o lugar só tem 3: sai sem descontar
-        Assert.Null(m.Local);
-        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        var m = await MaterialAsync(await JuntarAsync(c, 5, "A-02-1-01")); // o lugar só tem 3: reserva 5 e avisa
+        Assert.Equal("A-02-1-01", m.Local);
+        Assert.Equal(0, await NoLugarAsync(c, "A-02-1-01"));
 
         var e = await MaterialAsync(await EditarAsync(c, m.Id, 2));
 
         Assert.Equal("A-02-1-01", e.Local);
-        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01")); // 3 - 2; repor 5 daria 6
+        Assert.Null(e.AvisoStock);
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01")); // 3 - 2 reservados
+        Assert.Equal(3, (await LugaresAsync(c)).Localizado); // o saldo nunca mudou: só desce ao validar
     }
 
     [Fact]
-    public async Task Apagar_material_que_saiu_com_lugar_insuficiente_nunca_repoe_o_que_nao_descontou()
+    public async Task Apagar_material_que_reservou_mais_do_que_o_lugar_tem_deixa_o_saldo_como_estava()
     {
         var c = await ComoAnaAsync();
         var m = await MaterialAsync(await JuntarAsync(c, 5, "A-02-1-01"));
@@ -464,7 +503,7 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Editar_mudando_de_peca_repoe_o_lugar_da_antiga_e_a_nova_sem_lugar_avisa()
+    public async Task Editar_mudando_de_peca_liberta_a_reserva_da_antiga_e_a_nova_sem_lugar_avisa()
     {
         var c = await ComoAnaAsync();
         var m = await MaterialAsync(await JuntarAsync(c, 2));
@@ -512,48 +551,35 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Editar_recusado_com_a_reposicao_a_falhar_nao_desconta_duas_vezes()
+    public async Task Editar_recusado_com_a_saida_a_refazer_mantem_a_reserva_uma_so_vez()
     {
         var c = await ComoAnaAsync();
         var m = await MaterialAsync(await JuntarAsync(c, 2));
         _recusa.RecusarMaterial = true;
-        _lugares.FalharRepor = true;
 
         var r = await EditarAsync(c, m.Id, 3);
 
         Assert.Equal(HttpStatusCode.Conflict, r.StatusCode);
-        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01")); // continuou descontado: nada a repor nem a descontar de novo
+        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01")); // refez a saída antiga: reserva de 2, não de 4
         var depois = Assert.Single(await ListaAsync(c));
         Assert.True(depois.SaidaDada);
         Assert.Equal("A-02-1-01", depois.Local);
     }
 
     [Fact]
-    public async Task Editar_com_a_reposicao_a_falhar_avisa_lugares_por_repor()
+    public async Task Editar_e_apagar_ja_nao_ha_lugares_por_repor_nem_avisos_de_reposicao()
     {
         var c = await ComoAnaAsync();
         var m = await MaterialAsync(await JuntarAsync(c, 2));
-        _lugares.FalharRepor = true;
 
         var e = await MaterialAsync(await EditarAsync(c, m.Id, 1));
 
         Assert.True(e.SaidaDada);
-        Assert.Contains("Lugares por repor", e.AvisoStock);
-    }
-
-    [Fact]
-    public async Task Apagar_com_a_reposicao_a_falhar_apaga_e_avisa_que_saiu_sem_repor()
-    {
-        var c = await ComoAnaAsync();
-        var m = await MaterialAsync(await JuntarAsync(c, 2));
-        _lugares.FalharRepor = true;
-
+        Assert.Null(e.AvisoStock);
         var r = await c.DeleteAsync($"/intervencoes/F1/materiais/{m.Id}");
-
-        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
-        Assert.Contains("sem repor", JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement.GetProperty("avisoStock").GetString());
+        Assert.Equal(HttpStatusCode.NoContent, r.StatusCode);
         Assert.Empty(await ListaAsync(c));
-        Assert.Equal(1, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
     }
 
     [Fact]
@@ -638,7 +664,7 @@ public class FichaConferenciaApiTests : IDisposable
     // ---------- Falhas das localizações
 
     [Fact]
-    public async Task Localizacoes_indisponiveis_a_saida_da_se_e_avisa_que_nao_descontou()
+    public async Task Localizacoes_indisponiveis_a_saida_da_se_com_o_lugar_pedido_e_avisa()
     {
         var c = await ComoAnaAsync();
         _lugares.Indisponivel = true;
@@ -649,31 +675,30 @@ public class FichaConferenciaApiTests : IDisposable
         Assert.True(semLocal.SaidaDada);
         Assert.Contains("sem descontar de nenhum lugar", semLocal.AvisoStock);
         Assert.True(comLocal.SaidaDada);
-        Assert.Null(comLocal.Local);
-        Assert.Contains("sem descontar do lugar", comLocal.AvisoStock);
+        Assert.Equal("A-02-1-01", comLocal.Local); // o lugar pedido grava-se na linha mesmo sem poder confirmar a quantidade
+        Assert.Contains("Não foi possível confirmar a quantidade", comLocal.AvisoStock);
         Assert.Equal(8, (await PecaAsync(c)).Disponivel);
         _lugares.Indisponivel = false;
-        Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
+        Assert.Equal(2, await NoLugarAsync(c, "A-02-1-01")); // só a saída com lugar reserva (1); nada desceu do saldo
     }
 
     [Fact]
-    public async Task Lugar_ocupado_nao_da_a_saida_e_a_peca_fica_por_dar_ate_repetir()
+    public async Task Saida_que_falha_fica_por_dar_sem_reservar_o_lugar_ate_repetir()
     {
         var c = await ComoAnaAsync();
-        _lugares.Ocupado = true;
+        _pecas.FalharSaida = true;
 
         var m = await MaterialAsync(await JuntarAsync(c, 2, "A-02-1-01"));
 
         Assert.False(m.SaidaDada);
         Assert.Equal("P001", m.Ref);
-        Assert.Contains("ocupado", m.AvisoStock);
         Assert.Equal(10, (await PecaAsync(c)).Disponivel);
         Assert.Equal(3, await NoLugarAsync(c, "A-02-1-01"));
         var lido = Assert.Single(await ListaAsync(c));
         Assert.False(lido.SaidaDada);
         Assert.Equal("P001", lido.Ref);
 
-        _lugares.Ocupado = false;
+        _pecas.FalharSaida = false;
         var r = await c.PostAsJsonAsync($"/intervencoes/F1/materiais/{m.Id}/saida", new PedidoSaida(null, "A-02-1-01"));
 
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
@@ -714,18 +739,19 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Cancelar_com_a_reposicao_a_falhar_avisa_lugares_por_repor()
+    public async Task Cancelar_nao_tem_lugares_por_repor_e_o_saldo_nunca_se_mexeu()
     {
         var ana = await ComoAnaAsync();
         var chefe = await ComoAsync("603918");
         await JuntarAsync(ana, 2);
-        _lugares.FalharRepor = true;
 
         var r = (await (await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"))).Content.ReadFromJsonAsync<IntervencaoDto>())!;
 
         Assert.Equal(EstadoIntervencao.Cancelada, r.Estado);
-        Assert.Equal("Lugares por repor", r.AvisoStock);
+        Assert.Null(r.AvisoStock);
         Assert.Equal(["F1"], _pecas.Canceladas);
+        var lugares = await LugaresAsync(chefe);
+        Assert.Equal((3m, 0m, 3m), (lugares.Lugares.Single().Qtt, lugares.Lugares.Single().Reservado, lugares.Localizado));
     }
 
     // ---------- Supervisor: detalhe com peças, Ref omitida e validar com peças por dar
@@ -820,10 +846,10 @@ public class FichaConferenciaApiTests : IDisposable
     public async Task Put_sem_ref_num_material_por_dar_mantem_a_ligacao_sem_tentar_a_saida()
     {
         var ana = await ComoAnaAsync();
-        _lugares.Ocupado = true;
+        _pecas.FalharSaida = true;
         var m = await MaterialAsync(await JuntarAsync(ana, 2, "A-02-1-01"));
         Assert.False(m.SaidaDada);
-        _lugares.Ocupado = false;
+        _pecas.FalharSaida = false;
 
         var e = await MaterialAsync(await PutBrutoAsync(ana, m.Id, """{"design":"Peça","qtt":2,"epv":5}"""));
 
@@ -854,9 +880,9 @@ public class FichaConferenciaApiTests : IDisposable
     {
         var ana = await ComoAnaAsync();
         var chefe = await ComoAsync("603918");
-        _lugares.Ocupado = true;
+        _pecas.FalharSaida = true;
         var m = await MaterialAsync(await JuntarAsync(ana, 2, "A-02-1-01"));
-        _lugares.Ocupado = false;
+        _pecas.FalharSaida = false;
         Assert.Equal(HttpStatusCode.OK, (await ConcluirAsync(ana)).StatusCode);
 
         var r = await chefe.PostAsync("/validacao/F1", null);
@@ -880,9 +906,9 @@ public class FichaConferenciaApiTests : IDisposable
     {
         var ana = await ComoAnaAsync();
         var chefe = await ComoAsync("603918");
-        _lugares.Ocupado = true;
+        _pecas.FalharSaida = true;
         var m = await MaterialAsync(await JuntarAsync(ana, 2, "A-02-1-01"));
-        _lugares.Ocupado = false;
+        _pecas.FalharSaida = false;
         await ConcluirAsync(ana);
         Assert.Equal(HttpStatusCode.Conflict, (await chefe.PostAsync("/validacao/F1", null)).StatusCode);
 
@@ -955,9 +981,9 @@ public class FichaConferenciaApiTests : IDisposable
     {
         var ana = await ComoAnaAsync();
         var chefe = await ComoAsync("603918");
-        _lugares.Ocupado = true;
+        _pecas.FalharSaida = true;
         await JuntarAsync(ana, 2, "A-02-1-01");
-        _lugares.Ocupado = false;
+        _pecas.FalharSaida = false;
 
         var r = (await (await chefe.PostAsJsonAsync("/intervencoes/F1/cancelar", new PedidoCancelamento("Duplicada"))).Content.ReadFromJsonAsync<IntervencaoDto>())!;
 
@@ -997,8 +1023,10 @@ public class FichaConferenciaApiTests : IDisposable
     }
 
     // Repositório de peças que regista as chamadas e falha onde se pedir; o resto é o de memória.
-    private sealed class PecasEspia(RepositorioPecasMemoria memoria) : IRepositorioPecas
+    private sealed class PecasEspia(RepositorioPecasMemoria memoria) : IRepositorioPecas, ISaidasPorLugar
     {
+        public IReadOnlyList<SaidaNoLugar> SaidasComLugar(string refPeca) => memoria.SaidasComLugar(refPeca);
+
         public List<string> Abertas = [], Confirmadas = [], Canceladas = [];
         public bool FalharAbrir, FalharConfirmar, FalharCancelar, FalharSaida;
 
@@ -1041,20 +1069,13 @@ public class FichaConferenciaApiTests : IDisposable
     // Localizações de memória que falham onde se pedir.
     private sealed class LugaresEspia(IRepositorioLocalizacoes interno) : IRepositorioLocalizacoes
     {
-        public bool Indisponivel, Ocupado, FalharRepor;
+        public bool Indisponivel;
 
         private void Verificar() { if (Indisponivel) throw new RepositorioIndisponivelException(); }
 
         public Task<LocalizacoesPecaDto> ListarAsync(string refPeca, CancellationToken ct) { Verificar(); return interno.ListarAsync(refPeca, ct); }
         public Task<ResultadoMovimento> ArrumarAsync(string refPeca, string corredor, int estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct) =>
             interno.ArrumarAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
-        public Task<ResultadoMovimento> DescontarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
-        {
-            Verificar();
-            return Ocupado ? Task.FromResult(ResultadoMovimento.Falha(RegrasPecas.ErroOcupado)) : interno.DescontarAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
-        }
-        public Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct) =>
-            FalharRepor ? Task.FromResult(ResultadoMovimento.Falha("Não foi possível repor.")) : interno.ReporAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
         public Task<string> VerificarTabelaAsync(CancellationToken ct) { Verificar(); return interno.VerificarTabelaAsync(ct); }
         public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string corredor, string estante, int nivel, int posicao, CancellationToken ct) =>
             interno.ListarPecasDoLugarAsync(corredor, estante, nivel, posicao, ct);

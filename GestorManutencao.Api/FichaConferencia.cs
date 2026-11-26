@@ -2,6 +2,7 @@ namespace GestorManutencao.Api;
 
 // Conferência das peças da ficha: lugar de onde sai cada peça, saída em conferência e as falhas parciais.
 // Regra comum: nada disto desfaz o estado da ficha; o que falha fica "por dar" ou "por confirmar" e repete-se.
+// A API não mexe no saldo dos lugares (u_pecaloc): a saída só grava o lugar na linha bi e o trigger desce o saldo quando a ficha é validada.
 public static partial class EndpointsIntervencoes
 {
     private const string ErroEscolhaLugar = "escolha_o_lugar";
@@ -9,9 +10,7 @@ public static partial class EndpointsIntervencoes
     private const string AvisoSemLugar = "Peça sem localização: saiu sem descontar de nenhum lugar.";
     private const string AvisoPorConfirmar = "Conferência por confirmar";
     private const string AvisoPorCancelar = "Conferência por cancelar";
-    private const string AvisoPorRepor = "Lugares por repor";
     private const string AvisoLugaresSemFormato = "Os lugares da peça não têm um formato reconhecido: saiu sem descontar de nenhum lugar.";
-    private const string AvisoSaiuSemRepor = "Material apagado, mas a peça saiu sem repor no lugar: avise o supervisor.";
 
     // Lugar, aviso (peça sem lugar) ou erro de resposta (400 lugar inválido, 409 escolha_o_lugar).
     private sealed record LugarResolvido(LugarDto? Lugar, string? Aviso, IResult? Erro);
@@ -19,7 +18,8 @@ public static partial class EndpointsIntervencoes
     private static string? Juntar(string? a, string? b) =>
         string.Join(" ", new[] { a, b }.Where(x => !string.IsNullOrEmpty(x))) is { Length: > 0 } t ? t : null;
 
-    // Pedido com Local: vale esse (400 se inválido ou sem peça). Sem Local: o lugar anterior da saída, se vier; senão o único lugar da peça com stock;
+    // Pedido com Local: vale esse (400 se inválido ou sem peça). Sem Local: o lugar anterior da saída, se vier; senão o único lugar da peça com stock disponível
+    // (ou, se todo o stock estiver reservado em conferência, o único lugar reservado: o aviso de disponível sai depois);
     // vários = 409 escolha_o_lugar com a lista; nenhum (ou tabela em falta) = grava e avisa.
     private static async Task<LugarResolvido> ResolverLugarAsync(IRepositorioLocalizacoes locs, string refPeca, string? pedido, string? anterior, ILogger log, CancellationToken ct)
     {
@@ -32,8 +32,10 @@ public static partial class EndpointsIntervencoes
         try
         {
             if (await locs.VerificarTabelaAsync(ct) != "") return new(null, AvisoSemLugar, null);
-            var comStock = (await locs.ListarAsync(refPeca, ct)).Lugares.Where(l => l.Qtt > 0).ToList();
-            // Só se desconta de um lugar que se sabe repor: o texto tem de passar por LerLugar (o mesmo que a reposição usa).
+            var todos = (await locs.ListarAsync(refPeca, ct)).Lugares;
+            var comStock = todos.Where(l => l.Qtt > 0).ToList();
+            if (comStock.Count == 0) comStock = todos.Where(l => l.Reservado > 0).ToList();
+            // Só se propõe um lugar que o trigger sabe ler: o texto tem de passar por LerLugar.
             var usaveis = comStock.Where(l => RegrasLocalizacao.LerLugar(l.Texto) is not null).ToList();
             return usaveis.Count switch
             {
@@ -49,27 +51,20 @@ public static partial class EndpointsIntervencoes
         }
     }
 
-    // Soma de volta ao lugar. Sem lugar gravado não há nada a repor (true); um lugar gravado que não se consegue ler é false (desfasado, fica no log).
-    // Nunca lança: false = o lugar ficou desfasado.
-    private static async Task<bool> ReporLugarAsync(IRepositorioLocalizacoes locs, string refPeca, string? local, decimal qtt, string iniciais, ILogger log)
+    // Avisa se o lugar escolhido não tem disponível (saldo menos o reservado) para a quantidade; só avisa, a saída dá-se na mesma.
+    private static async Task<string?> AvisoDisponivelAsync(IRepositorioLocalizacoes locs, string refPeca, LugarDto lugar, decimal qtt, ILogger log)
     {
-        if (string.IsNullOrWhiteSpace(local)) return true;
-        if (RegrasLocalizacao.LerLugar(local) is not { } l)
-        {
-            log.LogError("Não foi possível repor {Qtt} da peça {Peca}: o lugar gravado '{Lugar}' não tem formato reconhecido.", qtt, refPeca, local);
-            return false;
-        }
         try
         {
-            var r = await locs.ReporAsync(refPeca, l.Corredor, l.Estante, l.Nivel, l.Posicao, qtt, iniciais, CancellationToken.None);
-            if (r.Ok) return true;
-            log.LogError("Não foi possível repor {Qtt} da peça {Peca} no lugar {Lugar}: {Erro}", qtt, refPeca, l.Texto, r.Erro);
+            var l = (await locs.ListarAsync(refPeca, CancellationToken.None)).Lugares.FirstOrDefault(x => RegrasLocalizacao.MesmoLugar(x, lugar));
+            var disponivel = l?.Qtt ?? 0;
+            return disponivel >= qtt ? null : $"O lugar {lugar.Texto} só tem {disponivel:0.###} disponível: confirme o lugar da peça.";
         }
         catch (Exception ex)
         {
-            log.LogError(ex, "Não foi possível repor a peça {Peca} no lugar {Lugar}.", refPeca, l.Texto);
+            log.LogError(ex, "Não foi possível consultar a quantidade da peça {Peca} no lugar {Lugar}.", refPeca, lugar.Texto);
+            return $"Não foi possível confirmar a quantidade disponível no lugar {lugar.Texto}.";
         }
-        return false;
     }
 
     private static async Task LigarSeguraAsync(IRepositorioPecas pecas, string materialId, string refPeca, string iniciais, ILogger log)
@@ -78,39 +73,19 @@ public static partial class EndpointsIntervencoes
         catch (Exception ex) { log.LogError(ex, "Não foi possível ligar a peça ao material {Material}.", materialId); }
     }
 
-    // Desconta do lugar e dá a saída em conferência (sem token do pedido: o material já está gravado). Sem quantidade no lugar sai na mesma, com aviso;
-    // com o lugar ocupado (falha repetível) a saída não se dá e a peça fica "por dar".
-    // Se a saída falhar repõe o lugar e liga a peça ao material (u_matinterv.ref), para Ref preenchida e SaidaDada = false significar "peça por dar".
+    // Dá a saída em conferência com o lugar escolhido (sem token do pedido: o material já está gravado). Sem disponível no lugar sai na mesma, com aviso.
+    // Se a saída falhar liga a peça ao material (u_matinterv.ref), para Ref preenchida e SaidaDada = false significar "peça por dar".
     private static async Task<(bool Ok, string? Erro, string? Aviso, string? Local)> TentarSaidaAsync(IRepositorioPecas pecas, IRepositorioLocalizacoes locs,
         string fichaId, string materialId, string refPeca, decimal qtt, LugarDto? lugar, string? avisoLugar, string iniciais, ILogger log)
     {
-        string? avisoStock = null, local = null, aviso = avisoLugar;
+        string? avisoStock = null, aviso = avisoLugar;
+        var local = lugar?.Texto;
         try
         {
             if (await pecas.ObterPorCodigoAsync(refPeca, CancellationToken.None) is { } peca) avisoStock = RegrasPecas.AvisoStock(qtt, peca.Disponivel);
         }
         catch (Exception ex) { log.LogError(ex, "Não foi possível ler o stock da peça {Peca}.", refPeca); }
-
-        if (lugar is not null)
-        {
-            try
-            {
-                var d = await locs.DescontarAsync(refPeca, lugar.Corredor, lugar.Estante, lugar.Nivel, lugar.Posicao, qtt, iniciais, CancellationToken.None);
-                if (d.Ok) local = lugar.Texto;
-                else if (d.Erro == RegrasPecas.ErroOcupado)
-                {
-                    var ocupado = $"O lugar {lugar.Texto} está ocupado por outro movimento: a peça ficou por dar, repita a saída.";
-                    await LigarSeguraAsync(pecas, materialId, refPeca, iniciais, log);
-                    return (false, ocupado, Juntar(avisoLugar, ocupado), null);
-                }
-                else aviso = Juntar(aviso, $"O lugar {lugar.Texto} não tem quantidade suficiente: a peça saiu sem descontar do lugar.");
-            }
-            catch (Exception ex)
-            {
-                log.LogError(ex, "Falha ao descontar a peça {Peca} do lugar {Lugar}.", refPeca, lugar.Texto);
-                aviso = Juntar(aviso, $"Não foi possível descontar do lugar {lugar.Texto}: a peça saiu sem descontar do lugar.");
-            }
-        }
+        if (lugar is not null) aviso = Juntar(aviso, await AvisoDisponivelAsync(locs, refPeca, lugar, qtt, log));
 
         string erro;
         try
@@ -124,26 +99,17 @@ public static partial class EndpointsIntervencoes
             log.LogError(ex, "Falha ao dar saída do material {Material}.", materialId);
             erro = "Não foi possível dar saída da peça agora; tente repetir.";
         }
-        var reposto = await ReporLugarAsync(locs, refPeca, local, qtt, iniciais, log);
         await LigarSeguraAsync(pecas, materialId, refPeca, iniciais, log);
-        return (false, erro, Juntar(avisoLugar, reposto ? null : AvisoPorRepor), null);
+        return (false, erro, avisoLugar, null);
     }
 
     // Repõe o que a anulação desfez (a saída com o seu lugar, ou só a ligação quando estava por dar). Devolve false se não conseguiu.
-    // lugarJaDescontado: a reposição do lugar falhou na anulação, por isso o lugar continua descontado e a saída volta só a gravar o Local.
-    private static async Task<bool> ReporSaidaAsync(IRepositorioPecas pecas, IRepositorioLocalizacoes locs, string fichaId, MaterialDto mat, string iniciais, ILogger log, bool lugarJaDescontado = false)
+    private static async Task<bool> ReporSaidaAsync(IRepositorioPecas pecas, IRepositorioLocalizacoes locs, string fichaId, MaterialDto mat, string iniciais, ILogger log)
     {
         try
         {
             if (mat.SaidaDada)
             {
-                if (lugarJaDescontado)
-                {
-                    var d = await pecas.DarSaidaAsync(fichaId, mat.Id, mat.Ref, mat.Qtt, iniciais, CancellationToken.None, mat.Local);
-                    if (d.Ok) return true;
-                    log.LogError("Não foi possível repor a saída do material {Material}: {Erro}", mat.Id, d.Erro);
-                    return false;
-                }
                 var s = await TentarSaidaAsync(pecas, locs, fichaId, mat.Id, mat.Ref, mat.Qtt, RegrasLocalizacao.LerLugar(mat.Local), null, iniciais, log);
                 if (s.Ok) return true;
                 log.LogError("Não foi possível repor a saída do material {Material}: {Erro}", mat.Id, s.Erro);
@@ -225,14 +191,13 @@ public static partial class EndpointsIntervencoes
         }
     }
 
-    // Ficha cancelada: lê o lugar de cada saída, apaga a conferência e só então repõe os lugares (se a conferência não saiu, as saídas continuam e os lugares ficam).
-    // null = tudo feito; senão o aviso para a resposta. Repetir é seguro: sem conferência já não há saídas a repor.
-    private static async Task<string?> LimparConferenciaAsync(IRepositorioPecas pecas, IRepositorioLocalizacoes locs, string fichaId, IReadOnlyList<MaterialDto> materiais, string iniciais, ILogger log)
+    // Ficha cancelada: apaga a conferência e limpa a ligação das peças por dar. Os lugares não se repõem: o saldo só desce ao validar, por isso nada saiu.
+    // null = tudo feito; senão o aviso para a resposta. Repetir é seguro.
+    private static async Task<string?> LimparConferenciaAsync(IRepositorioPecas pecas, string fichaId, IReadOnlyList<MaterialDto> materiais, string iniciais, ILogger log)
     {
         try
         {
             var enriquecidos = await pecas.EnriquecerMateriaisAsync(materiais, CancellationToken.None);
-            var saidas = enriquecidos.Where(m => m.SaidaDada && m.Ref != "").ToList();
             var porDar = enriquecidos.Where(m => !m.SaidaDada && m.Ref != "").ToList();
             var r = await pecas.CancelarConferenciaAsync(fichaId, iniciais, CancellationToken.None);
             if (!r.Ok)
@@ -247,10 +212,7 @@ public static partial class EndpointsIntervencoes
                 var a = await pecas.AnularSaidaAsync(m.Id, iniciais, CancellationToken.None);
                 if (!a.Ok) { log.LogError("Não foi possível limpar a peça por dar do material {Material}: {Erro}", m.Id, a.Erro); ligacoesLimpas = false; }
             }
-            if (!ligacoesLimpas) return AvisoPorCancelar;
-            var todosRepostos = true;
-            foreach (var m in saidas) todosRepostos &= await ReporLugarAsync(locs, m.Ref, m.Local, m.Qtt, iniciais, log);
-            return todosRepostos ? null : AvisoPorRepor;
+            return ligacoesLimpas ? null : AvisoPorCancelar;
         }
         catch (Exception ex)
         {

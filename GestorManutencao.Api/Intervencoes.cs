@@ -491,13 +491,10 @@ public static partial class EndpointsIntervencoes
 
                     // Se a anulação falhar o material não se edita.
                     var anular = antigo.Ref != "" && (!mesmaPeca || (antigo.SaidaDada && !manter));
-                    string? avisoRepor = null;
-                    var reposto = true;
                     if (anular)
                     {
                         var (ok, motivo) = await AnularSaidaSeguraAsync(pecas, materialId, t.Codigo, log);
                         if (!ok) return Results.Json(new { erro = motivo }, statusCode: StatusCodes.Status409Conflict);
-                        if (antigo.SaidaDada && !(reposto = await ReporLugarAsync(locs, antigo.Ref, antigo.Local, antigo.Qtt, t.Codigo, log))) avisoRepor = AvisoPorRepor;
                     }
                     var tk = anular ? CancellationToken.None : ct;
                     (ResultadoIntervencao Resultado, MaterialDto? Material) edicao;
@@ -505,21 +502,21 @@ public static partial class EndpointsIntervencoes
                     catch (Exception ex)
                     {
                         log.LogError(ex, "Falha ao editar o material {Material}.", materialId);
-                        if (anular && !await ReporSaidaAsync(pecas, locs, id, antigo, t.Codigo, log, !reposto)) return StockDesfasado();
+                        if (anular && !await ReporSaidaAsync(pecas, locs, id, antigo, t.Codigo, log)) return StockDesfasado();
                         throw;
                     }
                     var (res, mat) = edicao;
                     if (res != ResultadoIntervencao.Ok || mat is null)
                     {
-                        if (anular && !await ReporSaidaAsync(pecas, locs, id, antigo, t.Codigo, log, !reposto)) return StockDesfasado();
+                        if (anular && !await ReporSaidaAsync(pecas, locs, id, antigo, t.Codigo, log)) return StockDesfasado();
                         return Resposta((res, mat));
                     }
                     // O material já está gravado: uma falha ao mexer no stock nunca o desfaz (SaidaDada = false, a ligação fica e o ecrã oferece repetir).
                     if (soMaterial) return Resposta((res, mat with { Ref = antigo.Ref, SaidaDada = false, Local = antigo.Local }));
-                    if (refPeca == "") return Resposta((res, mat with { Ref = "", SaidaDada = false, AvisoStock = avisoRepor }));
+                    if (refPeca == "") return Resposta((res, mat with { Ref = "", SaidaDada = false }));
                     if (antigo.SaidaDada && !anular) return Resposta((res, mat with { Ref = antigo.Ref, SaidaDada = true, Local = antigo.Local }));
                     var s = await TentarSaidaAsync(pecas, locs, id, materialId, refPeca, qtt, lugar.Lugar, lugar.Aviso, t.Codigo, log);
-                    return Resposta((res, mat with { Ref = refPeca, SaidaDada = s.Ok, Local = s.Local, AvisoStock = Juntar(s.Aviso, avisoRepor) }));
+                    return Resposta((res, mat with { Ref = refPeca, SaidaDada = s.Ok, Local = s.Local, AvisoStock = s.Aviso }));
                 }));
 
         // Repete a saída que falhou. Sem Ref no corpo vale a peça já ligada ao material; a do corpo, se vier, prevalece.
@@ -552,13 +549,12 @@ public static partial class EndpointsIntervencoes
                 if (!ficha.PodeEditar) return Resposta<object>((ResultadoIntervencao.Conflito, null));
                 var mat = (await pecas.EnriquecerMateriaisAsync([lido], ct))[0];
 
-                // A saída anula-se (e o lugar repõe-se) antes de apagar; se a anulação falhar nada se apaga, e se o apagar falhar a seguir repõe-se a saída.
-                var reposto = true;
+                // A saída anula-se antes de apagar (o saldo do lugar não se mexe: a linha em conferência nunca o desceu); se a anulação falhar nada se apaga,
+                // e se o apagar falhar a seguir repõe-se a saída.
                 if (mat.SaidaDada)
                 {
                     var (ok, motivo) = await AnularSaidaSeguraAsync(pecas, materialId, t.Codigo, log);
                     if (!ok) return Results.Json(new { erro = motivo }, statusCode: StatusCodes.Status409Conflict);
-                    reposto = await ReporLugarAsync(locs, mat.Ref, mat.Local, mat.Qtt, t.Codigo, log);
                 }
                 var tk = mat.SaidaDada ? CancellationToken.None : ct;
                 ResultadoIntervencao r;
@@ -567,11 +563,11 @@ public static partial class EndpointsIntervencoes
                 {
                     log.LogError(ex, "Falha ao apagar o material {Material}.", materialId);
                     // Sem saída dada nada se desfez antes de apagar (a ligação "por dar" não se mexeu): não há o que repor.
-                    if (mat.SaidaDada && !await ReporSaidaAsync(pecas, locs, id, mat, t.Codigo, log, !reposto)) return StockDesfasado();
+                    if (mat.SaidaDada && !await ReporSaidaAsync(pecas, locs, id, mat, t.Codigo, log)) return StockDesfasado();
                     throw;
                 }
-                if (r == ResultadoIntervencao.Ok) return reposto ? Results.NoContent() : Results.Ok(new { avisoStock = AvisoSaiuSemRepor });
-                return !mat.SaidaDada || await ReporSaidaAsync(pecas, locs, id, mat, t.Codigo, log, !reposto) ? Resposta<object>((r, null)) : StockDesfasado();
+                if (r == ResultadoIntervencao.Ok) return Results.NoContent();
+                return !mat.SaidaDada || await ReporSaidaAsync(pecas, locs, id, mat, t.Codigo, log) ? Resposta<object>((r, null)) : StockDesfasado();
             }));
 
         // Ficha manual (operador e supervisor com número de técnico), ficha completa, edição, cancelamento e fecho das fichas antigas.
@@ -612,7 +608,7 @@ public static partial class EndpointsIntervencoes
             });
         });
 
-        // Cancelar apaga a conferência da ficha e repõe os lugares; os materiais lêem-se antes, porque a conferência leva as linhas.
+        // Cancelar apaga a conferência da ficha (os lugares não precisam de reposição: o saldo só desce ao validar); os materiais lêem-se antes, porque a conferência leva as linhas.
         g.MapPost("/intervencoes/{id}/cancelar", (string id, PedidoCancelamento p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, IRepositorioLocalizacoes locs, ILogger<Program> log, CancellationToken ct) =>
             RegrasFicha.ValidarCancelamento(p.Motivo) is { } erro
                 ? Task.FromResult(PedidoInvalido(erro))
@@ -621,10 +617,10 @@ public static partial class EndpointsIntervencoes
                     var antes = await repo.ObterDetalheAsync(id, s, true, ct);
                     // Já cancelada com a limpeza por fazer (falhou antes): repete só a limpeza, que é idempotente.
                     if (antes is { Estado: EstadoIntervencao.Cancelada } && await ConferenciaPorLimparAsync(pecas, antes.Materiais, log))
-                        return Results.Ok(ComoIntervencao(antes, await LimparConferenciaAsync(pecas, locs, id, antes.Materiais, s.Codigo, log)));
+                        return Results.Ok(ComoIntervencao(antes, await LimparConferenciaAsync(pecas, id, antes.Materiais, s.Codigo, log)));
                     var r = await repo.CancelarAsync(id, p.Motivo!.Trim(), s, ct);
                     if (r.Item1 != ResultadoIntervencao.Ok || r.Item2 is not { } ficha) return Resposta(r);
-                    return Results.Ok(ficha with { AvisoStock = await LimparConferenciaAsync(pecas, locs, id, antes?.Materiais ?? [], s.Codigo, log) });
+                    return Results.Ok(ficha with { AvisoStock = await LimparConferenciaAsync(pecas, id, antes?.Materiais ?? [], s.Codigo, log) });
                 })).RequireAuthorization("Supervisor");
 
         g.MapPut("/intervencoes/{id}/antiga", (string id, PedidoFechoAntiga p, ClaimsPrincipal eu, IRepositorioUtilizadores utilizadores, IRepositorioIntervencoes repo, IRepositorioPecas pecas, CancellationToken ct) =>

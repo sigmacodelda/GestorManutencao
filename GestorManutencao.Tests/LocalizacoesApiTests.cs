@@ -71,7 +71,7 @@ public class LocalizacoesApiTests : IDisposable
     {
         var c = await ComoAsync("482913");
         // P002 tem stock 0 (nada no buffer): a quantidade põe-se direto no lugar, sem passar pela arrumação.
-        Assert.True((await _fabrica.Services.GetRequiredService<IRepositorioLocalizacoes>().ReporAsync("P002", "A", "A-02", 1, 1, 5, "XX", CancellationToken.None)).Ok);
+        ((RepositorioLocalizacoesMemoria)_fabrica.Services.GetRequiredService<IRepositorioLocalizacoes>()).Semear("P002", "A", "A-02", 1, 1, 5);
         var pecas = (await c.GetFromJsonAsync<List<PecaNoLugarDto>>("/pecas/no-lugar?local=A-02-1-01"))!;
         Assert.Equal(["P002", "P001"], pecas.Select(p => p.Ref));
         Assert.Empty((await c.GetFromJsonAsync<List<PecaNoLugarDto>>("/pecas/no-lugar?local=B-09-9-09"))!);
@@ -147,7 +147,7 @@ public class LocalizacoesApiTests : IDisposable
         var pecas = new RepositorioPecasMemoria([new PecaDto("P001", "Parafuso M8", "560001", "A-01-1-01", 10, 4, 0.12m)]);
         var repo = new RepositorioLocalizacoesMemoria(pecas);
         repo.DefinirBuffer("Z-09-9-09");
-        await repo.ReporAsync("P001", "Z", "Z-09", 9, 9, 7, "XX", CancellationToken.None); // entrada: 7 à espera no buffer
+        repo.Semear("P001", "Z", "Z-09", 9, 9, 7); // entrada: 7 à espera no buffer
         using var f = new LocalizacoesApiTests(repo);
         var c = await f.ComoAsync("482913");
 
@@ -197,8 +197,6 @@ public class LocalizacoesApiTests : IDisposable
     {
         public Task<LocalizacoesPecaDto> ListarAsync(string r, CancellationToken ct) => Task.FromResult(new LocalizacoesPecaDto(r, 10, 0, 10, []));
         public Task<ResultadoMovimento> ArrumarAsync(string r, string c, int e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
-        public Task<ResultadoMovimento> DescontarAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
-        public Task<ResultadoMovimento> ReporAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
         public Task<string> VerificarTabelaAsync(CancellationToken ct) => Task.FromResult("Falta criar a tabela u_pecaloc no PHC.");
         public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string c, string e, int n, int p, CancellationToken ct) => throw new InvalidOperationException();
     }
@@ -207,8 +205,6 @@ public class LocalizacoesApiTests : IDisposable
     {
         public Task<LocalizacoesPecaDto> ListarAsync(string r, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<ResultadoMovimento> ArrumarAsync(string r, string c, int e, int n, int p, decimal q, string i, CancellationToken ct) => throw new RepositorioIndisponivelException();
-        public Task<ResultadoMovimento> DescontarAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new RepositorioIndisponivelException();
-        public Task<ResultadoMovimento> ReporAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<string> VerificarTabelaAsync(CancellationToken ct) => throw new RepositorioIndisponivelException();
         public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string c, string e, int n, int p, CancellationToken ct) => throw new RepositorioIndisponivelException();
     }
@@ -226,8 +222,6 @@ public class LocalizacoesApiTests : IDisposable
     {
         public Task<LocalizacoesPecaDto> ListarAsync(string r, CancellationToken ct) => Task.FromResult(new LocalizacoesPecaDto(r, 10, 0, 10, []));
         public Task<ResultadoMovimento> ArrumarAsync(string r, string c, int e, int n, int p, decimal q, string i, CancellationToken ct) => Task.FromResult(ResultadoMovimento.Falha(erro));
-        public Task<ResultadoMovimento> DescontarAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
-        public Task<ResultadoMovimento> ReporAsync(string r, string c, string e, int n, int p, decimal q, string i, CancellationToken ct) => throw new InvalidOperationException();
         public Task<string> VerificarTabelaAsync(CancellationToken ct) => Task.FromResult("");
         public Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string c, string e, int n, int p, CancellationToken ct) => throw new InvalidOperationException();
     }

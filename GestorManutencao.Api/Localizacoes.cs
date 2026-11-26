@@ -3,8 +3,10 @@ using System.Text.RegularExpressions;
 
 namespace GestorManutencao.Api;
 
-// Lugares de uma peça no armazém de manutenção (u_pecaloc). Estante guardada normalizada (A-03).
-public sealed record LugarDto(string Corredor, string Estante, int Nivel, int Posicao, decimal Qtt)
+// Lugares de uma peça no armazém de manutenção (u_pecaloc, lida pela vista v_sc_pecaloc_disponivel). Estante guardada normalizada (A-03).
+// Qtt = disponível (saldo menos o reservado em fichas em conferência); Reservado = o que está reservado. Qtt + Reservado só é o saldo físico
+// enquanto o reservado não o excede (o disponível nunca é negativo); por isso o Localizado da peça conta o saldo de cada lugar, nunca mais.
+public sealed record LugarDto(string Corredor, string Estante, int Nivel, int Posicao, decimal Qtt, decimal Reservado = 0)
 {
     public string Texto => $"{Estante}-{Nivel}-{Posicao:00}";
 }
@@ -74,21 +76,25 @@ public static class RegrasLocalizacao
 
     public static bool MesmoLugar(LugarDto a, LugarDto b) => EBuffer(a, b);
 
-    // Dossier de movimentos de arrumação: origem em bo.lobs, destino em bo.lobs2, uma linha bi por peça.
+    // Dossier de movimentos de arrumação: uma linha bi por peça, com a origem em bi.lobs e o destino em bi.lobs2.
     public const int NdosArrumacao = 66;
 
     // Texto do lugar como o PHC o mostra (A-02-1-01); o buffer em texto livre (BUFFER) fica como está; sem lugar, vazio.
     public static string TextoLugar(LugarDto? l) => l is null ? "" : l.Estante == "" ? l.Corredor : l.Texto;
 
-    // Rearrumar: quantidade existente 0 = "não indicada" na u_pecaloc; só se move o lugar todo e o destino não recebe número inventado.
-    public static string? ErroQuantidadeMover(decimal existente, decimal qtt) =>
-        existente > 0 && qtt > existente ? $"Só há {existente:0.###} nesse lugar." : null;
+    public const string ErroMoverSemQuantidade = "Indique a quantidade do lugar de origem antes de mover.";
 
-    public static decimal QuantidadeMovida(decimal existente, decimal qtt) => existente > 0 ? qtt : 0;
+    // Rearrumar: só se move o disponível do lugar. Quantidade existente 0 = "não indicada" na u_pecaloc: o trigger descarta movimentos de 0, por isso não se move.
+    public static string? ErroQuantidadeMover(decimal existente, decimal qtt) =>
+        existente <= 0 ? ErroMoverSemQuantidade
+        : qtt > existente ? $"Só há {existente:0.###} nesse lugar." : null;
+
 
     public const string ErroMoverDoBuffer = "O que está no buffer arruma-se em Arrumação, não em Rearrumar.";
     public const string ErroMoverParaBuffer = "Escolha um lugar diferente do de entrada (buffer).";
     public const string ErroMoverSemLinha = "Esta peça não tem stock nesse lugar.";
+    public const string ErroMoverSaldoNegativo = "O saldo desse lugar está negativo: corrija-o no PHC antes de mover.";
+    public const string ErroMoverReservado = "Todo o stock desse lugar está reservado em fichas em conferência.";
 
     // Só se arruma o que está no buffer (stock do armazém menos o já localizado fora dele).
     public static string? ErroForaDoBuffer(decimal pedida, decimal porArrumar) =>
@@ -99,20 +105,17 @@ public static class RegrasLocalizacao
 
 public interface IRepositorioLocalizacoes
 {
-    // Lugares definitivos por qtt desc (sem a linha do buffer); PorArrumar = max(0, stock do armazém 104 - localizado fora do buffer).
+    // A API só lê o saldo por lugar: quem o escreve é o trigger sc_bi_pecaloc, a partir das linhas bi (saída 63 validada, entrada 64, arrumação 66).
+    // Lugares por disponível desc (sem a linha do buffer); PorArrumar = max(0, stock do armazém 104 - localizado fora do buffer, reservado incluído).
     Task<LocalizacoesPecaDto> ListarAsync(string refPeca, CancellationToken ct);
-    // Soma ao lugar ou cria-o e tira o mesmo do buffer; Falha se o lugar é o próprio buffer.
+    // Regista o dossier 66 buffer -> lugar (origem em bi.lobs, destino em bi.lobs2); o trigger move o saldo. Falha se o lugar é o próprio buffer.
     Task<ResultadoMovimento> ArrumarAsync(string refPeca, string corredor, int estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct);
-    // Ok mesmo que o lugar fique a 0; Falha se o lugar não tem quantidade suficiente.
-    Task<ResultadoMovimento> DescontarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct);
-    // Soma de volta (anulação da saída), sem validar stock.
-    Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct);
-    // "" se a tabela está pronta, senão o que falta.
+    // "" se a vista do saldo por lugar e o trigger sc_bi_pecaloc estão prontos, senão o que falta.
     Task<string> VerificarTabelaAsync(CancellationToken ct);
-    // Peças com quantidade (> 0) num lugar, por quantidade desc. Só leitura; sem tabela devolve vazio.
+    // Peças com disponível (> 0) num lugar, por quantidade desc. Só leitura; sem a vista devolve vazio.
     Task<IReadOnlyList<(string Ref, decimal Qtt)>> ListarPecasDoLugarAsync(string corredor, string estante, int nivel, int posicao, CancellationToken ct);
-    // Rearrumar: soma ao destino (cria a linha se faltar) e depois tira da origem, que se apaga se ficar vazia; nunca mexe no buffer nem no stock do PHC.
-    // Falha: origem ou destino no buffer, origem sem linha, quantidade acima do que lá está, lugar ocupado.
+    // Rearrumar: regista o dossier 66 origem -> destino (origem em bi.lobs, destino em bi.lobs2); o trigger move o saldo. Só o disponível se move.
+    // Falha: origem ou destino no buffer, origem sem linha ou sem quantidade indicada, quantidade acima do disponível, lugar ocupado.
     Task<ResultadoMovimento> MoverAsync(string refPeca, LugarDto origem, LugarDto destino, decimal qtt, string iniciais, CancellationToken ct) => throw new NotSupportedException();
 }
 

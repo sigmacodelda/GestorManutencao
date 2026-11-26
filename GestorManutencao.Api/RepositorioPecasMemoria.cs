@@ -1,8 +1,23 @@
 namespace GestorManutencao.Api;
 
-// Modo Development e testes: mesmas regras do SQL, sem base. Stock inicial menos as saídas.
-public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) : IRepositorioPecas
+// Saída 63 com lugar (bi.lobs/lobs2); EmConferencia = emconf 1 (só reservado). É o que o repositório de lugares em memória precisa para simular o trigger.
+public sealed record SaidaNoLugar(string Ref, string Local, decimal Qtt, bool EmConferencia);
+
+public interface ISaidasPorLugar
 {
+    IReadOnlyList<SaidaNoLugar> SaidasComLugar(string refPeca);
+}
+
+// Modo Development e testes: mesmas regras do SQL, sem base. Stock inicial menos as saídas.
+public sealed class RepositorioPecasMemoria(IEnumerable<PecaDto>? pecas = null) : IRepositorioPecas, ISaidasPorLugar
+{
+    public IReadOnlyList<SaidaNoLugar> SaidasComLugar(string refPeca)
+    {
+        lock (_trinco)
+            return _saidas.Values.Where(s => string.Equals(s.Ref, refPeca.Trim(), StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(s.Local))
+                .Select(s => new SaidaNoLugar(s.Ref, s.Local!, s.Qtt, _dossiers[s.FichaId])).ToList();
+    }
+
     private readonly object _trinco = new();
     private readonly Dictionary<string, PecaDto> _pecas = (pecas ?? Amostra()).ToDictionary(p => p.Ref, StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string FichaId, string Ref, decimal Qtt, string? Local)> _saidas = []; // materialId → linha do dossier

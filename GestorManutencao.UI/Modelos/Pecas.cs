@@ -14,6 +14,12 @@ public sealed record ResultadoPecas(bool CampoExiste, IReadOnlyList<Peca> Pecas,
 // Um lugar da peça no armazém; Texto é o endereço para mostrar (A-02-1-01).
 public sealed record PecaNoLugar(string Ref, string Design, decimal Qtt);
 
-public sealed record Lugar(string Corredor, string Estante, int Nivel, int Posicao, decimal Qtt, string Texto);
+// Qtt = disponível (saldo menos o reservado em conferência); Reservado = o que está reservado em fichas em conferência (0 nas respostas antigas).
+// Qtt 0 só quer dizer "quantidade não indicada" se Reservado também for 0.
+public sealed record Lugar(string Corredor, string Estante, int Nivel, int Posicao, decimal Qtt, string Texto, decimal Reservado = 0)
+{
+    public bool NaoIndicada => Qtt == 0 && Reservado == 0;
+    public bool SoReservado => Qtt == 0 && Reservado > 0;
+}
 
 public sealed record LocalizacoesPeca(string Ref, decimal Stock, decimal Localizado, decimal PorArrumar, IReadOnlyList<Lugar> Lugares);

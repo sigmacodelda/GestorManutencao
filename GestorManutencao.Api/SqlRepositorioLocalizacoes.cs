@@ -3,14 +3,15 @@ using Microsoft.Data.SqlClient;
 
 namespace GestorManutencao.Api;
 
-// Lugares das peças em u_pecaloc (tabela criada no PHC, como a LandeiroMaui). Escritas por lugar sob applock.
-// Arrumar e mover não escrevem na u_pecaloc: criam um dossier 66 (origem bo.lobs, destino bo.lobs2) e é o trigger do PHC que move o stock.
+// Lugares das peças: só se lê a vista v_sc_pecaloc_disponivel (saldo da u_pecaloc menos o reservado em conferência). A API nunca escreve na u_pecaloc:
+// arrumar e mover criam um dossier 66 (origem em bi.lobs, destino em bi.lobs2) e o trigger sc_bi_pecaloc move o saldo; o 63 também é com o trigger.
 public sealed partial class SqlRepositorioLocalizacoes(IConfiguration configuracao, IRepositorioPecas pecas, ILogger<SqlRepositorioLocalizacoes> log) : IRepositorioLocalizacoes
 {
     private const string Hoje = "CAST(CONVERT(date, GETDATE()) AS datetime)";
     private const string Hora = "CONVERT(varchar(8), GETDATE(), 108)";
-    private static readonly string[] Campos = ["u_pecalocstamp", "ref", "armazem", "corredor", "estante", "nivel", "posicao", "qtt", "marcada",
-        "ousrinis", "ousrdata", "ousrhora", "usrinis", "usrdata", "usrhora"];
+    private const string Vista = "v_sc_pecaloc_disponivel";
+    private const string Trigger = "sc_bi_pecaloc";
+    private static readonly string[] Campos = ["ref", "armazem", "corredor", "estante", "nivel", "posicao", "qtt", "reservado", "disponivel"];
     private static bool _tabelaOk;
 
     private async Task<T> Executar<T>(Func<SqlConnection, Task<T>> trabalho)
@@ -61,18 +62,25 @@ public sealed partial class SqlRepositorioLocalizacoes(IConfiguration configurac
         catch (Exception) { }
     }
 
+    // Sem a vista, os campos dela e o trigger sc_bi_pecaloc, arrumar e mover não fazem nada (o dossier 66 ficava sem efeito): por isso também se exige o trigger.
     private static async Task<string> VerificarAsync(SqlConnection conn, CancellationToken ct)
     {
         if (_tabelaOk) return "";
-        await using (var existe = Cmd(conn, null, "SELECT OBJECT_ID('u_pecaloc')"))
-            if (await existe.ExecuteScalarAsync(ct) is null or DBNull) return "Falta criar a tabela u_pecaloc no PHC.";
+        await using (var existe = Cmd(conn, null, "SELECT OBJECT_ID(@v)", ("@v", Vista)))
+            if (await existe.ExecuteScalarAsync(ct) is null or DBNull) return $"Falta instalar a vista {Vista} no PHC (saldo por lugar).";
         var falta = new List<string>();
         foreach (var c in Campos)
         {
-            await using var cmd = Cmd(conn, null, "SELECT COL_LENGTH('u_pecaloc', @c)", ("@c", c));
+            await using var cmd = Cmd(conn, null, "SELECT COL_LENGTH(@v, @c)", ("@v", Vista), ("@c", c));
             if (await cmd.ExecuteScalarAsync(ct) is null or DBNull) falta.Add(c);
         }
-        if (falta.Count > 0) return "A tabela u_pecaloc não tem o(s) campo(s): " + string.Join(", ", falta) + ".";
+        if (falta.Count > 0) return $"A vista {Vista} não tem o(s) campo(s): " + string.Join(", ", falta) + ".";
+        await using (var gatilho = Cmd(conn, null, "SELECT is_disabled FROM sys.triggers WHERE name = @t AND parent_id = OBJECT_ID('dbo.bi')", ("@t", Trigger)))
+        {
+            var desativado = await gatilho.ExecuteScalarAsync(ct);
+            if (desativado is null or DBNull) return $"Falta instalar o trigger {Trigger} no PHC (move o saldo por lugar).";
+            if (Convert.ToInt32(desativado) == 1) return $"O trigger {Trigger} está desativado no PHC (o saldo por lugar não se move).";
+        }
         _tabelaOk = true;
         return "";
     }
@@ -82,27 +90,29 @@ public sealed partial class SqlRepositorioLocalizacoes(IConfiguration configurac
     public async Task<LocalizacoesPecaDto> ListarAsync(string refPeca, CancellationToken ct)
     {
         var stock = (await pecas.ObterPorCodigoAsync(refPeca, ct))?.Stock ?? 0;
-        var lugares = await Executar(async conn =>
+        var (lugares, localizado) = await Executar(async conn =>
         {
             var l = new List<LugarDto>();
-            if (await VerificarAsync(conn, ct) != "") return l;
+            decimal saldos = 0;
+            if (await VerificarAsync(conn, ct) != "") return (l, saldos);
             var buffer = await LerBufferAsync(conn, null, ct);
-            await using var cmd = Cmd(conn, null, @"
-SELECT ISNULL(LTRIM(RTRIM(corredor)), ''), ISNULL(LTRIM(RTRIM(estante)), ''), CAST(ISNULL(NULLIF(LTRIM(RTRIM(nivel)), ''), '0') AS int), CAST(ISNULL(NULLIF(LTRIM(RTRIM(posicao)), ''), '0') AS int),
-       CAST(ISNULL(NULLIF(LTRIM(RTRIM(qtt)), ''), '0') AS decimal(13, 3)) AS q  -- qtt, nivel e posicao são varchar no PHC
-FROM u_pecaloc WITH (NOLOCK) WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a
-ORDER BY q DESC, corredor, estante, nivel, posicao",
+            // Qtt = disponível (saldo menos o reservado em conferência); o saldo físico de cada lugar vem da coluna qtt da vista.
+            await using var cmd = Cmd(conn, null, $@"
+SELECT {Texto("corredor")}, {Texto("estante")}, {Inteiro("nivel")}, {Inteiro("posicao")}, {Qtd("disponivel")} AS d, {Qtd("reservado")} AS res, {QtdComSinal("qtt")} AS saldo
+FROM {Vista} WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a
+ORDER BY d DESC, corredor, estante, nivel, posicao",
                 ("@r", refPeca.Trim()), ("@a", RegrasPecas.Armazem));
             await using var rd = await cmd.ExecuteReaderAsync(ct);
             while (await rd.ReadAsync(ct))
             {
                 // A linha do buffer é o que espera lugar, não um lugar: fora da lista e do "localizado".
-                var lugar = new LugarDto(rd.GetString(0), rd.GetString(1), rd.GetInt32(2), rd.GetInt32(3), rd.GetDecimal(4));
-                if (!RegrasLocalizacao.EBuffer(lugar, buffer)) l.Add(lugar);
+                var lugar = new LugarDto(rd.GetString(0), rd.GetString(1), rd.GetInt32(2), rd.GetInt32(3), rd.GetDecimal(4), rd.GetDecimal(5));
+                if (RegrasLocalizacao.EBuffer(lugar, buffer)) continue;
+                l.Add(lugar);
+                saldos += Math.Max(0, rd.GetDecimal(6)); // saldo negativo não conta como localizado (a view de divergências mostra-o)
             }
-            return l;
+            return (l, saldos);
         });
-        var localizado = lugares.Sum(l => l.Qtt);
         return new LocalizacoesPecaDto(refPeca, stock, localizado, RegrasLocalizacao.Calcular(stock, localizado), lugares);
     }
 
@@ -113,8 +123,8 @@ ORDER BY q DESC, corredor, estante, nivel, posicao",
             if (await VerificarAsync(conn, ct) != "") return l;
             await using var cmd = Cmd(conn, null, $@"
 SELECT r, SUM(q) AS q FROM (
-    SELECT LTRIM(RTRIM(ISNULL(ref, ''))) AS r, {Qtd("qtt")} AS q
-    FROM u_pecaloc WITH (NOLOCK)
+    SELECT LTRIM(RTRIM(ISNULL(ref, ''))) AS r, {Qtd("disponivel")} AS q
+    FROM {Vista}
     WHERE armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po
 ) t
 WHERE r <> ''
@@ -136,7 +146,7 @@ ORDER BY SUM(q) DESC, r",
         return RegrasLocalizacao.LerBuffer(await cmd.ExecuteScalarAsync(ct) as string);
     }
 
-    // Soma ao lugar de destino e tira o mesmo do buffer, na mesma transação.
+    // Regista o dossier 66 (buffer -> destino); o trigger sc_bi_pecaloc tira do buffer e soma ao destino.
     public Task<ResultadoMovimento> ArrumarAsync(string refPeca, string corredor, int estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
     {
         var estanteNormal = RegrasLocalizacao.NormalizarEstante(corredor, estante);
@@ -152,8 +162,8 @@ ORDER BY SUM(q) DESC, r",
         });
     }
 
-    // Primeiro soma ao destino, depois tira da origem, tudo na mesma transação e com applock nos dois lugares.
-    // Origem a 0 = "não indicada": move-se a linha toda e o destino não recebe número inventado.
+    // Regista o dossier 66 (origem -> destino) sob applock nos dois lugares; o trigger move o saldo. Só se move o disponível (o reservado em conferência fica).
+    // Origem a 0 = "não indicada": o trigger descarta movimentos de 0, por isso recusa-se em vez de criar um dossier sem efeito.
     public Task<ResultadoMovimento> MoverAsync(string refPeca, LugarDto origem, LugarDto destino, decimal qtt, string iniciais, CancellationToken ct)
         => EscreverBloqueando([ChaveLugar(refPeca, origem.Estante, origem.Nivel, origem.Posicao), ChaveLugar(refPeca, destino.Estante, destino.Nivel, destino.Posicao)], ct, async (conn, tx) =>
         {
@@ -161,69 +171,39 @@ ORDER BY SUM(q) DESC, r",
             if (RegrasLocalizacao.EBuffer(destino, buffer)) return ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverParaBuffer);
             if (RegrasLocalizacao.EBuffer(origem, buffer)) return ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverDoBuffer);
             var linhaOrigem = $"LTRIM(RTRIM(ref)) = @r AND armazem = @a AND {Texto("corredor")} = @c AND {Texto("estante")} = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po";
-            decimal atual;
-            await using (var ler = Cmd(conn, tx, $"SELECT TOP 1 {Qtd("qtt")} FROM u_pecaloc WITH (UPDLOCK, HOLDLOCK) WHERE {linhaOrigem}",
-                Parametros(refPeca, origem.Corredor, origem.Estante, origem.Nivel, origem.Posicao, qtt, iniciais, "")))
+            decimal saldo, atual, reservado;
+            await using (var ler = Cmd(conn, tx, $"SELECT TOP 1 {QtdComSinal("qtt")}, {Qtd("disponivel")}, {Qtd("reservado")} FROM {Vista} WHERE {linhaOrigem}",
+                ("@r", refPeca.Trim()), ("@a", RegrasPecas.Armazem), ("@c", origem.Corredor.Trim().ToUpperInvariant()), ("@e", origem.Estante.Trim().ToUpperInvariant()),
+                ("@n", origem.Nivel), ("@po", origem.Posicao)))
+            await using (var rd = await ler.ExecuteReaderAsync(ct))
             {
-                if (await ler.ExecuteScalarAsync(ct) is not decimal lida) return ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverSemLinha);
-                atual = lida;
+                if (!await rd.ReadAsync(ct)) return ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverSemLinha);
+                saldo = rd.GetDecimal(0);
+                atual = rd.GetDecimal(1);
+                reservado = rd.GetDecimal(2);
             }
+            if (saldo < 0) return ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverSaldoNegativo);
+            if (atual <= 0 && (saldo > 0 || reservado > 0)) return ResultadoMovimento.Falha(RegrasLocalizacao.ErroMoverReservado);
             if (RegrasLocalizacao.ErroQuantidadeMover(atual, qtt) is { } erro) return ResultadoMovimento.Falha(erro);
-            var movida = RegrasLocalizacao.QuantidadeMovida(atual, qtt);
-            if (await CriarMovimentoAsync(conn, tx, "Rearrumação", refPeca, origem.Texto, destino.Texto, movida, iniciais, ct) is { } falha)
+            if (await CriarMovimentoAsync(conn, tx, "Rearrumação", refPeca, origem.Texto, destino.Texto, qtt, iniciais, ct) is { } falha)
                 return ResultadoMovimento.Falha(falha);
             return ResultadoMovimento.Sucesso("");
         });
 
-    public Task<ResultadoMovimento> ReporAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
-        => SomarAsync(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
-
-    // qtt, nivel e posicao são varchar no PHC e podem ter lixo (outra app): lê-se só texto limpo (dígitos, no máximo um ponto), o resto vale 0,
-    // para uma linha estranha da tabela nunca fazer falhar a conversão de um movimento (e não se compara texto com número sem proteção).
+    // qtt, nivel e posicao podem ser texto no PHC e ter lixo (outra app): lê-se só texto limpo (dígitos, no máximo um ponto), o resto vale 0,
+    // para uma linha estranha nunca fazer falhar a conversão (e não se compara texto com número sem proteção).
     private static string Texto(string col) => $"LTRIM(RTRIM(ISNULL({col}, '')))";
     private static string Qtd(string col) =>
         $"CASE WHEN {Texto(col)} LIKE '%[0-9]%' AND {Texto(col)} NOT LIKE '%[^0-9.]%' AND LEN({Texto(col)}) - LEN(REPLACE({Texto(col)}, '.', '')) <= 1 AND LEN({Texto(col)}) <= 13 THEN CAST({Texto(col)} AS decimal(13, 3)) ELSE CAST(0 AS decimal(13, 3)) END";
+    // Saldo físico: pode ser negativo (saída acima do saldo); o sinal só se aceita à frente.
+    private static string QtdComSinal(string col)
+    {
+        var t = Texto(col);
+        var u = $"(CASE WHEN LEFT({t}, 1) = '-' THEN SUBSTRING({t}, 2, 50) ELSE {t} END)";
+        return $"CASE WHEN {u} LIKE '%[0-9]%' AND {u} NOT LIKE '%[^0-9.]%' AND LEN({u}) - LEN(REPLACE({u}, '.', '')) <= 1 AND LEN({u}) <= 13 THEN CAST({u} AS decimal(13, 3)) * (CASE WHEN LEFT({t}, 1) = '-' THEN -1 ELSE 1 END) ELSE CAST(0 AS decimal(13, 3)) END";
+    }
     private static string Inteiro(string col) =>
         $"CASE WHEN {Texto(col)} LIKE '[0-9]%' AND {Texto(col)} NOT LIKE '%[^0-9]%' AND LEN({Texto(col)}) <= 9 THEN CAST({Texto(col)} AS int) ELSE 0 END";
-
-    // Um só comando: soma ao lugar se existir, senão cria.
-    private Task<ResultadoMovimento> SomarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
-        => Escrever(refPeca, estante, nivel, posicao, ct, async (conn, tx) =>
-        {
-            await SomarNoLugarAsync(conn, tx, refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ct);
-            return ResultadoMovimento.Sucesso("");
-        });
-
-    private static async Task SomarNoLugarAsync(SqlConnection conn, SqlTransaction tx, string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
-    {
-            await using var cmd = Cmd(conn, tx, $@"
-UPDATE u_pecaloc SET qtt = CAST(CAST({Qtd("qtt")} + @q AS decimal(13, 3)) AS varchar(13)), usrinis = @ini, usrdata = {Hoje}, usrhora = {Hora}
-WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po;
-IF @@ROWCOUNT = 0
-INSERT INTO u_pecaloc (u_pecalocstamp, ref, armazem, corredor, estante, nivel, posicao, qtt, marcada, ousrinis, ousrdata, ousrhora, usrinis, usrdata, usrhora)
-VALUES (@s, @r, @a, @c, @e, @n, @po, @q, 0, @ini, {Hoje}, {Hora}, @ini, {Hoje}, {Hora})",
-                Parametros(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, Guid.NewGuid().ToString("N")[..25]));
-            await cmd.ExecuteNonQueryAsync(ct);
-    }
-
-    public Task<ResultadoMovimento> DescontarAsync(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, CancellationToken ct)
-        => Escrever(refPeca, estante, nivel, posicao, ct, async (conn, tx) =>
-        {
-            await using var cmd = Cmd(conn, tx, $@"
-UPDATE u_pecaloc SET qtt = CAST(CAST({Qtd("qtt")} - @q AS decimal(13, 3)) AS varchar(13)), usrinis = @ini, usrdata = {Hoje}, usrhora = {Hora}
-WHERE LTRIM(RTRIM(ref)) = @r AND armazem = @a AND LTRIM(RTRIM(corredor)) = @c AND LTRIM(RTRIM(estante)) = @e AND {Inteiro("nivel")} = @n AND {Inteiro("posicao")} = @po AND {Qtd("qtt")} >= @q;
-SELECT @@ROWCOUNT",
-                Parametros(refPeca, corredor, estante, nivel, posicao, qtt, iniciais, ""));
-            return (int)(await cmd.ExecuteScalarAsync(ct))! == 0
-                ? ResultadoMovimento.Falha("Não há quantidade suficiente neste lugar.")
-                : ResultadoMovimento.Sucesso("");
-        });
-
-    private static (string, object?)[] Parametros(string refPeca, string corredor, string estante, int nivel, int posicao, decimal qtt, string iniciais, string stamp) =>
-    [
-        ("@r", refPeca.Trim()), ("@a", RegrasPecas.Armazem), ("@c", corredor.Trim().ToUpperInvariant()), ("@e", estante.Trim().ToUpperInvariant()),
-        ("@n", nivel), ("@po", posicao), ("@q", qtt), ("@ini", iniciais ?? ""), ("@s", stamp)
-    ];
 
     private static string ChaveLugar(string refPeca, string estante, int nivel, int posicao) =>
         $"pecas-lugar-{refPeca.Trim()}-{estante.Trim().ToUpperInvariant()}-{nivel}-{posicao}";
@@ -234,7 +214,6 @@ SELECT @@ROWCOUNT",
     // Transação com applock por lugar, sempre pela mesma ordem (dois movimentos cruzados não se bloqueiam); o lock liberta-se no commit/rollback.
     private async Task<ResultadoMovimento> EscreverBloqueando(string[] chaves, CancellationToken ct, Func<SqlConnection, SqlTransaction, Task<ResultadoMovimento>> trabalho)
     {
-        // Parâmetros não usados pelo comando (@s no desconto) são aceites pelo SQL Server sem erro.
         return await Executar(async conn =>
         {
             var falta = await VerificarAsync(conn, ct);
@@ -260,10 +239,10 @@ SELECT @@ROWCOUNT",
             catch (SqlException ex) when (ex.Number is 8152 or 2628 or 8115 or 220 or 245)
             {
                 await RollbackSeguroAsync(tx);
-                log.LogWarning("Dados recusados pela tabela u_pecaloc (erro {Numero}).", ex.Number);
+                log.LogWarning("Dados recusados pelo movimento de arrumação (erro {Numero}).", ex.Number);
                 return ResultadoMovimento.Falha(ex.Number is 8152 or 2628
-                    ? "O local ou a peça excede o tamanho permitido na tabela u_pecaloc."
-                    : "Quantidade ou posição fora dos limites permitidos na tabela u_pecaloc.");
+                    ? "O local ou a peça excede o tamanho permitido no movimento."
+                    : "Quantidade ou posição fora dos limites permitidos no movimento.");
             }
             catch (Exception)
             {
