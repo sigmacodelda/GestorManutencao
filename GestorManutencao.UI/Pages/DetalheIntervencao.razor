@@ -361,6 +361,7 @@
         }
         else if (_i.Estado == EstadoIntervencao.Planeada)
         {
+            <p class="campo-erro" role="alert">@_erro</p>
             <button type="button" class="btn btn-primario btn-grande" disabled="@_a_gravar" @onclick="IniciarAsync"><Icone Nome="play" /><span>Começar</span></button>
         }
         else if (_i.Estado == EstadoIntervencao.EmCurso)
