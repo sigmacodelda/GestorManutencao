@@ -1,0 +1,98 @@
+
+== Concorrência e idempotência
+  ok    [conc] ficha criada
+  ok    [conc] 6 materiais em paralelo: todos 200/201 sem 500
+  ok    [conc] emConferencia sobe exatamente 6 (sem perdas/duplicações)
+  ok    [conc] detalhe mostra 6 materiais, todos com saída
+  ok    [conc] ids dos materiais únicos
+  ok    [conc] apagar o mesmo material 3x em paralelo: 1x 204 e resto 404, sem 500
+  ok    [stock] após apagar 1 material a reserva desce exatamente 1
+  ok    [conc] concluir 3x em paralelo sem 500
+  concluir paralelo: [200,200,200]
+  validar paralelo: [200,200,200,200]
+  ok    [conc] validar 4x em paralelo sem 500
+  ok    [stock] stock desce exatamente 5 (uma só validação efetiva)
+  ok    [stock] emConferencia volta ao inicial
+  ok    [estado] devolver ficha já validada -> 409/404 (não 200)
+  qualidade paralelo: [200,409,409]
+  ok    [conc] qualidade 3x em paralelo: no máximo 1x 200, sem 500
+
+== Mão de obra e custos
+  ok    [mo] mão de obra sem tecno -> 400/409
+  ok    [mo] mão de obra horas 0 -> 400/409
+  ok    [mo] mão de obra horas negativas -> 400/409
+  FALHA [mo] mão de obra horas 25 -> 400/409 :: 200 {"id":"1b267c22bb4d42a59562634e6","tecno":101,"responsavel":"Ana Silva","horas":25,"custo":0,"custoHora":0}
+  ok    [mo] mão de obra custo negativo -> 400/409
+  ok    [mo] mão de obra técnico inexistente -> 400/409
+  ok    [mo] técnico regista mão de obra
+  MO técnico: [{"id":"1b267c22bb4d42a59562634e6","tecno":101,"responsavel":"Ana Silva","horas":25,"custo":0,"custoHora":0},{"id":"01e8b51cc6924ff4a3e568f4e","tecno":101,"responsavel":"Ana Silva","horas":1.5,"custo":0,"custoHora":0}]
+  MO supervisor: [{"id":"1b267c22bb4d42a59562634e6","tecno":101,"responsavel":"Ana Silva","horas":25,"custo":0,"custoHora":0},{"id":"01e8b51cc6924ff4a3e568f4e","tecno":101,"responsavel":"Ana Silva","horas":1.5,"custo":0,"custoHora":0}]
+  ok    [perm] custo-hora ao técnico: 403 ou sem valor
+  custo-hora técnico: 200 0
+  ok    [perm] compras ao técnico 403
+  /fornecedores técnico: 200
+  ok    [perm] /fornecedores técnico sem 500
+  ok    [mo] apagar tempo inexistente 404
+  ok    [mo] apagar tempo 204
+
+== Ficha manual e edição
+  ok    [ficha] ficha manual sem equipamento -> 400/404
+  ok    [ficha] ficha manual equipamento inexistente -> 400/404
+  ok    [perm] qualidade não cria ficha manual
+  PUT ficha pelo técnico: 200 {"id":"e0a76a526ffa4bbea4081ccfc","numero":1008,"equipamentoId":"E5","equipamento":"Balança 03","zona":"Expedição","ref":"BAL-03","tipo":"Curativa","t
+  ok    [ficha] PUT ficha sem 500
+  ok    [ficha] PUT ficha inexistente 404
+  ok    [ficha] GET ficha inexistente 404
+  ok    [ficha] detalhe inexistente 404
+  ok    [ficha] id com SQL injection 404 sem 500
+  ok    [ficha] recentes dias=-5 sem 500
+  ok    [ficha] recentes dias=abc sem 500
+  ok    [ficha] todas pagina=-1 sem 500
+  ok    [ficha] todas desde=xx sem 500
+  ok    [ficha] todas com filtro estranho sem 500
+  ok    [ficha] assinatura externa inválida -> 400
+  ok    [ficha] foto inválida sem 500
+  ok    [ficha] listar fotos 200
+
+== Gestão (supervisor)
+  ok    [gestao] opções 200
+  ok    [gestao] equipamento inexistente 404
+  ok    [gestao] criar equipamento vazio -> 400
+  ok    [gestao] criar equipamento com textos gigantes -> 400 (sem 500)
+  ok    [gestao] editar equipamento inexistente 404
+  ok    [gestao] periodicidades 200
+  ok    [gestao] periodicidade inexistente 404/400
+  ok    [gestao] instrução em equipamento inexistente 404/400
+  ok    [gestao] configuração antecedencia negativa -> 400
+  ok    [gestao] configuração não foi alterada por pedido inválido
+  ok    [gestao] configuração antecedencia 99999 -> 400
+
+== Utilizadores e planeadas (só validações e leitura)
+  ok    [util] criar utilizador sem código -> 400
+  ok    [util] criar utilizador duplicado -> 409
+  ok    [util] código com símbolos -> 400
+  ok    [util] perfil inválido -> 400
+  ok    [util] supervisor não se inativa a si (409)
+  ok    [util] inativar inexistente 404
+  ok    [util] tecno de outra pessoa -> 409
+  ok    [util] lista de utilizadores sem pin/hash
+  ok    [plan] planeadas 200
+  ok    [plan] atribuir técnico inexistente -> 400/404/409
+  ok    [plan] atribuir em planeada inexistente 404
+  adicionais duplicados: 409 {"erro":"conflito"}
+  ok    [plan] adicionais duplicados sem 500
+
+== Cabeçalhos e formatos
+  ok    [fmt] content-type JSON
+  ok    [fmt] /saude 200 sem auth
+  ok    [fmt] rota inexistente 404 (autenticado)
+  ok    [fmt] POST em rota só GET -> 404/405
+  ok    [fmt] JSON com tipo errado -> 400 (não 500)
+  ok    [fmt] JSON truncado -> 400
+  ok    [fmt] content-type errado -> 415/400
+  CORS Allow-Origin: null
+  ok    [fmt] sem CORS aberto a origens externas
+  cabeçalhos: x-content-type-options=null strict-transport-security=null
+
+TOTAL: 71 ok, 1 falhas, 0 bugs
+ FALHA [mo] mão de obra horas 25 -> 400/409 :: 200 {"id":"1b267c22bb4d42a59562634e6","tecno":101,"responsavel":"Ana Silva","horas":25,"custo":0,"custoHora":0}

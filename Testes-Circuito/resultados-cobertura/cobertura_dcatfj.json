@@ -1,0 +1,1081 @@
+{
+ "marca": "TESTE-E2E-dcatfj",
+ "ok": 166,
+ "falha": 11,
+ "bugs": [
+  {
+   "id": "B-PRECO-1",
+   "titulo": "GET /pecas devolve \"preco\" ao técnico (Operador)",
+   "evidencia": "GET /pecas com token do técnico: {\"ref\":\"P001\",\"design\":\"Parafuso M8\",\"codigo\":\"560001\",\"local\":\"A-01-1-01\",\"stock\":10,\"stMin\":4,\"preco\":0.12,\"emConferencia\":0,\"disponivel\":10,\"abaixoDoMinimo\":false}; esperado preco omitido/0"
+  },
+  {
+   "id": "B-PRECO-2",
+   "titulo": "GET /pecas/codigo/{c} devolve preco ao técnico",
+   "evidencia": "{\"ref\":\"P001\",\"design\":\"Parafuso M8\",\"codigo\":\"560001\",\"local\":\"A-01-1-01\",\"stock\":10,\"stMin\":4,\"preco\":0.12,\"emConferencia\":0,\"disponivel\":10,\"abaixoDoMinimo\":false}"
+  }
+ ],
+ "res": [
+  {
+   "grupo": "auth",
+   "nome": "sem token /intervencoes -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /pecas -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /inventarios -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /equipamentos -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /qualidade -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /validacao -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /gestao/opcoes -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /utilizadores/ -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /configuracao -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /intervencoes/todas -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /planeadas -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "sem token /auth/eu -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "token inválido -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/validacao perfil t 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/validacao perfil s 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/validacao perfil q 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/qualidade perfil t 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/qualidade perfil s 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/qualidade perfil q 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/gestao/opcoes perfil t 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/gestao/opcoes perfil s 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/gestao/opcoes perfil q 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/utilizadores/ perfil t 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/utilizadores/ perfil s 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/utilizadores/ perfil q 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/configuracao perfil t 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/configuracao perfil s 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/configuracao perfil q 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/intervencoes/todas perfil t 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/intervencoes/todas perfil s 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/intervencoes/todas perfil q 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/planeadas perfil t 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/planeadas perfil s 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/planeadas perfil q 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/intervencoes/contadores perfil t 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/intervencoes/contadores perfil s 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/intervencoes/contadores perfil q 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "qualidade /pecas: 200 ou 403 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "qualidade /inventarios: 200 ou 403 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "qualidade /intervencoes: 200 ou 403 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "qualidade /equipamentos: 200 ou 403 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não valida (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "validacao",
+   "nome": "devolver sem motivo -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não conclui qualidade (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "supervisor não conclui qualidade (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não gera planeadas (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não altera configuração (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não cria utilizadores (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não atribui planeadas (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não cancela (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não cria equipamento (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "login corpo vazio -> 400/401 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "login pin curto -> 400/401 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "login pin letras -> 400/401 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "login pin nulo -> 400/401 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "login pin numérico (tipo errado) -> 400/401 (nunca 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "login com corpo inválido não dá 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "login PIN errado 401 e Cache-Control no-store",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "/auth/eu 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "/auth/eu sem pin/hash",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "mudar PIN para fraco -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "mudar PIN com atual errado -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "mudar PIN igual -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "auth",
+   "nome": "mudar PIN com PIN de outra pessoa -> 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "pecas",
+   "nome": "listar peças técnico/supervisor 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "pecas",
+   "nome": "peça por código 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "pecas",
+   "nome": "código inexistente -> 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "pecas",
+   "nome": "pesquisa com caracteres especiais -> 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "pecas",
+   "nome": "pesquisa com 5000 chars sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "localizações P001 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "localizado = soma dos lugares",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "porArrumar = max(0, stock - localizado)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "localizações de peça inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "ref com 40 chars -> 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar sem corpo -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar sem corpo: mensagem útil no corpo",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar local incompleto -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar local incompleto: mensagem útil no corpo",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar qtt 0 -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar qtt 0: mensagem útil no corpo",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar qtt negativa -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar qtt negativa: mensagem útil no corpo",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar qtt 4 casas -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar qtt 4 casas: mensagem útil no corpo",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar qtt gigante -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar qtt gigante: mensagem útil no corpo",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar ref vazia -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar ref vazia: mensagem útil no corpo",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar mais do que o buffer -> 400 com mensagem",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "arrumar peça inexistente -> 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "qualidade não arruma (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "arrumar sem token 401",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "mover mesmo lugar -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "mover origem inválida -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "mover qtt 0 -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "mover acima do disponível -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "mover origem sem stock -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "no-lugar local inválido -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "loc",
+   "nome": "no-lugar sem local -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "avaria sem equipamento -> 400/404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "avaria sem anomalia -> 400/404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "avaria anomalia só espaços -> 400/404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "avaria anomalia enorme -> 400/404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "avaria equipamento inexistente -> 400/404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "criar avaria 200/201",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "qualidade não cria avaria (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "concluir ficha não iniciada -> 409/400",
+   "ok": false,
+   "detalhe": "200 {\"id\":\"171ce3a6f7c44b26b5de85da1\",\"equipamento\":\"Balança 03\",\"zona\":\"Expedição\",\"tipo\":\"Curativa\",\"dataPlaneada\":\"2026-11-26\",\"estado\":\"Concluida\",\"anomalia\":\"TESTE-E2E-dcatfj avaria\",\"feito\":\"TESTE-E2E-dcatfj\",\"horaInicio\":\"08:00:00\",\"horaFim\":\"09:00:00\",\"tecnico\":\"Ana Silva\",\"tecno\":101,\"podeV"
+  },
+  {
+   "grupo": "estado",
+   "nome": "iniciar ficha",
+   "ok": false,
+   "detalhe": "409 {\"erro\":\"conflito\"}"
+  },
+  {
+   "grupo": "idem",
+   "nome": "iniciar 2ª vez sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "estado após iniciar = EmCurso",
+   "ok": false,
+   "detalhe": "Concluida"
+  },
+  {
+   "grupo": "material",
+   "nome": "material sem design -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "material",
+   "nome": "material qtt 0 -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "material",
+   "nome": "material qtt negativa -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "material",
+   "nome": "material epv negativo -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "material",
+   "nome": "material qtt enorme -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "material",
+   "nome": "material design só espaços -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "material",
+   "nome": "material com peça inexistente -> 400/404",
+   "ok": false,
+   "detalhe": "409 {\"erro\":\"conflito\"}"
+  },
+  {
+   "grupo": "material",
+   "nome": "material com local inválido -> 400",
+   "ok": false,
+   "detalhe": "409 {\"erro\":\"conflito\"}"
+  },
+  {
+   "grupo": "material",
+   "nome": "material em ficha inexistente -> 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "material",
+   "nome": "juntar material P001 qtt 2",
+   "ok": false,
+   "detalhe": "409 {\"erro\":\"conflito\"}"
+  },
+  {
+   "grupo": "estado",
+   "nome": "concluir sem texto -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "concluir com fim antes do início -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "concluir sem horas -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "pausar",
+   "ok": false,
+   "detalhe": "409 {\"erro\":\"conflito\"}"
+  },
+  {
+   "grupo": "idem",
+   "nome": "pausar 2ª vez sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "retomar",
+   "ok": false,
+   "detalhe": "409 {\"erro\":\"conflito\"}"
+  },
+  {
+   "grupo": "estado",
+   "nome": "concluir ficha",
+   "ok": false,
+   "detalhe": "409 {\"erro\":\"conflito\"}"
+  },
+  {
+   "grupo": "idem",
+   "nome": "concluir 2ª vez sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "estado = Concluida",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "não se junta material a ficha concluída (409)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "não se reinicia ficha concluída",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "validacao",
+   "nome": "171ce3a6f7c44b26b5de85da1 aparece em /validacao",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "171ce3a6f7c44b26b5de85da1 ainda NÃO está em /qualidade",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "validacao",
+   "nome": "devolver ao técnico",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "validacao",
+   "nome": "após devolver já não está Concluida/Validada",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "concluir após devolução",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "validacao",
+   "nome": "validar ficha",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "stock",
+   "nome": "validar: stock -2 e emConferencia -2",
+   "ok": false,
+   "detalhe": "{\"ref\":\"P001\",\"design\":\"Parafuso M8\",\"codigo\":\"560001\",\"local\":\"A-01-1-01\",\"stock\":10,\"stMin\":4,\"preco\":0.12,\"emConferencia\":0,\"disponivel\":10,\"abaixoDoMinimo\":false} -> {\"ref\":\"P001\",\"design\":\"Parafuso M8\",\"codigo\":\"560001\",\"local\":\"A-01-1-01\",\"stock\":10,\"stMin\":4,\"preco\":0.12,\"emConferencia\":0,\"di"
+  },
+  {
+   "grupo": "idem",
+   "nome": "validar 2ª vez sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "stock",
+   "nome": "stock não desceu em duplicado",
+   "ok": false,
+   "detalhe": "{\"ref\":\"P001\",\"design\":\"Parafuso M8\",\"codigo\":\"560001\",\"local\":\"A-01-1-01\",\"stock\":10,\"stMin\":4,\"preco\":0.12,\"emConferencia\":0,\"disponivel\":10,\"abaixoDoMinimo\":false}"
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "ficha validada passa à Qualidade",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "detalhe de qualidade 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "qualidade sem higienização -> 400/413",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "qualidade vazia -> 400/413",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "qualidade gigante -> 400/413",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "qualidade em ficha inexistente -> 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "concluir qualidade",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "idem",
+   "nome": "concluir qualidade 2ª vez sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "qualidade",
+   "nome": "ficha sai da lista de qualidade",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "ficha validada não se cancela (409/400)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "stock",
+   "nome": "reserva de 1 na ficha a cancelar",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "técnico não cancela (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "cancelar sem motivo -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "cancelar ficha com material",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "stock",
+   "nome": "cancelar liberta a reserva sem mexer no stock",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "idem",
+   "nome": "cancelar 2ª vez sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "listar inventários",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "qualidade vs inventários: 403 esperado",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "id inválido -> 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "inventário inexistente -> 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "contagem sem peça -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "contagem sem local -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "contagem local inválido -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "contagem qtt negativa -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "contagem qtt 4 casas -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "contagem qtt nula -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "contagem peça inexistente -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "gravar contagem P001 A-02-1-01 = 3",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "repetir contagem do mesmo lugar sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "alterar qtt negativa -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "alterar qtt para 5",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "alterar linha inexistente -> 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "supervisor em inventário do técnico -> 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "supervisor não apaga linha alheia (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "supervisor não conclui inventário alheio (403)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "apagar linha 03588392ac1a426187cd9e2d9",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "inv",
+   "nome": "inventário volta às linhas iniciais",
+   "ok": true,
+   "detalhe": ""
+  }
+ ]
+}

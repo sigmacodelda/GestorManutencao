@@ -1,0 +1,214 @@
+[
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": false,
+    "ms": 6636,
+    "detalhe": "",
+    "consola": [],
+    "erro": "6 tapado(s): [medida] scroll 0/1485 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1396; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | a \"Arrumação Pôr as peças nos seus lugares \" tapado por a.nav-item | a \"Rearrumar Mudar uma peça para outro luga\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/intervencoes sem controlos tapados",
+    "ok": true,
+    "ms": 1822,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 268; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/avaria sem controlos tapados",
+    "ok": true,
+    "ms": 2350,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 538; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/pecas/arrumar sem controlos tapados",
+    "ok": true,
+    "ms": 2383,
+    "detalhe": "[medida] scroll 0/874 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 417; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/pecas/rearrumar sem controlos tapados",
+    "ok": true,
+    "ms": 2366,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 277; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/inventarios sem controlos tapados",
+    "ok": true,
+    "ms": 2314,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 209; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/leitor sem controlos tapados",
+    "ok": true,
+    "ms": 2325,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": false,
+    "ms": 2549,
+    "detalhe": "",
+    "consola": [],
+    "erro": "10 tapado(s): [medida] scroll 0/2166 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 2077; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | a \"Intervenção devolvida TESTE-E2E-4o6x5g C\" tapado por nav.navegacao | a \"Nova intervenção atribuída TESTE-E2E-4o6\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos sem controlos tapados",
+    "ok": false,
+    "ms": 2588,
+    "detalhe": "",
+    "consola": [],
+    "erro": "8 tapado(s): [medida] scroll 0/1642 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1553; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | select \"TodosBalançaCompressorEmpilhadorFrioLinh\" tapado por ul.contadores contadores-4 | select \"TodosArmazémExpediçãoFrioProdução\" tapado por ul.contadores contadores-4"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": false,
+    "ms": 5651,
+    "detalhe": "",
+    "consola": [],
+    "erro": "12 tapado(s): [medida] scroll 0/2410 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 2322; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | a \"Todas as fichas Pesquisar fichas de qual\" tapado por nav.navegacao | a \"Equipamentos Fichas, histórico e instruç\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/planeadas sem controlos tapados",
+    "ok": false,
+    "ms": 2011,
+    "detalhe": "",
+    "consola": [],
+    "erro": "4 tapado(s): [medida] scroll 0/1434 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1328; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | input \"adic-F2-101\" tapado por span.nav-rotulo | input \"adic-F2-100\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/validacao sem controlos tapados",
+    "ok": true,
+    "ms": 2320,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 487; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/nova-ficha sem controlos tapados",
+    "ok": false,
+    "ms": 2481,
+    "detalhe": "",
+    "consola": [],
+    "erro": "1 tapado(s): [medida] scroll 0/914 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 756; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | button \"Falar\" tapado por button.btn btn-primario btn-grande btn-fixo"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/fichas sem controlos tapados",
+    "ok": false,
+    "ms": 2518,
+    "detalhe": "",
+    "consola": [],
+    "erro": "12 tapado(s): [medida] scroll 0/1253 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1077; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | select \"TodosPlaneadaEm cursoPor validarValidada\" tapado por a.intervencao-titulo cartao-link | select \"Todos Preventiva Avaria\" tapado por a.intervencao-titulo cartao-link"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/mais sem controlos tapados",
+    "ok": true,
+    "ms": 2315,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 562; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/configuracao sem controlos tapados",
+    "ok": true,
+    "ms": 2391,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 690; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/periodicidades sem controlos tapados",
+    "ok": false,
+    "ms": 2611,
+    "detalhe": "",
+    "consola": [],
+    "erro": "5 tapado(s): [medida] scroll 0/1534 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1429; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | button \"Editar\" tapado por nav.navegacao | button \"Editar\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipa sem controlos tapados",
+    "ok": false,
+    "ms": 2581,
+    "detalhe": "",
+    "consola": [],
+    "erro": "4 tapado(s): [medida] scroll 0/1266 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1162; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | button \"Mudar o número do técnico\" tapado por nav.navegacao | button \"Novo PIN\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos sem controlos tapados",
+    "ok": false,
+    "ms": 2586,
+    "detalhe": "",
+    "consola": [],
+    "erro": "9 tapado(s): [medida] scroll 0/1710 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1621; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | select \"TodosBalançaCompressorEmpilhadorFrioLinh\" tapado por ul.contadores contadores-4 | select \"TodosArmazémExpediçãoFrioProdução\" tapado por ul.contadores contadores-4"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos/novo sem controlos tapados",
+    "ok": false,
+    "ms": 2402,
+    "detalhe": "",
+    "consola": [],
+    "erro": "3 tapado(s): [medida] scroll 0/1176 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 752; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | input \"eq-modelo\" tapado por a.nav-item active | input \"eq-serie\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/inventarios sem controlos tapados",
+    "ok": true,
+    "ms": 2285,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 231; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": false,
+    "ms": 2603,
+    "detalhe": "",
+    "consola": [],
+    "erro": "46 tapado(s): [medida] scroll 0/6994 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 6906; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum | a \"Avaria registada TESTE-E2E-9743s1 Compre\" tapado por nav.navegacao | a \"Ficha por validar TESTE-E2E-9743s1 Compr\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": true,
+    "ms": 2507,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 678; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/qualidade sem controlos tapados",
+    "ok": true,
+    "ms": 1764,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo n/a; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": true,
+    "ms": 2465,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 82; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  }
+]

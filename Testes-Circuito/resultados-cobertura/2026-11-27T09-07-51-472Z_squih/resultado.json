@@ -1,0 +1,43 @@
+[
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Página abre no passo 1 com pesquisa e sem botão Arrumar",
+    "ok": true,
+    "ms": 3357,
+    "detalhe": "Início Arrumação Passo 1 de 3 · pique a etiqueta da peça ou procure-a Peça Corredor Escolha o corredor A B Estante Escol",
+    "consola": []
+  },
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Pesquisa vazia, sem resultados e peça sem nada por arrumar (P002)",
+    "ok": true,
+    "ms": 2358,
+    "detalhe": "vazio: \"\" · sem resultados: \"Código não encontrado: zzzz-nao / Peça Corredor Escolha o corredor A B Estante Escolha a estante Nív\"",
+    "consola": []
+  },
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Mudar de peça volta ao passo 1",
+    "ok": true,
+    "ms": 479,
+    "detalhe": "",
+    "consola": []
+  },
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Passo 2 sem peça: \"Usar este lugar\" só ativa com os 4 níveis; selects em cascata",
+    "ok": true,
+    "ms": 107,
+    "detalhe": "corredores: Escolha o corredor,A,B",
+    "consola": []
+  },
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Escolher a peça P001: stock, por arrumar e lugares coerentes com a API (aceita stock negativo)",
+    "ok": false,
+    "ms": 30644,
+    "detalhe": "",
+    "consola": [],
+    "erro": "sem aviso de stock negativo: Início Arrumação Passo 2 de 3 · pique a etiqueta ou escolha o lugar de destino P001 Parafuso M8 Mudar de peça Stock -5 · À espera de arrumar 0 Esta peça não tem nada à espera de arrumar: só se arruma o que lá está."
+  }
+]

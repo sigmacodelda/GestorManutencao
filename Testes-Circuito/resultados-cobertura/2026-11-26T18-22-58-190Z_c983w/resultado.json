@@ -1,0 +1,42 @@
+[
+  {
+    "circuito": "I Inventários (contagem)",
+    "nome": "Lista mostra o inventário atribuído e abre a contagem",
+    "ok": true,
+    "ms": 852,
+    "detalhe": "0dd05fb8a3784941893d9946d",
+    "consola": []
+  },
+  {
+    "circuito": "I Inventários (contagem)",
+    "nome": "Sem linhas: aviso e sem botão Concluir; id inexistente mostra \"já não existe\"",
+    "ok": true,
+    "ms": 1104,
+    "detalhe": "Este inventário já não existe.",
+    "consola": []
+  },
+  {
+    "circuito": "I Inventários (contagem)",
+    "nome": "Contar P001 num lugar: quantidade inválida recusada e linha gravada",
+    "ok": true,
+    "ms": 3758,
+    "detalhe": "Inventários Inventário 1 Inventário de teste · Por contar · 1 linha Passo 1 de 3 · pique a etiqueta do lugar ou a da peça, ou escolha-os Peça Corredor Escolha o corredor A B Estante Escolha a estante ",
+    "consola": []
+  },
+  {
+    "circuito": "I Inventários (contagem)",
+    "nome": "Alterar quantidade (vazio recusado, 6 gravado), Cancelar, e a mesma peça+lugar não duplica",
+    "ok": true,
+    "ms": 1746,
+    "detalhe": "P001 Parafuso M8 Lugar A-02-1-01 · 6 unidades Alterar quantidade Apagar",
+    "consola": []
+  },
+  {
+    "circuito": "I Inventários (contagem)",
+    "nome": "Apagar a linha e voltar a contar; \"Concluir inventário\" pede confirmação e \"Ainda não\" cancela",
+    "ok": true,
+    "ms": 1560,
+    "detalhe": "ok",
+    "consola": []
+  }
+]

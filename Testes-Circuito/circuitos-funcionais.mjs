@@ -10,6 +10,8 @@ const CDP = process.env.CDP_URL ?? 'http://127.0.0.1:9222';
 const PIN_T = process.env.PIN_TECNICO;
 const PIN_S = process.env.PIN_SUPERVISOR;
 const LOG_API = process.env.GM_API_LOG;
+// Nome do técnico nas listas: na base de testes é o criado por -CriarUtilizadores; em -Memoria é o da API em memória.
+const NOME_TEC = new RegExp(process.env.NOME_TECNICO ?? 'Teste E2E Tecnico', 'i');
 if (!PIN_T || !PIN_S) { console.error('Faltam PIN_TECNICO e PIN_SUPERVISOR.'); process.exit(2); }
 if (!/^https:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(API)) { console.error('API_URL tem de ser https local.'); process.exit(2); }
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -90,8 +92,29 @@ async function entrarApp(pin, erroEsperado = false) {
   await page.locator('.teclado').waitFor({ timeout: 30000 });
   for (const d of pin) await clicar(page.locator('.teclado button.tecla', { hasText: new RegExp(`^${d}$`) }), `tecla ${d}`);
   if (erroEsperado) return;
-  const hero = page.locator('.hero-texto, input#pin-atual');
+  const hero = page.locator('.hero-texto, input#pin-atual, #assinatura-tela');
   await hero.first().waitFor({ timeout: 30000 });
+  // Sem assinatura a app pede-a antes de continuar: desenha-se um traço e guarda-se.
+  if (await page.locator('#assinatura-tela').isVisible().catch(() => false)) {
+    await assinar();
+    await page.locator('.hero-texto, input#pin-atual').first().waitFor({ timeout: 30000 });
+  }
+}
+async function assinar() {
+  const c = page.locator('#assinatura-tela');
+  const guardar = botao(page, 'Guardar');
+  await c.waitFor({ timeout: 15000 });
+  // O canvas só ouve o rato depois de o Blazor o iniciar: desenha-se até o Guardar ficar ativo.
+  for (let t = 0; t < 4 && await guardar.isDisabled(); t++) {
+    await espera(500);
+    await c.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {});
+    const b = await c.boundingBox();
+    await page.mouse.move(b.x + b.width * 0.15, b.y + b.height * 0.6); await page.mouse.down();
+    for (let i = 1; i <= 12; i++) await page.mouse.move(b.x + b.width * (0.15 + 0.06 * i), b.y + b.height * (0.6 - 0.25 * Math.sin(i / 2)), { steps: 3 });
+    await page.mouse.up();
+    await espera(300);
+  }
+  await guardar.click();
 }
 async function sairApp() {
   await clicar(page.locator('header.topo button[aria-label="Terminar sessão"]'), 'Terminar sessão');
@@ -106,6 +129,7 @@ async function sessaoComo(papel) {
       if ((await page.locator('.hero-texto .sobretitulo').innerText()) === papel) return;
       await sairApp(); continue;
     }
+    if (await page.locator('#assinatura-tela').isVisible().catch(() => false)) { await assinar(); await espera(1500); continue; }
     if (await page.locator('input#pin-atual').isVisible().catch(() => false)) { await page.reload(); await espera(3000); continue; }
     if (await page.locator('.teclado').isVisible().catch(() => false)) { await entrarApp(pin); continue; }
     try { await paraInicio(); } catch { await page.reload().catch(() => {}); await espera(3000); }
@@ -148,8 +172,10 @@ async function ligar() {
   page.on('console', (m) => { if (m.type() === 'error') consola.push(m.text().slice(0, 160)); });
   page.on('pageerror', (e) => consola.push(`pageerror: ${String(e.message).slice(0, 160)}`));
   await page.waitForLoadState('domcontentloaded');
-  await ate(async () => (await page.locator('.teclado').isVisible()) || (await page.locator('.hero-texto').isVisible()), 40000, 'login ou início');
-  if (await page.locator('.hero-texto').isVisible()) await sairApp();
+  const pronta = async () => (await page.locator('.teclado').isVisible()) || (await page.locator('.hero-texto').isVisible()) || (await page.locator('#assinatura-tela').isVisible()) || (await page.locator('input#pin-atual').isVisible());
+  await ate(pronta, 40000, 'login, início, assinatura ou mudança de PIN');
+  // Sessão guardada de uma execução anterior (início, assinatura por dar ou PIN provisório por mudar): termina-a.
+  if (!(await page.locator('.teclado').isVisible())) await sairApp();
   return browser;
 }
 
@@ -159,13 +185,13 @@ const T0 = Date.now();
 await circuito('01 Login e PIN de 4 números', async () => {
   await passo('PIN errado (4 números) mostra o erro e não entra', async () => {
     await entrarApp('0000', true);
-    await page.locator('.alerta[role=alert], .alerta').first().waitFor({ timeout: 15000 });
+    await page.locator('.alerta[role=alert], .alerta').first().waitFor({ state: 'attached', timeout: 15000 });
     afirma(!(await page.locator('.hero-texto').isVisible().catch(() => false)), 'entrou com PIN errado');
   });
   await passo('O teclado só aceita 4 números e entra sozinho ao 4.º (sem carregar em Entrar)', async () => {
     // Já com o PIN errado limpo pela app; confirma 4 pontos e que o técnico entra sem botão.
     afirma((await page.locator('.pin-ponto').count()) === 4, `pontos do PIN: ${await page.locator('.pin-ponto').count()}`);
-    afirma((await page.locator('.login-sub').first().innerText()).includes('4 números'), 'o texto devia dizer 4 números');
+    afirma(/4 números|PIN incorreto/.test(await page.locator('.login-aviso').textContent()), 'o aviso do login devia dizer 4 números ou o erro');
     await entrarApp(PIN_T);
     afirma((await page.locator('.hero-texto .sobretitulo').innerText()) === 'Operador', 'devia entrar como Operador');
   });
@@ -224,7 +250,7 @@ await circuito('02 Equipamento: criar, ver e editar (supervisor)', async () => {
     await escrever('#eq-ref', MARCA); await escrever('#eq-design', `${MARCA} duplicado`);
     await clicar(botao(page, 'Seguinte'), 'Seguinte 1'); await clicar(botao(page, 'Seguinte'), 'Seguinte 2');
     await clicar(botao(page, 'Feito'), 'Guardar equipamento');
-    await page.locator('p.campo-erro, .alerta').filter({ hasText: /\S/ }).first().waitFor({ timeout: 20000 });
+    await page.locator('p.campo-erro, .alerta').filter({ hasText: /\S/ }).first().waitFor({ state: 'attached', timeout: 20000 });
     afirma(/equipamentos\/novo/.test(page.url()), 'não devia ter navegado');
     await page.goBack().catch(() => {});
   });
@@ -252,7 +278,7 @@ await circuito('02b Periodicidade Mensal: configurar como 1 mês (a base de test
     await page.locator('#pe-unidade').selectOption('meses');
     await page.locator('#pe-intervalo').fill(''); await page.locator('#pe-intervalo').press('Tab');
     await clicar(botao(page, 'Feito'), 'Guardar (sem intervalo)');
-    await page.locator('p.campo-erro').filter({ hasText: /Indique o intervalo/ }).first().waitFor({ timeout: 15000 });
+    await page.locator('p.campo-erro').filter({ hasText: /Indique o intervalo/ }).first().waitFor({ state: 'attached', timeout: 15000 });
     await clicar(botao(page, 'Deixar de editar'), 'Deixar de editar');
   });
 });
@@ -314,7 +340,7 @@ await circuito('04 Planeadas (supervisor)', async () => {
     const sel = page.locator(`#tec-${ctx.planeadaId}`);
     await sel.waitFor({ timeout: 20000 });
     const opcoes = await sel.locator('option').allInnerTexts();
-    const alvo = opcoes.find((o) => /Teste E2E Tecnico/i.test(o)); afirma(alvo, `técnico de teste não está na lista (${opcoes.length} opções)`);
+    const alvo = opcoes.find((o) => NOME_TEC.test(o)); afirma(alvo, `técnico de teste não está na lista (${opcoes.length} opções)`);
     await sel.selectOption({ label: alvo });
     await page.getByText(/atribuída a/).first().waitFor({ timeout: 20000 });
   });
@@ -367,7 +393,7 @@ await circuito('06 Periodicidades e Configuração (supervisor, repõe o origina
     const campo = page.locator('#cfg-antecedencia'); await campo.waitFor({ timeout: 20000 });
     const original = await campo.inputValue();
     await escrever('#cfg-antecedencia', '999'); await clicar(botao(page, 'Guardar'), 'Guardar (999)');
-    await page.locator('p.campo-erro, .alerta').filter({ hasText: /entre 0 e 90/ }).first().waitFor({ timeout: 15000 });
+    await page.locator('p.campo-erro, .alerta').filter({ hasText: /entre 0 e 90/ }).first().waitFor({ state: 'attached', timeout: 15000 });
     await escrever('#cfg-antecedencia', '9'); await clicar(botao(page, 'Guardar'), 'Guardar (9)');
     await sucesso('Configuração guardada'); // volta ao menu "Mais" com o aviso de 2 s
     await abrirMosaico('Configuração', 'Configuração');
@@ -407,7 +433,7 @@ await circuito('07 Ficha manual e ficha completa (supervisor)', async () => {
   });
   await passo('Ficha completa: juntar horas de mão de obra do técnico de teste', async () => {
     const sel = page.locator('#mo-tecnico'); await sel.waitFor({ timeout: 20000 });
-    const ops = await sel.locator('option').allInnerTexts(); const alvo = ops.find((o) => /Teste E2E Tecnico/i.test(o));
+    const ops = await sel.locator('option').allInnerTexts(); const alvo = ops.find((o) => NOME_TEC.test(o));
     afirma(alvo, `técnico de teste não está em "Mão de obra" (${ops.length} opções)`);
     await sel.selectOption({ label: alvo }); await escrever('#mo-horas', '1.5');
     await clicar(botao(page, 'Juntar horas'), 'Juntar horas');
@@ -452,13 +478,18 @@ await circuito('08 Técnico: planeada atribuída e avaria com material', async (
   });
   await passo('Material: juntar, editar, apagar e juntar de novo; depois concluir', async () => {
     await page.locator(`a.intervencao[href$="${ctx.avaria}"]`).first().click({ timeout: 30000 });
-    await escrever('#material', 'Filtro E2E'); await escrever('#qtt', '2'); await escrever('#epv', '3.5');
+    await escrever('#material', 'Filtro E2E'); await escrever('#qtt', '2');
+    // O preço só aparece ao supervisor.
+    if (await page.locator('#epv').count()) await escrever('#epv', '3.5');
     await clicar(botao(page, 'Juntar material'), 'Juntar material');
     await page.locator('.material-linha', { hasText: 'Filtro E2E' }).waitFor({ timeout: 20000 });
+    await clicar(page.locator('summary[aria-label="Mais ações de Filtro E2E"]'), 'Menu do material');
     await clicar(page.locator('button[aria-label="Editar Filtro E2E"]'), 'Editar material');
     await escrever('#e-qtt', '3'); await clicar(botao(page, 'Guardar material'), 'Guardar material');
     await ate(async () => (await page.locator('.material-linha', { hasText: 'Filtro E2E' }).innerText()).includes('3'), 15000, 'quantidade editada');
+    await clicar(page.locator('summary[aria-label="Mais ações de Filtro E2E"]'), 'Menu do material');
     await clicar(page.locator('button[aria-label="Tirar Filtro E2E"]'), 'Tirar material');
+    await clicar(page.locator('button[aria-label="Confirmar: tirar Filtro E2E"]'), 'Tirar mesmo?');
     await ate(async () => (await page.locator('.material-linha', { hasText: 'Filtro E2E' }).count()) === 0, 15000, 'material apagado');
     await escrever('#material', 'Retentor E2E'); await escrever('#qtt', '1');
     await clicar(botao(page, 'Juntar material'), 'Juntar material 2');
@@ -467,7 +498,7 @@ await circuito('08 Técnico: planeada atribuída e avaria com material', async (
     await concluirEVoltar();
   });
   await passo('Barra inferior do técnico e Notificações', async () => {
-    for (const [rotulo, h1] of [['Avaria', 'Registar avaria'], ['Máquinas', 'Equipamentos'], ['Avisos', 'Notificações'], ['Intervenções', 'As minhas intervenções'], ['Início', null]]) {
+    for (const [rotulo, h1] of [['Avaria', 'Registar avaria'], ['Máquinas', 'Equipamentos'], ['Avisos', 'Notificações'], ['Fichas', 'As minhas intervenções'], ['Início', null]]) {
       await clicar(page.locator('nav.navegacao .nav-item', { has: page.locator('.nav-rotulo', { hasText: new RegExp('^[ \\n\\t]*' + rotulo) }) }), `nav ${rotulo}`);
       if (h1) await page.locator('h1', { hasText: h1 }).first().waitFor({ timeout: 15000 }); else await page.locator('.hero-texto').waitFor({ timeout: 15000 });
     }
@@ -526,7 +557,7 @@ await circuito('10 Equipamento obsoleto e Equipa/PIN (supervisor)', async () => 
   await passo('Equipa: criar operador e receber o PIN provisório de 4 números', async () => {
     await abrirMosaico('Equipa', 'Equipa');
     const codigo = `e2e.n${RUN}`; criados.utilizadores.push(codigo);
-    await escrever('#nome', `Teste E2E Novo ${RUN}`); await escrever('#codigo', codigo); await escrever('#tecno', '99005');
+    await escrever('#nome', `Teste E2E Novo ${RUN}`); await escrever('#codigo', codigo);
     await clicar(botao(page, 'Feito'), 'Criar e dar PIN');
     const pin = await page.locator('.pin-grande').first().innerText({ timeout: 20000 });
     afirma(/^\d{4}$/.test(pin.trim()), `o PIN provisório devia ter 4 números (tem ${pin.trim().length})`);
@@ -543,14 +574,17 @@ await circuito('10 Equipamento obsoleto e Equipa/PIN (supervisor)', async () => 
     afirma((await page.locator('nav.navegacao').count()) === 0, 'a navegação devia estar escondida até mudar o PIN');
     await escrever('#pin-atual', ctx.pinNovo);
     await escrever('#pin-novo', '1234'); await escrever('#pin-repetir', '1234'); await clicar(botao(page, 'Guardar PIN'), 'Guardar PIN (fraco)');
-    await page.locator('p.campo-erro').filter({ hasText: /fácil de adivinhar/ }).first().waitFor({ timeout: 15000 });
+    await page.locator('p.campo-erro').filter({ hasText: /fácil de adivinhar/ }).first().waitFor({ state: 'attached', timeout: 15000 });
     await escrever('#pin-novo', '5927'); await escrever('#pin-repetir', '5928'); await clicar(botao(page, 'Guardar PIN'), 'Guardar PIN (diferentes)');
-    await page.locator('p.campo-erro').filter({ hasText: /não são iguais/ }).first().waitFor({ timeout: 15000 });
+    await page.locator('p.campo-erro').filter({ hasText: /não são iguais/ }).first().waitFor({ state: 'attached', timeout: 15000 });
     const maxlen = await page.locator('#pin-novo').getAttribute('maxlength');
     afirma(maxlen === '4', `o campo do PIN novo aceita ${maxlen} caracteres em vez de 4`);
   });
   await passo('Define o PIN 5927, entra no início e volta a entrar com ele', async () => {
     await escrever('#pin-repetir', '5927'); await clicar(botao(page, 'Guardar PIN'), 'Guardar PIN');
+    // Um utilizador novo também tem de assinar antes de chegar ao início.
+    await page.locator('.hero-texto, #assinatura-tela').first().waitFor({ timeout: 30000 });
+    if (await page.locator('#assinatura-tela').isVisible()) await assinar();
     await page.locator('.hero-texto').waitFor({ timeout: 30000 });
     await sairApp(); await entrarApp('5927');
     await page.locator('.hero-texto').waitFor({ timeout: 30000 }); await sairApp();

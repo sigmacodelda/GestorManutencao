@@ -1,0 +1,52 @@
+[
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Abrir /fichas e ver lista",
+    "ok": true,
+    "ms": 1545,
+    "detalhe": "Mais Todas as fichas Abertas Fechadas Todas Pesquisar Filtros Câmara de frio 01 Preventiva · Sem técnico Planeada Nº 4 · 26/12/2026 · 0,00 € Balança 03 Avaria · Ana Silva Em curso Nº 1008 · 26/11/2026",
+    "consola": []
+  },
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Situação Abertas/Fechadas/Todas: Todas = Abertas + Fechadas",
+    "ok": false,
+    "ms": 33112,
+    "detalhe": "",
+    "consola": [],
+    "erro": "Todas 18 ≠ Abertas 7 + Fechadas 8"
+  },
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Filtro Estado (cada opção): todos os cartões mostram o estado e batem com a API",
+    "ok": true,
+    "ms": 6351,
+    "detalhe": "Planeada: UI 2/API 3 | Em curso: UI 2/API 2 | Por validar: UI 1/API 1 | Validada: UI 9/API 9 | Cancelada: UI 4/API 4",
+    "consola": []
+  },
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Filtro Tipo (Avaria/Preventiva) e Ordenar mudam a lista sem erro",
+    "ok": true,
+    "ms": 7398,
+    "detalhe": "cartões depois de repor: 18",
+    "consola": []
+  },
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Só por supervisionar e técnico: respondem; Repor filtros limpa o contador \"Filtros (n)\"",
+    "ok": false,
+    "ms": 60033,
+    "detalhe": "",
+    "consola": [],
+    "erro": "locator.check: Timeout 30000ms exceeded."
+  },
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Pesquisa sem resultados mostra estado vazio; datas invertidas recusadas",
+    "ok": true,
+    "ms": 2031,
+    "detalhe": "datas invertidas: A data final não pode ser antes da inicial.",
+    "consola": []
+  }
+]

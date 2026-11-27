@@ -19,6 +19,10 @@
             {
                 <span class="intervencao-desc">Stock disponível @_peca.QuantidadeDisponivel.ToString("0.###")@(_peca.QuantidadeDisponivel != _peca.Stock ? $" (stock {_peca.Stock:0.###})" : "")</span>
             }
+            @if (_peca.Stock < 0)
+            {
+                <span class="aviso-cartao">Atenção: o stock desta peça está negativo (@_peca.Stock.ToString("0.###")). Peça ao supervisor para o acertar.</span>
+            }
             <button type="button" class="btn-texto" @onclick="LimparPeca"><Icone Nome="x" /><span>Mudar de peça</span></button>
         </div>
     }

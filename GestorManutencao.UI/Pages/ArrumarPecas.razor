@@ -38,6 +38,10 @@
         @if (_esc?.Lugares is { } lug && _esc.Ref is not null)
         {
             <p class="intervencao-desc">Stock @lug.Stock.ToString("0.###") · À espera de arrumar @lug.PorArrumar.ToString("0.###")</p>
+            @if (lug.Stock < 0)
+            {
+                <p class="estado-lista" role="note">Atenção: o stock desta peça está negativo (@lug.Stock.ToString("0.###")). Foi dada saída de mais; peça ao supervisor para o acertar.</p>
+            }
             @if (lug.PorArrumar <= 0)
             {
                 <p class="estado-lista" role="status">Esta peça não tem nada à espera de arrumar: só se arruma o que lá está.</p>

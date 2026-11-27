@@ -1,0 +1,222 @@
+
+== Autenticação e permissões
+  ok    [auth] sem token /intervencoes -> 401
+  ok    [auth] sem token /pecas -> 401
+  ok    [auth] sem token /inventarios -> 401
+  ok    [auth] sem token /equipamentos -> 401
+  ok    [auth] sem token /qualidade -> 401
+  ok    [auth] sem token /validacao -> 401
+  ok    [auth] sem token /gestao/opcoes -> 401
+  ok    [auth] sem token /utilizadores/ -> 401
+  ok    [auth] sem token /configuracao -> 401
+  ok    [auth] sem token /intervencoes/todas -> 401
+  ok    [auth] sem token /planeadas -> 401
+  ok    [auth] sem token /auth/eu -> 401
+  ok    [auth] token inválido -> 401
+  ok    [perm] /validacao perfil t 403
+  ok    [perm] /validacao perfil s 200
+  ok    [perm] /validacao perfil q 403
+  ok    [perm] /qualidade perfil t 403
+  ok    [perm] /qualidade perfil s 403
+  ok    [perm] /qualidade perfil q 200
+  ok    [perm] /gestao/opcoes perfil t 403
+  ok    [perm] /gestao/opcoes perfil s 200
+  ok    [perm] /gestao/opcoes perfil q 403
+  ok    [perm] /utilizadores/ perfil t 403
+  ok    [perm] /utilizadores/ perfil s 200
+  ok    [perm] /utilizadores/ perfil q 403
+  ok    [perm] /configuracao perfil t 403
+  ok    [perm] /configuracao perfil s 200
+  ok    [perm] /configuracao perfil q 403
+  ok    [perm] /intervencoes/todas perfil t 403
+  ok    [perm] /intervencoes/todas perfil s 200
+  ok    [perm] /intervencoes/todas perfil q 403
+  ok    [perm] /planeadas perfil t 403
+  ok    [perm] /planeadas perfil s 200
+  ok    [perm] /planeadas perfil q 403
+  ok    [perm] /intervencoes/contadores perfil t 403
+  ok    [perm] /intervencoes/contadores perfil s 200
+  ok    [perm] /intervencoes/contadores perfil q 403
+  ok    [perm] qualidade /pecas: 200 ou 403 (nunca 500)
+     qualidade /pecas -> 403
+  ok    [perm] qualidade /inventarios: 200 ou 403 (nunca 500)
+     qualidade /inventarios -> 403
+  ok    [perm] qualidade /intervencoes: 200 ou 403 (nunca 500)
+     qualidade /intervencoes -> 403
+  ok    [perm] qualidade /equipamentos: 200 ou 403 (nunca 500)
+     qualidade /equipamentos -> 200
+  ok    [perm] técnico não valida (403)
+  ok    [validacao] devolver sem motivo -> 400
+  ok    [perm] técnico não conclui qualidade (403)
+  ok    [perm] supervisor não conclui qualidade (403)
+  ok    [perm] técnico não gera planeadas (403)
+  ok    [perm] técnico não altera configuração (403)
+  ok    [perm] técnico não cria utilizadores (403)
+  ok    [perm] técnico não atribui planeadas (403)
+  ok    [perm] técnico não cancela (403)
+  ok    [perm] técnico não cria equipamento (403)
+  ok    [auth] login corpo vazio -> 400/401 (nunca 500)
+  ok    [auth] login pin curto -> 400/401 (nunca 500)
+  ok    [auth] login pin letras -> 400/401 (nunca 500)
+  ok    [auth] login pin nulo -> 400/401 (nunca 500)
+  ok    [auth] login pin numérico (tipo errado) -> 400/401 (nunca 500)
+  ok    [auth] login com corpo inválido não dá 500
+  ok    [auth] login PIN errado 401 e Cache-Control no-store
+  ok    [auth] /auth/eu 200
+  ok    [auth] /auth/eu sem pin/hash
+  ok    [auth] mudar PIN para fraco -> 400
+  ok    [auth] mudar PIN com atual errado -> 401
+  ok    [auth] mudar PIN igual -> 400
+  ok    [auth] mudar PIN com PIN de outra pessoa -> 401
+
+== Peças e preços
+  ok    [pecas] listar peças técnico/supervisor 200
+  BUG B-PRECO-1: GET /pecas devolve "preco" ao técnico (Operador) :: GET /pecas com token do técnico: {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"disponivel":10,"abaixoDoMinimo":false}; esperado preco omitido/0
+  ok    [pecas] peça por código 200
+  BUG B-PRECO-2: GET /pecas/codigo/{c} devolve preco ao técnico :: {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"disponivel":10,"abaixoDoMinimo":false}
+  ok    [pecas] código inexistente -> 404
+  ok    [pecas] pesquisa com caracteres especiais -> 200
+  ok    [pecas] pesquisa com 5000 chars sem 500
+  ok    [loc] localizações P001 200
+  ok    [loc] localizado = soma dos lugares
+  ok    [loc] porArrumar = max(0, stock - localizado)
+  ok    [loc] localizações de peça inexistente 404
+  ok    [loc] ref com 40 chars -> 404
+  ok    [loc] arrumar sem corpo -> 400
+  ok    [loc] arrumar sem corpo: mensagem útil no corpo
+  ok    [loc] arrumar local incompleto -> 400
+  ok    [loc] arrumar local incompleto: mensagem útil no corpo
+  ok    [loc] arrumar qtt 0 -> 400
+  ok    [loc] arrumar qtt 0: mensagem útil no corpo
+  ok    [loc] arrumar qtt negativa -> 400
+  ok    [loc] arrumar qtt negativa: mensagem útil no corpo
+  ok    [loc] arrumar qtt 4 casas -> 400
+  ok    [loc] arrumar qtt 4 casas: mensagem útil no corpo
+  ok    [loc] arrumar qtt gigante -> 400
+  ok    [loc] arrumar qtt gigante: mensagem útil no corpo
+  ok    [loc] arrumar ref vazia -> 400
+  ok    [loc] arrumar ref vazia: mensagem útil no corpo
+  ok    [loc] arrumar mais do que o buffer -> 400 com mensagem
+  ok    [loc] arrumar peça inexistente -> 404
+  ok    [perm] qualidade não arruma (403)
+  ok    [perm] arrumar sem token 401
+  ok    [loc] mover mesmo lugar -> 400
+  ok    [loc] mover origem inválida -> 400
+  ok    [loc] mover qtt 0 -> 400
+  ok    [loc] mover acima do disponível -> 400
+  ok    [loc] mover origem sem stock -> 400
+  ok    [loc] no-lugar local inválido -> 400
+  ok    [loc] no-lugar sem local -> 400
+
+== Fichas, material e stock
+  ok    [ficha] avaria sem equipamento -> 400/404
+  ok    [ficha] avaria sem anomalia -> 400/404
+  ok    [ficha] avaria anomalia só espaços -> 400/404
+  ok    [ficha] avaria anomalia enorme -> 400/404
+  ok    [ficha] avaria equipamento inexistente -> 400/404
+  ok    [ficha] criar avaria 200/201
+  ficha criada 171ce3a6f7c44b26b5de85da1 (TESTE-E2E-dcatfj)
+  ok    [perm] qualidade não cria avaria (403)
+  estado inicial: EmCurso
+  FALHA [estado] concluir ficha não iniciada -> 409/400 :: 200 {"id":"171ce3a6f7c44b26b5de85da1","equipamento":"Balança 03","zona":"Expedição","tipo":"Curativa","dataPlaneada":"2026-11-26","estado":"Concluida","anomalia":"TESTE-E2E-dcatfj avaria","feito":"TESTE-E2E-dcatfj","horaInicio":"08:00:00","horaFim":"09:00:00","tecnico":"Ana Silva","tecno":101,"podeV
+  FALHA [estado] iniciar ficha :: 409 {"erro":"conflito"}
+  ok    [idem] iniciar 2ª vez sem 500
+  iniciar 2ª vez: 409
+  FALHA [estado] estado após iniciar = EmCurso :: Concluida
+  ok    [material] material sem design -> 400
+  ok    [material] material qtt 0 -> 400
+  ok    [material] material qtt negativa -> 400
+  ok    [material] material epv negativo -> 400
+  ok    [material] material qtt enorme -> 400
+  ok    [material] material design só espaços -> 400
+  FALHA [material] material com peça inexistente -> 400/404 :: 409 {"erro":"conflito"}
+  FALHA [material] material com local inválido -> 400 :: 409 {"erro":"conflito"}
+  ok    [material] material em ficha inexistente -> 404
+  FALHA [material] juntar material P001 qtt 2 :: 409 {"erro":"conflito"}
+  ok    [estado] concluir sem texto -> 400
+  ok    [estado] concluir com fim antes do início -> 400
+  ok    [estado] concluir sem horas -> 400
+  FALHA [estado] pausar :: 409 {"erro":"conflito"}
+  ok    [idem] pausar 2ª vez sem 500
+  FALHA [estado] retomar :: 409 {"erro":"conflito"}
+  FALHA [estado] concluir ficha :: 409 {"erro":"conflito"}
+  ok    [idem] concluir 2ª vez sem 500
+  concluir 2ª vez: 409
+  ok    [estado] estado = Concluida
+  ok    [estado] não se junta material a ficha concluída (409)
+  ok    [estado] não se reinicia ficha concluída
+
+== Validação e Qualidade
+  ok    [validacao] 171ce3a6f7c44b26b5de85da1 aparece em /validacao
+  ok    [qualidade] 171ce3a6f7c44b26b5de85da1 ainda NÃO está em /qualidade
+  ok    [validacao] devolver ao técnico
+  após devolver: EmCurso motivo=TESTE-E2E-dcatfj devolvida
+  ok    [validacao] após devolver já não está Concluida/Validada
+  P001 após devolver: {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"disponivel":10,"abaixoDoMinimo":false}
+  reiniciar após devolução: 200
+  ok    [estado] concluir após devolução
+  ok    [validacao] validar ficha
+  FALHA [stock] validar: stock -2 e emConferencia -2 :: {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"disponivel":10,"abaixoDoMinimo":false} -> {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"di
+  localizações após validar: {"ref":"P001","stock":10,"localizado":3,"porArrumar":7,"lugares":[{"corredor":"A","estante":"A-02","nivel":1,"posicao":1,"qtt":3,"reservado":0,"texto":"A-02-1-01"}]}
+  ok    [idem] validar 2ª vez sem 500
+  FALHA [stock] stock não desceu em duplicado :: {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"disponivel":10,"abaixoDoMinimo":false}
+  estado após validar: Validada
+  em /qualidade: true
+  ok    [qualidade] ficha validada passa à Qualidade
+  ok    [qualidade] detalhe de qualidade 200
+  ok    [qualidade] qualidade sem higienização -> 400/413
+  ok    [qualidade] qualidade vazia -> 400/413
+  ok    [qualidade] qualidade gigante -> 400/413
+  ok    [qualidade] qualidade em ficha inexistente -> 404
+  ok    [qualidade] concluir qualidade
+  ok    [idem] concluir qualidade 2ª vez sem 500
+  qualidade 2ª vez: 409
+  estado após qualidade: Validada fechada=true
+  ok    [qualidade] ficha sai da lista de qualidade
+  ok    [estado] ficha validada não se cancela (409/400)
+
+== Cancelar liberta reserva
+  ok    [stock] reserva de 1 na ficha a cancelar
+  ok    [perm] técnico não cancela (403)
+  ok    [estado] cancelar sem motivo -> 400
+  ok    [estado] cancelar ficha com material
+  ok    [stock] cancelar liberta a reserva sem mexer no stock
+  ok    [idem] cancelar 2ª vez sem 500
+
+== Inventários
+  ok    [inv] listar inventários
+  ok    [perm] qualidade vs inventários: 403 esperado
+  ok    [inv] id inválido -> 404
+  ok    [inv] inventário inexistente -> 404
+  ok    [inv] contagem sem peça -> 400
+  ok    [inv] contagem sem local -> 400
+  ok    [inv] contagem local inválido -> 400
+  ok    [inv] contagem qtt negativa -> 400
+  ok    [inv] contagem qtt 4 casas -> 400
+  ok    [inv] contagem qtt nula -> 400
+  ok    [inv] contagem peça inexistente -> 400
+  ok    [inv] gravar contagem P001 A-02-1-01 = 3
+  linhas: [{"id":"03588392ac1a426187cd9e2d9","ref":"P001","design":"Parafuso M8","lugar":"A-02-1-01","qtt":3}]
+  ok    [inv] repetir contagem do mesmo lugar sem 500
+  linhas P001/A-02-1-01 após 2 gravações: 1
+  ok    [inv] alterar qtt negativa -> 400
+  ok    [inv] alterar qtt para 5
+  ok    [inv] alterar linha inexistente -> 404
+  ok    [perm] supervisor em inventário do técnico -> 403
+  ok    [perm] supervisor não apaga linha alheia (403)
+  ok    [perm] supervisor não conclui inventário alheio (403)
+  ok    [inv] apagar linha 03588392ac1a426187cd9e2d9
+  ok    [inv] inventário volta às linhas iniciais
+
+TOTAL: 166 ok, 11 falhas, 2 bugs
+ FALHA [estado] concluir ficha não iniciada -> 409/400 :: 200 {"id":"171ce3a6f7c44b26b5de85da1","equipamento":"Balança 03","zona":"Expedição","tipo":"Curativa","dataPlaneada":"2026-11-26","estado":"Concluida","anomalia":"TESTE-E2E-dcatfj avaria","feito":"TESTE-E2E-dcatfj","horaInicio":"08:00:00","horaFim":"09:00:00","tecnico":"Ana Silva","tecno":101,"podeV
+ FALHA [estado] iniciar ficha :: 409 {"erro":"conflito"}
+ FALHA [estado] estado após iniciar = EmCurso :: Concluida
+ FALHA [material] material com peça inexistente -> 400/404 :: 409 {"erro":"conflito"}
+ FALHA [material] material com local inválido -> 400 :: 409 {"erro":"conflito"}
+ FALHA [material] juntar material P001 qtt 2 :: 409 {"erro":"conflito"}
+ FALHA [estado] pausar :: 409 {"erro":"conflito"}
+ FALHA [estado] retomar :: 409 {"erro":"conflito"}
+ FALHA [estado] concluir ficha :: 409 {"erro":"conflito"}
+ FALHA [stock] validar: stock -2 e emConferencia -2 :: {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"disponivel":10,"abaixoDoMinimo":false} -> {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"di
+ FALHA [stock] stock não desceu em duplicado :: {"ref":"P001","design":"Parafuso M8","codigo":"560001","local":"A-01-1-01","stock":10,"stMin":4,"preco":0.12,"emConferencia":0,"disponivel":10,"abaixoDoMinimo":false}

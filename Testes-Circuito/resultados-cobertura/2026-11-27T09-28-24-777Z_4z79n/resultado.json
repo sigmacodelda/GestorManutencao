@@ -1,0 +1,202 @@
+[
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": true,
+    "ms": 6165,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/intervencoes sem controlos tapados",
+    "ok": true,
+    "ms": 1756,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 268; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/avaria sem controlos tapados",
+    "ok": true,
+    "ms": 2312,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 538; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/pecas/arrumar sem controlos tapados",
+    "ok": true,
+    "ms": 2373,
+    "detalhe": "[medida] scroll 0/874 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 417; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/pecas/rearrumar sem controlos tapados",
+    "ok": true,
+    "ms": 2321,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 277; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/inventarios sem controlos tapados",
+    "ok": true,
+    "ms": 2355,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 209; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/leitor sem controlos tapados",
+    "ok": true,
+    "ms": 2343,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 1; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": true,
+    "ms": 2334,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos sem controlos tapados",
+    "ok": true,
+    "ms": 2399,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": true,
+    "ms": 4275,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/planeadas sem controlos tapados",
+    "ok": true,
+    "ms": 1856,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/validacao sem controlos tapados",
+    "ok": true,
+    "ms": 2410,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 487; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/nova-ficha sem controlos tapados",
+    "ok": true,
+    "ms": 2348,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/fichas sem controlos tapados",
+    "ok": true,
+    "ms": 2298,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/mais sem controlos tapados",
+    "ok": true,
+    "ms": 2450,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 562; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/configuracao sem controlos tapados",
+    "ok": true,
+    "ms": 2442,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 690; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/periodicidades sem controlos tapados",
+    "ok": true,
+    "ms": 2338,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipa sem controlos tapados",
+    "ok": true,
+    "ms": 2324,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos sem controlos tapados",
+    "ok": true,
+    "ms": 2314,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos/novo sem controlos tapados",
+    "ok": true,
+    "ms": 2346,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/inventarios sem controlos tapados",
+    "ok": true,
+    "ms": 2301,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 231; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": true,
+    "ms": 2353,
+    "detalhe": "SALTADO: a janela não rola neste ambiente (scrollTo sem efeito), sobreposição não medível",
+    "consola": []
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": true,
+    "ms": 2535,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 678; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/qualidade sem controlos tapados",
+    "ok": true,
+    "ms": 1756,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo n/a; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": true,
+    "ms": 2309,
+    "detalhe": "[medida] scroll 0/844 (vista 844); roláveis: nenhum; barra topo 765; último controlo fundo 82; padding-fundo 0px; scrollTo300→0; overflow html/body visible/visible; contentores com scroll: nenhum",
+    "consola": []
+  }
+]

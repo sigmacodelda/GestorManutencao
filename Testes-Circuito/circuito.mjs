@@ -368,7 +368,7 @@ async function pistaApp(ctx) {
     afirma((await page.locator('h2', { hasText: /^Dados|Mão de obra|Externo/ }).count()) === 0, 'o técnico vê secções da ficha completa');
     await page.locator('#material').fill('Parafuso M8 E2E');
     await page.locator('#qtt').fill('2'); await page.locator('#qtt').press('Tab');
-    await page.locator('#epv').fill('1.5'); await page.locator('#epv').press('Tab');
+    afirma((await page.locator('#epv').count()) === 0, 'o técnico não devia ver o campo do preço');
     await clicar(botao(page, 'Juntar material'), 'Juntar material');
     await page.locator('.material-linha', { hasText: 'Parafuso M8 E2E' }).waitFor({ timeout: 20000 });
     await page.locator('#feito').fill('Substituído o parafuso (E2E)');

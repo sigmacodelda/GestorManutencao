@@ -1,0 +1,18 @@
+[
+  {
+    "circuito": "IC Concluir inventário",
+    "nome": "Concluir pela app: depois só consulta (sem contar nem editar)",
+    "ok": true,
+    "ms": 1917,
+    "detalhe": "Inventários Inventário 1 Inventário de teste · Concluído · 1 linha Este inventário já está concluído: só se pode consultar. Linhas contadas P002 Rolamento 6204 Lugar A-01-2-03 · 2 unidades",
+    "consola": []
+  },
+  {
+    "circuito": "IC Concluir inventário",
+    "nome": "Lista de inventários mostra o estado concluído",
+    "ok": true,
+    "ms": 589,
+    "detalhe": "Início Inventários Inventário 1 · Inventário de teste 26/11/2026 · 1 linha · Concluído · Ana Silva",
+    "consola": []
+  }
+]

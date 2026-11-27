@@ -212,7 +212,8 @@ async function vidaDaFicha(page, modo, M, semRedeNoTecnico) {
     await page.locator('#feito').waitFor({ timeout: 20000 });
     await page.locator('#material').fill('Parafuso M8 (dia a dia)');
     await page.locator('#qtt').fill('2'); await page.locator('#qtt').press('Tab');
-    await page.locator('#epv').fill('1.5'); await page.locator('#epv').press('Tab');
+    // O técnico não vê o preço (só o supervisor).
+    if (await page.locator('#epv').count()) { await page.locator('#epv').fill('1.5'); await page.locator('#epv').press('Tab'); }
     await botao(page, 'Juntar material').click();
     await page.locator('.material-linha', { hasText: 'Parafuso M8 (dia a dia)' }).waitFor({ timeout: 20000 });
     await page.locator('#feito').fill(`${marca} resolvido`);

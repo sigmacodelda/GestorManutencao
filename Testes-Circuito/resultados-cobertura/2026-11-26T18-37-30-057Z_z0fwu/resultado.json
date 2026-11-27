@@ -1,0 +1,26 @@
+[
+  {
+    "circuito": "IP Inventário: quem pode contar",
+    "nome": "Supervisor abre o inventário da Ana: só consulta, sem controlos de contagem",
+    "ok": true,
+    "ms": 623,
+    "detalhe": "Inventários Inventário 1 Inventário de teste · Por contar · 0 linhas Só o técnico a quem o inventário foi atribuído o pode contar. Linhas contadas Ainda não con",
+    "consola": []
+  },
+  {
+    "circuito": "IP Inventário: quem pode contar",
+    "nome": "Qualidade abre /inventarios/{id}: bloqueada",
+    "ok": true,
+    "ms": 3017,
+    "detalhe": "",
+    "consola": []
+  },
+  {
+    "circuito": "IP Inventário: quem pode contar",
+    "nome": "Técnico: /inventarios/{id} de outro (id falso) não rebenta",
+    "ok": true,
+    "ms": 1940,
+    "detalhe": "",
+    "consola": []
+  }
+]

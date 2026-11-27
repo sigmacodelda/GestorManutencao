@@ -18,7 +18,11 @@
         <a class="btn btn-secundario" href="nova-ficha"><Icone Nome="plus" /><span>Nova ficha completa</span></a>
     }
 
-    @if (_guardadoSemRede)
+    @if (Sessao.EQualidade)
+    {
+        <p class="estado-lista" role="status">Esta área é para operadores e supervisores.</p>
+    }
+    else if (_guardadoSemRede)
     {
         <div class="sucesso" role="status">
             <span class="sucesso-icone"><Icone Nome="circle-check" /></span>

@@ -25,7 +25,9 @@
                 <p>Ainda não há notificações.</p>
                 <p>@(perfil == Perfil.Supervisor
                     ? "Aqui aparecem as fichas por validar, as avarias, as fichas em atraso e as que estão sem técnico."
-                    : "Aqui aparecem as intervenções que lhe atribuem, as que lhe devolvem, as de hoje e as em atraso.")</p>
+                    : perfil == Perfil.Qualidade
+                        ? "Aqui aparecem as fichas validadas que esperam a conclusão da Qualidade."
+                        : "Aqui aparecem as intervenções que lhe atribuem, as que lhe devolvem, as de hoje e as em atraso.")</p>
                 <p>Os avisos só chegam com a app aberta ou em segundo plano.</p>
             </div>
         }

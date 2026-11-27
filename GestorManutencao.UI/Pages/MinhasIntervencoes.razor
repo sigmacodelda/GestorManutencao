@@ -16,7 +16,11 @@
     {
         <p class="alerta" role="alert"><Icone Nome="triangle-alert" /><span>Não foi possível atualizar a lista. Tente outra vez.</span></p>
     }
-    @if (_a_carregar && EstadoRecarga.MostrarSpinner(_temDados))
+    @if (Sessao.EQualidade)
+    {
+        <p class="estado-lista" role="status">Esta área é para operadores e supervisores.</p>
+    }
+    else if (_a_carregar && EstadoRecarga.MostrarSpinner(_temDados))
     {
         <p class="estado-lista" role="status">A carregar…</p>
     }
@@ -91,6 +95,7 @@
     protected override async Task OnInitializedAsync()
     {
         Notificacoes.DadosMudaram += AoMudarDados;
+        if (Sessao.EQualidade) return;
         await CarregarAsync();
     }
 

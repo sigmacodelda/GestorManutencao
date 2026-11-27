@@ -1,0 +1,58 @@
+[
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Página abre no passo 1 com pesquisa e sem botão Arrumar",
+    "ok": true,
+    "ms": 5154,
+    "detalhe": "Início Arrumação Passo 1 de 3 · pique a etiqueta da peça ou procure-a Peça Corredor Escolha o corredor A B Estante Escol",
+    "consola": []
+  },
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Pesquisa vazia, sem resultados e peça sem nada por arrumar (P002)",
+    "ok": true,
+    "ms": 2499,
+    "detalhe": "vazio: \"\" · sem resultados: \"Código não encontrado: zzzz-nao / Peça Corredor Escolha o corredor A B Estante Escolha a estante Nív\"",
+    "consola": []
+  },
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Mudar de peça volta ao passo 1",
+    "ok": true,
+    "ms": 122,
+    "detalhe": "",
+    "consola": []
+  },
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Passo 2 sem peça: \"Usar este lugar\" só ativa com os 4 níveis; selects em cascata",
+    "ok": true,
+    "ms": 185,
+    "detalhe": "corredores: Escolha o corredor,A,B",
+    "consola": []
+  },
+  {
+    "circuito": "A1 Arrumação sem escrita (técnico)",
+    "nome": "Escolher a peça P001: stock, por arrumar e lugares coerentes com a API (aceita stock negativo)",
+    "ok": true,
+    "ms": 780,
+    "detalhe": "UI: stock 10 por arrumar 7 · API: {\"s\":10,\"p\":7,\"l\":[\"A-02-1-01=3\"]}",
+    "consola": []
+  },
+  {
+    "circuito": "A2 Arrumação com escrita",
+    "nome": "Quantidade acima do que está à espera é recusada",
+    "ok": true,
+    "ms": 5668,
+    "detalhe": "",
+    "consola": []
+  },
+  {
+    "circuito": "A2 Arrumação com escrita",
+    "nome": "Arrumar 2 de P001 no lugar A-2-1-2",
+    "ok": true,
+    "ms": 623,
+    "detalhe": "UI: Início Arrumação Passo 1 de 3 · pique a etiqueta da peça ou procure-a Peça Corredor Escolha o corredor A B Estante Escolha a estante Nível Escolha o nível Posiç · API: stock 10 porArrumar 5 lugares A-02-1-01=3,A-02-1-02=2",
+    "consola": []
+  }
+]

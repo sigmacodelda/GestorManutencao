@@ -1,0 +1,440 @@
+{
+ "marca": "TESTE-E2E-yfnvjy",
+ "ok": 71,
+ "falha": 1,
+ "bugs": [],
+ "res": [
+  {
+   "grupo": "conc",
+   "nome": "ficha criada",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "conc",
+   "nome": "6 materiais em paralelo: todos 200/201 sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "conc",
+   "nome": "emConferencia sobe exatamente 6 (sem perdas/duplicações)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "conc",
+   "nome": "detalhe mostra 6 materiais, todos com saída",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "conc",
+   "nome": "ids dos materiais únicos",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "conc",
+   "nome": "apagar o mesmo material 3x em paralelo: 1x 204 e resto 404, sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "stock",
+   "nome": "após apagar 1 material a reserva desce exatamente 1",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "conc",
+   "nome": "concluir 3x em paralelo sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "conc",
+   "nome": "validar 4x em paralelo sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "stock",
+   "nome": "stock desce exatamente 5 (uma só validação efetiva)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "stock",
+   "nome": "emConferencia volta ao inicial",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "estado",
+   "nome": "devolver ficha já validada -> 409/404 (não 200)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "conc",
+   "nome": "qualidade 3x em paralelo: no máximo 1x 200, sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "mo",
+   "nome": "mão de obra sem tecno -> 400/409",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "mo",
+   "nome": "mão de obra horas 0 -> 400/409",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "mo",
+   "nome": "mão de obra horas negativas -> 400/409",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "mo",
+   "nome": "mão de obra horas 25 -> 400/409",
+   "ok": false,
+   "detalhe": "200 {\"id\":\"1b267c22bb4d42a59562634e6\",\"tecno\":101,\"responsavel\":\"Ana Silva\",\"horas\":25,\"custo\":0,\"custoHora\":0}"
+  },
+  {
+   "grupo": "mo",
+   "nome": "mão de obra custo negativo -> 400/409",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "mo",
+   "nome": "mão de obra técnico inexistente -> 400/409",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "mo",
+   "nome": "técnico regista mão de obra",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "custo-hora ao técnico: 403 ou sem valor",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "compras ao técnico 403",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "/fornecedores técnico sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "mo",
+   "nome": "apagar tempo inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "mo",
+   "nome": "apagar tempo 204",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "ficha manual sem equipamento -> 400/404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "ficha manual equipamento inexistente -> 400/404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "perm",
+   "nome": "qualidade não cria ficha manual",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "PUT ficha sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "PUT ficha inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "GET ficha inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "detalhe inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "id com SQL injection 404 sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "recentes dias=-5 sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "recentes dias=abc sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "todas pagina=-1 sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "todas desde=xx sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "todas com filtro estranho sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "assinatura externa inválida -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "foto inválida sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "ficha",
+   "nome": "listar fotos 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "opções 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "equipamento inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "criar equipamento vazio -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "criar equipamento com textos gigantes -> 400 (sem 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "editar equipamento inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "periodicidades 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "periodicidade inexistente 404/400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "instrução em equipamento inexistente 404/400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "configuração antecedencia negativa -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "configuração não foi alterada por pedido inválido",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "gestao",
+   "nome": "configuração antecedencia 99999 -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "util",
+   "nome": "criar utilizador sem código -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "util",
+   "nome": "criar utilizador duplicado -> 409",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "util",
+   "nome": "código com símbolos -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "util",
+   "nome": "perfil inválido -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "util",
+   "nome": "supervisor não se inativa a si (409)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "util",
+   "nome": "inativar inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "util",
+   "nome": "tecno de outra pessoa -> 409",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "util",
+   "nome": "lista de utilizadores sem pin/hash",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "plan",
+   "nome": "planeadas 200",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "plan",
+   "nome": "atribuir técnico inexistente -> 400/404/409",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "plan",
+   "nome": "atribuir em planeada inexistente 404",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "plan",
+   "nome": "adicionais duplicados sem 500",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "fmt",
+   "nome": "content-type JSON",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "fmt",
+   "nome": "/saude 200 sem auth",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "fmt",
+   "nome": "rota inexistente 404 (autenticado)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "fmt",
+   "nome": "POST em rota só GET -> 404/405",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "fmt",
+   "nome": "JSON com tipo errado -> 400 (não 500)",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "fmt",
+   "nome": "JSON truncado -> 400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "fmt",
+   "nome": "content-type errado -> 415/400",
+   "ok": true,
+   "detalhe": ""
+  },
+  {
+   "grupo": "fmt",
+   "nome": "sem CORS aberto a origens externas",
+   "ok": true,
+   "detalhe": ""
+  }
+ ]
+}

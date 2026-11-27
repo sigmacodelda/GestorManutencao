@@ -1,0 +1,106 @@
+[
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Abrir /fichas e ver lista",
+    "ok": true,
+    "ms": 581,
+    "detalhe": "Mais Todas as fichas Abertas Fechadas Todas Pesquisar Filtros Câmara de frio 01 Preventiva · Sem técnico Planeada Nº 4 · 26/12/2026 · 0,00 € Balança 03 Avaria · Ana Silva Em curso Nº 1008 · 26/11/2026",
+    "consola": []
+  },
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Filtros por estado (cada opção) respondem sem erro",
+    "ok": true,
+    "ms": 5105,
+    "detalhe": "Todos:? | Planeada:? | Em curso:? | Por validar:? | Validada:? | Cancelada:?",
+    "consola": []
+  },
+  {
+    "circuito": "F Supervisor: Todas as fichas",
+    "nome": "Pesquisa sem resultados mostra estado vazio; datas invertidas recusadas",
+    "ok": true,
+    "ms": 2000,
+    "detalhe": "datas invertidas: A data final não pode ser antes da inicial.",
+    "consola": []
+  },
+  {
+    "circuito": "N Operador: notificações e por rever",
+    "nome": "Notificações: estado e botões coerentes",
+    "ok": true,
+    "ms": 1869,
+    "detalhe": "Início Notificações Mais recentes 42 Marcar todas como lidas Limpar notificações Intervenç · novas=42",
+    "consola": []
+  },
+  {
+    "circuito": "N Operador: notificações e por rever",
+    "nome": "Cada notificação abre o destino do perfil",
+    "ok": true,
+    "ms": 1468,
+    "detalhe": "intervencoes/4bcf64a1e1054099ae4c7159e -> Intervenção",
+    "consola": []
+  },
+  {
+    "circuito": "N Operador: notificações e por rever",
+    "nome": "Por rever abre e mostra vazio ou lista com \"Percebi\"",
+    "ok": true,
+    "ms": 559,
+    "detalhe": "Início Por rever Não há nada por rever.",
+    "consola": []
+  },
+  {
+    "circuito": "N Supervisor: notificações e por rever",
+    "nome": "Notificações: estado e botões coerentes",
+    "ok": true,
+    "ms": 1821,
+    "detalhe": "Início Notificações Mais recentes 50 Marcar todas como lidas Limpar notificações Avaria re · novas=50",
+    "consola": []
+  },
+  {
+    "circuito": "N Supervisor: notificações e por rever",
+    "nome": "Cada notificação abre o destino do perfil",
+    "ok": true,
+    "ms": 1486,
+    "detalhe": "planeadas -> Planeadas",
+    "consola": []
+  },
+  {
+    "circuito": "N Supervisor: notificações e por rever",
+    "nome": "Por rever abre e mostra vazio ou lista com \"Percebi\"",
+    "ok": true,
+    "ms": 566,
+    "detalhe": "Início Por rever Não há nada por rever.",
+    "consola": []
+  },
+  {
+    "circuito": "N Qualidade: notificações e por rever",
+    "nome": "Notificações: estado e botões coerentes",
+    "ok": true,
+    "ms": 1738,
+    "detalhe": "vazio: Início Notificações Ainda não há notificações. Aqui aparecem as intervenções que lhe atribuem, as que lhe devo",
+    "consola": []
+  },
+  {
+    "circuito": "N Qualidade: notificações e por rever",
+    "nome": "Cada notificação abre o destino do perfil",
+    "ok": true,
+    "ms": 541,
+    "detalhe": "sem notificações para abrir",
+    "consola": []
+  },
+  {
+    "circuito": "N Qualidade: notificações e por rever",
+    "nome": "Por rever abre e mostra vazio ou lista com \"Percebi\"",
+    "ok": true,
+    "ms": 545,
+    "detalhe": "Início Por rever Estes registos feitos sem rede não foram aceites. O que escreveu fica aqui para o p",
+    "consola": []
+  },
+  {
+    "circuito": "Q Qualidade (sem escrita)",
+    "nome": "Lista (ou vazio) coerente com a API",
+    "ok": true,
+    "ms": 1178,
+    "detalhe": "0 fichas",
+    "consola": []
+  }
+]

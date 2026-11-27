@@ -1,0 +1,35 @@
+[
+  {
+    "circuito": "R Rearrumação",
+    "nome": "Página abre; peça sem lugares (P002) avisa; técnico não vê botão antes do destino",
+    "ok": true,
+    "ms": 1151,
+    "detalhe": "",
+    "consola": []
+  },
+  {
+    "circuito": "R Rearrumação",
+    "nome": "Escolher P001: lista de origens com disponível; escolher origem avança ao passo 3",
+    "ok": true,
+    "ms": 771,
+    "detalhe": "A-02-1-01\n3 unidades | A-02-1-02\n2 unidades",
+    "consola": []
+  },
+  {
+    "circuito": "R Rearrumação",
+    "nome": "Mudar de origem volta à lista; destino igual à origem é recusado",
+    "ok": true,
+    "ms": 1897,
+    "detalhe": "alerta: A origem e o destino são o mesmo lugar. avisos: ",
+    "consola": []
+  },
+  {
+    "circuito": "R Rearrumação",
+    "nome": "Quantidade acima do lugar recusada; mudar 1 de P001 para A-2-1-2",
+    "ok": false,
+    "ms": 38547,
+    "detalhe": "",
+    "consola": [],
+    "erro": "locator.waitFor: Timeout 8000ms exceeded."
+  }
+]

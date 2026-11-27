@@ -34,6 +34,12 @@
     private string _atual = "", _novo = "", _repetir = "", _erro = "";
     private bool _a_guardar;
 
+    // Só quem tem PIN provisório precisa deste ecrã: os outros voltam ao início em vez de ver um texto que não lhes diz respeito.
+    protected override void OnInitialized()
+    {
+        if (Sessao.Utilizador is { PinProvisorio: false }) Nav.NavigateTo("", replace: true);
+    }
+
     private async Task GuardarAsync()
     {
         _erro = !RegrasPin.FormatoValido(_atual) ? "Escreva o PIN que recebeu (4 números)."

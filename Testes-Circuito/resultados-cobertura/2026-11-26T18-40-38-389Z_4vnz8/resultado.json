@@ -1,0 +1,434 @@
+[
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "Entrar e ver o início",
+    "ok": true,
+    "ms": 1538,
+    "detalhe": "",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "Mosaicos do início corretos para o perfil",
+    "ok": true,
+    "ms": 35,
+    "detalhe": "As minhas intervenções | Registar avaria | Equipamentos | Arrumação | Rearrumar | Inventários | Leitor | A minha assinatura | Notificações",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/pecas/arrumar abre",
+    "ok": true,
+    "ms": 585,
+    "detalhe": "Arrumação · Início Arrumação Passo 1 de 3 · pique a etiqueta da peça ou procure-a Peça Corre",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/pecas/rearrumar abre",
+    "ok": true,
+    "ms": 564,
+    "detalhe": "Rearrumar · Início Rearrumar Passo 1 de 3 · pique a etiqueta da peça ou procure-a Peça",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/inventarios abre",
+    "ok": true,
+    "ms": 558,
+    "detalhe": "Inventários · Início Inventários Inventário 1 · Inventário de teste 26/11/2026 · 0 linhas · Po",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/qualidade bloqueia",
+    "ok": true,
+    "ms": 576,
+    "detalhe": "Qualidade · Qualidade Esta área é só para o perfil Qualidade.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/por-rever abre",
+    "ok": true,
+    "ms": 567,
+    "detalhe": "Por rever · Início Por rever Não há nada por rever.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/notificacoes abre",
+    "ok": true,
+    "ms": 571,
+    "detalhe": "Notificações · Início Notificações Ainda não há notificações. Aqui aparecem as intervenções que",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/leitor abre",
+    "ok": true,
+    "ms": 598,
+    "detalhe": "Leitor de etiquetas · Início Leitor de etiquetas Escolha como este aparelho lê códigos de barras e QR.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/mais bloqueia",
+    "ok": true,
+    "ms": 574,
+    "detalhe": "Mais · Início Mais Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/fichas bloqueia",
+    "ok": true,
+    "ms": 590,
+    "detalhe": "Todas as fichas · Mais Todas as fichas Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/configuracao bloqueia",
+    "ok": true,
+    "ms": 579,
+    "detalhe": "Configuração · Mais Configuração Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/periodicidades bloqueia",
+    "ok": true,
+    "ms": 574,
+    "detalhe": "Periodicidades · Mais Periodicidades Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/equipa bloqueia",
+    "ok": true,
+    "ms": 572,
+    "detalhe": "Equipa · Início Equipa Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/validacao bloqueia",
+    "ok": true,
+    "ms": 562,
+    "detalhe": "Validação · Início Validação Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/planeadas bloqueia",
+    "ok": true,
+    "ms": 563,
+    "detalhe": "Planeadas · Início Planeadas Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "/nova-ficha bloqueia",
+    "ok": true,
+    "ms": 566,
+    "detalhe": "Registar avaria · Início Registar avaria Equipamento Qual é o problema? 0 de 200 letras Falar Feit",
+    "consola": []
+  },
+  {
+    "circuito": "P Operador: início e permissões",
+    "nome": "Nenhum pedido protegido da API recusado por 403 no perfil (rotas do perfil)",
+    "ok": true,
+    "ms": 10,
+    "detalhe": "verificação de rotas delegada ao agente API (1)",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "Entrar e ver o início",
+    "ok": true,
+    "ms": 1875,
+    "detalhe": "",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "Mosaicos do início corretos para o perfil",
+    "ok": true,
+    "ms": 19,
+    "detalhe": "Planeadas | Validação | Nova ficha | Todas as fichas | Equipamentos | Novo equipamento | Periodicidades | Arrumação | Rearrumar | Inventários | Leitor | Equipa | Configuração | A minha assinatura | Notificações",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/pecas/arrumar abre",
+    "ok": true,
+    "ms": 549,
+    "detalhe": "Arrumação · Início Arrumação Passo 1 de 3 · pique a etiqueta da peça ou procure-a Peça Corre",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/pecas/rearrumar abre",
+    "ok": true,
+    "ms": 599,
+    "detalhe": "Rearrumar · Início Rearrumar Passo 1 de 3 · pique a etiqueta da peça ou procure-a Peça",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/inventarios abre",
+    "ok": true,
+    "ms": 567,
+    "detalhe": "Inventários · Início Inventários Inventário 1 · Inventário de teste 26/11/2026 · 0 linhas · Po",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/qualidade bloqueia",
+    "ok": true,
+    "ms": 569,
+    "detalhe": "Qualidade · Qualidade Esta área é só para o perfil Qualidade.",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/por-rever abre",
+    "ok": true,
+    "ms": 558,
+    "detalhe": "Por rever · Início Por rever Não há nada por rever.",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/notificacoes abre",
+    "ok": true,
+    "ms": 563,
+    "detalhe": "Notificações · Início Notificações Mais recentes 50 Marcar todas como lidas Limpar notificações",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/leitor abre",
+    "ok": true,
+    "ms": 559,
+    "detalhe": "Leitor de etiquetas · Início Leitor de etiquetas Escolha como este aparelho lê códigos de barras e QR.",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/mais abre",
+    "ok": true,
+    "ms": 558,
+    "detalhe": "Mais · Início Mais Todas as fichas Pesquisar fichas de qualquer estado Periodicidades U",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/fichas abre",
+    "ok": true,
+    "ms": 559,
+    "detalhe": "Todas as fichas · Mais Todas as fichas Abertas Fechadas Todas Pesquisar Filtros Câmara de frio 01 ",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/configuracao abre",
+    "ok": true,
+    "ms": 556,
+    "detalhe": "Configuração · Mais Configuração Dias de antecedência Com quantos dias de avanço as planeadas s",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/periodicidades abre",
+    "ok": true,
+    "ms": 583,
+    "detalhe": "Periodicidades · Mais Periodicidades Aqui só se mudam a unidade, o intervalo e o aviso; as period",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/equipa abre",
+    "ok": true,
+    "ms": 564,
+    "detalhe": "Equipa · Início Equipa Novo utilizador Nome Código curto (sem espaços) Perfil Operador Qu",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/validacao abre",
+    "ok": true,
+    "ms": 589,
+    "detalhe": "Validação · Início Validação Por validar 1 Balança 03 Expedição · Ana Silva Concluída Avaria",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/planeadas abre",
+    "ok": true,
+    "ms": 563,
+    "detalhe": "Planeadas · Início Planeadas 3 Em aberto 1 Fora de prazo 2 A vencer (7 dias) 0 Em curso Zona",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "/nova-ficha abre",
+    "ok": true,
+    "ms": 573,
+    "detalhe": "Nova ficha de intervenção · Início Nova ficha de intervenção Equipamento Tipo Preventiva Curativa (avaria) M",
+    "consola": []
+  },
+  {
+    "circuito": "P Supervisor: início e permissões",
+    "nome": "Nenhum pedido protegido da API recusado por 403 no perfil (rotas do perfil)",
+    "ok": true,
+    "ms": 9,
+    "detalhe": "verificação de rotas delegada ao agente API (1)",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "Entrar e ver o início",
+    "ok": true,
+    "ms": 1887,
+    "detalhe": "",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "Mosaicos do início corretos para o perfil",
+    "ok": true,
+    "ms": 22,
+    "detalhe": "Qualidade | A minha assinatura | Notificações",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/pecas/arrumar bloqueia",
+    "ok": true,
+    "ms": 560,
+    "detalhe": "Arrumação · Início Arrumação Esta área é para operadores e supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/pecas/rearrumar bloqueia",
+    "ok": true,
+    "ms": 571,
+    "detalhe": "Rearrumar · Início Rearrumar Esta área é para operadores e supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/inventarios bloqueia",
+    "ok": true,
+    "ms": 573,
+    "detalhe": "Inventários · Início Inventários Esta área é para operadores e supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/qualidade abre",
+    "ok": true,
+    "ms": 568,
+    "detalhe": "Qualidade · Qualidade Não há intervenções à espera de conclusão.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/por-rever abre",
+    "ok": true,
+    "ms": 562,
+    "detalhe": "Por rever · Início Por rever Não há nada por rever.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/notificacoes abre",
+    "ok": true,
+    "ms": 560,
+    "detalhe": "Notificações · Início Notificações Ainda não há notificações. Aqui aparecem as intervenções que",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/leitor abre",
+    "ok": true,
+    "ms": 569,
+    "detalhe": "Leitor de etiquetas · Início Leitor de etiquetas Escolha como este aparelho lê códigos de barras e QR.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/mais bloqueia",
+    "ok": true,
+    "ms": 576,
+    "detalhe": "Mais · Início Mais Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/fichas bloqueia",
+    "ok": true,
+    "ms": 576,
+    "detalhe": "Todas as fichas · Mais Todas as fichas Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/configuracao bloqueia",
+    "ok": true,
+    "ms": 629,
+    "detalhe": "Configuração · Mais Configuração Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/periodicidades bloqueia",
+    "ok": true,
+    "ms": 590,
+    "detalhe": "Periodicidades · Mais Periodicidades Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/equipa bloqueia",
+    "ok": true,
+    "ms": 573,
+    "detalhe": "Equipa · Início Equipa Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/validacao bloqueia",
+    "ok": true,
+    "ms": 580,
+    "detalhe": "Validação · Início Validação Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/planeadas bloqueia",
+    "ok": true,
+    "ms": 583,
+    "detalhe": "Planeadas · Início Planeadas Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "/nova-ficha bloqueia",
+    "ok": true,
+    "ms": 556,
+    "detalhe": "Registar avaria · Início Registar avaria Equipamento Qual é o problema? 0 de 200 letras Falar Feit",
+    "consola": []
+  },
+  {
+    "circuito": "P Qualidade: início e permissões",
+    "nome": "Nenhum pedido protegido da API recusado por 403 no perfil (rotas do perfil)",
+    "ok": true,
+    "ms": 9,
+    "detalhe": "verificação de rotas delegada ao agente API (0)",
+    "consola": []
+  }
+]

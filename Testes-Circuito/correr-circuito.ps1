@@ -55,6 +55,7 @@ if ($Memoria) {
   if (-not $env:PIN_TECNICO) { $env:PIN_TECNICO = '4829' }
   if (-not $env:PIN_SUPERVISOR) { $env:PIN_SUPERVISOR = '7953' }
   if (-not $env:PIN_QUALIDADE) { $env:PIN_QUALIDADE = '3197' }
+  if (-not $env:NOME_TECNICO) { $env:NOME_TECNICO = 'Ana Silva' }  # técnico da API em memória
   # Chaves só para esta execução (o desenvolvimento gera-as sozinho; o pepper tem de ser definido de forma estável).
   Remove-Item Env:\Pin__Pepper -ErrorAction SilentlyContinue
 } else {
@@ -138,6 +139,10 @@ try {
   }
 
   # ---- App Windows com a porta de depuração do WebView2
+  # Se a porta já responde, é outra app (ex.: LandeiroMaui) e o circuito mexeria nela: aborta.
+  if (Get-NetTCPConnection -LocalPort $PortaCdp -State Listen -ErrorAction SilentlyContinue) {
+    Falhar "A porta CDP $PortaCdp já está ocupada por outra aplicação. Feche-a ou use -PortaCdp <outra>."
+  }
   $dados = Join-Path $env:TEMP "gm-webview2-$PID"
   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$PortaCdp"
   $env:WEBVIEW2_USER_DATA_FOLDER = $dados

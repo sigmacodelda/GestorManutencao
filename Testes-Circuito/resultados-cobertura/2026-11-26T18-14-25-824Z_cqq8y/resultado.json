@@ -1,0 +1,50 @@
+[
+  {
+    "circuito": "QW Qualidade: validações e conclusão",
+    "nome": "Lista mostra as duas fichas de teste, com chips e texto",
+    "ok": true,
+    "ms": 1112,
+    "detalhe": "cartão: Balança 03 Expedição · Ana Silva Validada Avaria 26/11 Problema: TESTE-UIQ-1 problema Feito: TESTE-UIQ-1 feito Concluir intervenção · contagem 2 (nº da ficha não aparece no cartão: true)",
+    "consola": []
+  },
+  {
+    "circuito": "QW Qualidade: validações e conclusão",
+    "nome": "Concluir: pede a higienização, Concluir desativado vazio/só espaços, Cancelar fecha",
+    "ok": true,
+    "ms": 842,
+    "detalhe": "ok",
+    "consola": []
+  },
+  {
+    "circuito": "QW Qualidade: validações e conclusão",
+    "nome": "Abrir a conclusão de outra ficha fecha a primeira? (só uma em edição)",
+    "ok": true,
+    "ms": 38,
+    "detalhe": "campos abertos: 1",
+    "consola": []
+  },
+  {
+    "circuito": "QW Qualidade: validações e conclusão",
+    "nome": "Concluir TESTE-UIQ-1 com \"Teste UI\"",
+    "ok": true,
+    "ms": 1157,
+    "detalhe": "concluída",
+    "consola": []
+  },
+  {
+    "circuito": "QW Qualidade: validações e conclusão",
+    "nome": "Início da Qualidade: contagem \"por concluir\" coerente",
+    "ok": true,
+    "ms": 553,
+    "detalhe": "Qualidade1 por concluir Intervenções validadas à espera de conclusão",
+    "consola": []
+  },
+  {
+    "circuito": "QW Qualidade: validações e conclusão",
+    "nome": "Por rever da Qualidade: \"Percebi\" dispensa o aviso antigo",
+    "ok": true,
+    "ms": 1046,
+    "detalhe": "1 -> 0",
+    "consola": []
+  }
+]

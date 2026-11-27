@@ -1,0 +1,10 @@
+[
+  {
+    "circuito": "QA Qualidade tenta registar avaria (API recusa com 403)",
+    "nome": "Formulário /avaria aceita o envio e a app explica a recusa (sem crash)",
+    "ok": true,
+    "ms": 5115,
+    "detalhe": "url=https://0.0.0.1/avaria · alertas=[\"Não foi possível guardar (erro 403). Tente outra vez.\"] · avisos=[] · Início Registar avaria Equipamento Balança 03 · Expedição Qual é o problema? 34 de 200 letras Falar Feito",
+    "consola": []
+  }
+]

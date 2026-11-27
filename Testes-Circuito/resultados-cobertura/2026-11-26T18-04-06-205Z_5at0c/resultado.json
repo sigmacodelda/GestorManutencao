@@ -1,0 +1,90 @@
+[
+  {
+    "circuito": "P2 Operador: rotas de outros perfis",
+    "nome": "/avaria",
+    "ok": true,
+    "ms": 550,
+    "detalhe": "h1=\"Registar avaria\" bloqueio=false campos=2 · Início Registar avaria Equipamento Qual é o problema? 0 de 200 letras Falar Feito",
+    "consola": []
+  },
+  {
+    "circuito": "P2 Operador: rotas de outros perfis",
+    "nome": "/intervencoes",
+    "ok": true,
+    "ms": 536,
+    "detalhe": "h1=\"As minhas intervenções\" bloqueio=false campos=0 · Início As minhas intervenções Em curso 2 Balança 03 Expedição Em curso Avaria Hoje Balança 03 Expedição Em cur",
+    "consola": []
+  },
+  {
+    "circuito": "P2 Operador: rotas de outros perfis",
+    "nome": "/equipamentos",
+    "ok": true,
+    "ms": 528,
+    "detalhe": "h1=\"Equipamentos\" bloqueio=false campos=3 · Início Equipamentos Pesquisar Filtros 6 Ativos 1 Com fichas abertas 1 Fora de serviço 3 Sem intervenção +1 ano",
+    "consola": []
+  },
+  {
+    "circuito": "P2 Operador: rotas de outros perfis",
+    "nome": "/equipamentos/novo",
+    "ok": true,
+    "ms": 541,
+    "detalhe": "h1=\"Novo equipamento\" bloqueio=true campos=0 · Equipamentos Novo equipamento Esta área é só para supervisores.",
+    "consola": []
+  },
+  {
+    "circuito": "P2 Operador: rotas de outros perfis",
+    "nome": "/assinatura",
+    "ok": true,
+    "ms": 553,
+    "detalhe": "h1=\"A minha assinatura\" bloqueio=false campos=0 · Início A minha assinatura Desenhe a assinatura que fica associada ao seu nome. Só você a altera. Assinatura De",
+    "consola": []
+  },
+  {
+    "circuito": "P2 Operador: rotas de outros perfis",
+    "nome": "/pin",
+    "ok": true,
+    "ms": 568,
+    "detalhe": "h1=\"Escolha o seu PIN\" bloqueio=false campos=3 · Escolha o seu PIN O PIN que recebeu é provisório. Escolha um só seu, com 4 números, que mais ninguém conheça. ",
+    "consola": []
+  },
+  {
+    "circuito": "P2 Qualidade: rotas de outros perfis",
+    "nome": "circuito interrompido",
+    "ok": false,
+    "erro": "não consegui ficar com a sessão de Qualidade"
+  },
+  {
+    "circuito": "M Supervisor: Mais, leitor e Configuração",
+    "nome": "Mais mostra 4 atalhos que abrem as páginas certas",
+    "ok": false,
+    "ms": 26017,
+    "detalhe": "",
+    "consola": [],
+    "erro": "não consegui ficar com a sessão de Supervisor"
+  },
+  {
+    "circuito": "M Supervisor: Mais, leitor e Configuração",
+    "nome": "Leitor: 3 modos, câmara desativada sem câmara, teste de leitura",
+    "ok": true,
+    "ms": 1118,
+    "detalhe": "câmara desativada=true · Início Leitor de etiquetas Escolha como este aparelho lê códigos de barras e QR. Automático Câmara Leitor Modo em uso: Leitor . Detetado: Computador: teclado ou",
+    "consola": []
+  },
+  {
+    "circuito": "M Supervisor: Mais, leitor e Configuração",
+    "nome": "Leitor: picada por teclado no campo escondido mostra o código lido",
+    "ok": true,
+    "ms": 1096,
+    "detalhe": "lido",
+    "consola": []
+  },
+  {
+    "circuito": "M Supervisor: Mais, leitor e Configuração",
+    "nome": "Configuração: valor inválido recusado e valor válido gravado (repõe)",
+    "ok": false,
+    "ms": 30708,
+    "detalhe": "",
+    "consola": [],
+    "erro": "locator.inputValue: Timeout 30000ms exceeded."
+  }
+]

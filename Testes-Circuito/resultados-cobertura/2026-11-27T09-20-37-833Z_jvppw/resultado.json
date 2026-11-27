@@ -1,0 +1,214 @@
+[
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": false,
+    "ms": 6460,
+    "detalhe": "",
+    "consola": [],
+    "erro": "6 tapado(s): a \"Arrumação Pôr as peças nos seus lugares \" tapado por a.nav-item | a \"Rearrumar Mudar uma peça para outro luga\" tapado por nav.navegacao | a \"Inventários Contar as peças do armazém\" tapado por nav.navegacao | a \"Leitor Câmara ou leitor de etiquetas\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/intervencoes sem controlos tapados",
+    "ok": true,
+    "ms": 1757,
+    "detalhe": "/intervencoes ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/avaria sem controlos tapados",
+    "ok": true,
+    "ms": 2361,
+    "detalhe": "/avaria ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/pecas/arrumar sem controlos tapados",
+    "ok": true,
+    "ms": 2332,
+    "detalhe": "/pecas/arrumar ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/pecas/rearrumar sem controlos tapados",
+    "ok": true,
+    "ms": 2403,
+    "detalhe": "/pecas/rearrumar ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/inventarios sem controlos tapados",
+    "ok": true,
+    "ms": 2334,
+    "detalhe": "/inventarios ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/leitor sem controlos tapados",
+    "ok": true,
+    "ms": 2323,
+    "detalhe": "/leitor ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": false,
+    "ms": 2641,
+    "detalhe": "",
+    "consola": [],
+    "erro": "10 tapado(s): a \"Intervenção devolvida TESTE-E2E-4o6x5g C\" tapado por nav.navegacao | a \"Nova intervenção atribuída TESTE-E2E-4o6\" tapado por nav.navegacao | a \"Intervenção para hoje TESTE-E2E-4o6x5g C\" tapado por nav.navegacao | a \"Intervenção devolvida TESTE-E2E-0jxg28 C\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Operador: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos sem controlos tapados",
+    "ok": false,
+    "ms": 2672,
+    "detalhe": "",
+    "consola": [],
+    "erro": "8 tapado(s): select \"TodosBalançaCompressorEmpilhadorFrioLinh\" tapado por ul.contadores contadores-4 | select \"TodosArmazémExpediçãoFrioProdução\" tapado por ul.contadores contadores-4 | input \"eq-obsoletos\" tapado por select. | a \"Câmara de frio 01 CF-01 · Frio · Kide CF\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": false,
+    "ms": 4298,
+    "detalhe": "",
+    "consola": [],
+    "erro": "12 tapado(s): a \"Todas as fichas Pesquisar fichas de qual\" tapado por nav.navegacao | a \"Equipamentos Fichas, histórico e instruç\" tapado por nav.navegacao | a \"Novo equipamento Registar um equipamento\" tapado por nav.navegacao | a \"Periodicidades Unidade, intervalo e avis\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/planeadas sem controlos tapados",
+    "ok": false,
+    "ms": 1971,
+    "detalhe": "",
+    "consola": [],
+    "erro": "4 tapado(s): input \"adic-F2-101\" tapado por span.nav-rotulo | input \"adic-F2-100\" tapado por nav.navegacao | select \"Sem técnicoAna SilvaChefe de Turno\" tapado por nav.navegacao | select \"Sem técnicoAna SilvaChefe de Turno\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/validacao sem controlos tapados",
+    "ok": true,
+    "ms": 2350,
+    "detalhe": "/validacao ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/nova-ficha sem controlos tapados",
+    "ok": false,
+    "ms": 2510,
+    "detalhe": "",
+    "consola": [],
+    "erro": "1 tapado(s): button \"Falar\" tapado por button.btn btn-primario btn-grande btn-fixo"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/fichas sem controlos tapados",
+    "ok": false,
+    "ms": 2521,
+    "detalhe": "",
+    "consola": [],
+    "erro": "12 tapado(s): select \"TodosPlaneadaEm cursoPor validarValidada\" tapado por a.intervencao-titulo cartao-link | select \"Todos Preventiva Avaria\" tapado por a.intervencao-titulo cartao-link | select \"TodosAna SilvaChefe de Turno\" tapado por a.intervencao-titulo cartao-link | input \"fi-desde\" tapado por a.intervencao-titulo cartao-link"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/mais sem controlos tapados",
+    "ok": true,
+    "ms": 2336,
+    "detalhe": "/mais ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/configuracao sem controlos tapados",
+    "ok": true,
+    "ms": 2349,
+    "detalhe": "/configuracao ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/periodicidades sem controlos tapados",
+    "ok": false,
+    "ms": 2592,
+    "detalhe": "",
+    "consola": [],
+    "erro": "5 tapado(s): button \"Editar\" tapado por nav.navegacao | button \"Editar\" tapado por nav.navegacao | button \"Editar\" tapado por nav.navegacao | button \"Editar\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipa sem controlos tapados",
+    "ok": false,
+    "ms": 2576,
+    "detalhe": "",
+    "consola": [],
+    "erro": "4 tapado(s): button \"Mudar o número do técnico\" tapado por nav.navegacao | button \"Novo PIN\" tapado por nav.navegacao | button \"Inativar utilizador\" tapado por nav.navegacao | button \"Mudar o número do técnico\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos sem controlos tapados",
+    "ok": false,
+    "ms": 2557,
+    "detalhe": "",
+    "consola": [],
+    "erro": "9 tapado(s): select \"TodosBalançaCompressorEmpilhadorFrioLinh\" tapado por ul.contadores contadores-4 | select \"TodosArmazémExpediçãoFrioProdução\" tapado por ul.contadores contadores-4 | input \"eq-obsoletos\" tapado por select. | a \"Balança 03 BAL-03 · Balança · Mettler IN\" tapado por a.nav-item active"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/equipamentos/novo sem controlos tapados",
+    "ok": false,
+    "ms": 2526,
+    "detalhe": "",
+    "consola": [],
+    "erro": "3 tapado(s): input \"eq-modelo\" tapado por a.nav-item active | input \"eq-serie\" tapado por nav.navegacao | input \"eq-local\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/inventarios sem controlos tapados",
+    "ok": true,
+    "ms": 2292,
+    "detalhe": "/inventarios ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Supervisor: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": false,
+    "ms": 2475,
+    "detalhe": "",
+    "consola": [],
+    "erro": "46 tapado(s): a \"Avaria registada TESTE-E2E-9743s1 Compre\" tapado por nav.navegacao | a \"Ficha por validar TESTE-E2E-9743s1 Compr\" tapado por nav.navegacao | a \"Ficha por validar TESTE-E2E-9743s1 Compr\" tapado por nav.navegacao | a \"Ficha sem técnico TESTE-E2E-9743s1 Compr\" tapado por nav.navegacao"
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/ sem controlos tapados",
+    "ok": true,
+    "ms": 2699,
+    "detalhe": "/ ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/qualidade sem controlos tapados",
+    "ok": true,
+    "ms": 1812,
+    "detalhe": "/qualidade ok",
+    "consola": []
+  },
+  {
+    "circuito": "SO Qualidade: nada tapa os controlos (390x844)",
+    "nome": "/notificacoes sem controlos tapados",
+    "ok": true,
+    "ms": 2297,
+    "detalhe": "/notificacoes ok",
+    "consola": []
+  }
+]
